@@ -1,0 +1,60 @@
+/* Site navbar, shared by every page (assets/nav.js builds it). The current page or section is highlighted. */
+.mtcnav{position:fixed;inset:0 0 auto 0;z-index:50;display:flex;align-items:center;gap:10px;padding:10px 22px;min-height:64px;
+  background:#150E08f2;border-bottom:3px solid #000;font-family:"Archivo","MTC Tamil",system-ui,sans-serif;transition:background .3s,border-color .3s}
+.mtcnav.clear{background:linear-gradient(#150E08e6,#150E0800);border-bottom-color:transparent}
+.mtcnav a{color:inherit}
+.mtcnav .brand{display:flex;align-items:center;gap:10px;margin-right:auto;font-family:"Press Start 2P",monospace;font-size:11px;color:#F7EBD8;text-decoration:none;flex:none}
+.mtcnav .brand img{width:36px;height:36px;display:block}
+.mtcnav ul{display:flex;align-items:center;gap:2px;list-style:none;margin:0;padding:0}
+.mtcnav ul a{position:relative;display:block;padding:10px 12px;color:#B3A18B;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:.01em;transition:color .15s}
+.mtcnav ul a:hover{color:#F7EBD8}
+.mtcnav ul a::after{content:"";position:absolute;left:12px;right:12px;bottom:3px;height:3px;background:#F7931E;transform:scaleX(0);transition:transform .2s}
+.mtcnav ul a:hover::after{transform:scaleX(.5)}
+.mtcnav ul a[aria-current]{color:#F7EBD8}
+.mtcnav ul a[aria-current]::after{transform:scaleX(1)}
+.mtcnav ul .mobile{display:none}
+.mtcnav .acct{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px 0 6px;margin-left:8px;border:2px solid #4a3a2c;background:#21160D;color:#F7EBD8;text-decoration:none;font-weight:700;font-size:14px;max-width:190px;flex:none}
+.mtcnav .acct:hover{border-color:#F7931E}
+.mtcnav .acct[aria-current]{border-color:#F7931E;box-shadow:inset 0 -3px 0 #F7931E}
+.mtcnav .acct img,.mtcnav .acct .ini{width:28px;height:28px;border:2px solid #000;flex:none}
+.mtcnav .acct .ini{display:grid;place-items:center;background:#F7931E;color:#1A0F05;font:10px "Press Start 2P",monospace}
+.mtcnav .acct span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mtcnav .acct.out{padding:0 14px;font:10px "Press Start 2P",monospace}
+.mtcnav .join{display:inline-flex;align-items:center;height:42px;padding:0 16px;background:#F7931E;color:#1A0F05;font:10px "Press Start 2P",monospace;text-decoration:none;box-shadow:0 4px 0 #9A5A0C;flex:none}
+.mtcnav .join:hover{transform:translateY(2px);box-shadow:0 2px 0 #9A5A0C}
+.mtcnav .menu{display:none;height:42px;padding:0 12px;background:#4a4a4a;color:#fff;border:2px solid #000;font:10px "Press Start 2P",monospace;cursor:pointer;flex:none}
+.mtcnav :focus-visible{outline:3px solid #F7931E;outline-offset:2px}
+@media(max-width:1180px){
+  .mtcnav{padding:8px 14px;gap:8px;min-height:60px}
+  .mtcnav .menu{display:inline-flex;align-items:center}
+  .mtcnav .join{display:none}
+  .mtcnav .acct{margin-left:0;padding:0 6px}
+  .mtcnav .acct span{display:none}
+  .mtcnav .acct.out span{display:inline}
+  .mtcnav ul{display:none;position:absolute;top:100%;left:10px;right:10px;flex-direction:column;align-items:stretch;gap:4px;background:#150E08fa;border:3px solid #000;padding:8px;box-shadow:0 12px 24px #000a}
+  .mtcnav.open ul{display:flex}
+  .mtcnav ul a{padding:15px 16px;font-size:16px;background:#2a2118}
+  .mtcnav ul a::after{left:0;right:auto;top:0;bottom:0;width:5px;height:auto;transform:scaleY(0)}
+  .mtcnav ul a[aria-current]{background:#3a2a1c}
+  .mtcnav ul a[aria-current]::after{transform:scaleY(1)}
+  .mtcnav ul .mobile{display:block}
+  .mtcnav ul .mobile a{background:#F7931E;color:#1A0F05;font:11px "Press Start 2P",monospace;text-align:center}
+  .mtcnav ul .mobile a::after{display:none}
+}
+@media(prefers-reduced-motion:reduce){.mtcnav,.mtcnav *{transition:none!important}}
+
+.setupbar{position:absolute;left:0;right:0;top:100%;display:block;padding:8px 16px;background:var(--accent,#F7931E);color:#1a0f05;font:600 14px Archivo,system-ui,sans-serif;text-align:center;text-decoration:none;border-bottom:3px solid #000}
+.setupbar:hover{text-decoration:underline}
+.mtcnav ul a{white-space:nowrap}
+
+/* pixel icons (assets/px.js) used instead of emoji */
+.pxi{display:inline-block;width:max(1.15em,17px);height:max(1.15em,17px);vertical-align:middle;margin-top:-.15em;flex:none;filter:drop-shadow(0 1px 0 #0009)}
+/* on orange buttons and selected tabs the icon takes the dark text colour so it stays visible */
+.btn:not(.grey):not(.ghost):not(.red):not(.green):not(.discord) .pxi,[aria-current] .pxi,[aria-selected=true] .pxi,.ctabs a[aria-current] .pxi,.pollcta .pxi{stroke:currentColor;filter:none}
+
+/* Tamil letters: the pixel font has none, so a heavy Tamil font is paired with it (only used for Tamil characters) */
+@font-face{font-family:"MTC Tamil Display";src:url(/assets/fonts/noto-sans-tamil-800.woff2) format("woff2");font-weight:100 900;font-display:swap;size-adjust:112%;unicode-range:U+0964-0965,U+0B82-0BFA,U+200C-200D,U+25CC}
+@font-face{font-family:"MTC Tamil";src:url(/assets/fonts/noto-sans-tamil-var.woff2) format("woff2");font-weight:100 900;font-display:swap;unicode-range:U+0964-0965,U+0B82-0BFA,U+200C-200D,U+25CC}
+
+/* pixel Tamil inside pixel-font text (made by assets/px.js) */
+img.tpx{display:inline-block;image-rendering:pixelated;image-rendering:crisp-edges;max-width:none;border:0;margin:0 .1em}

@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Event | MTC</title>
+<link rel="icon" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+.hero-ev{position:relative;border:4px solid #000;background:linear-gradient(120deg,#3a1f08,#21160D) center/cover;min-height:240px;display:flex;align-items:flex-end;padding:26px;margin-bottom:24px}
+.hero-ev::before{content:"";position:absolute;inset:0;background:linear-gradient(#0000 20%,#150E08ee)}
+.hero-ev>*{position:relative}
+.hero-ev.whole{background-color:#0d0804;min-height:clamp(240px,34vw,420px)}
+/* title on the banner: darker fade on the text side so it stays readable */
+.hero-ev.over::before{background:linear-gradient(90deg,#150E08f0 0%,#150E08b0 45%,#150E0830 75%),linear-gradient(#0000 30%,#150E08ee)}
+.hero-ev.over h1{text-shadow:3px 3px 0 #000,0 0 18px #000}
+/* banner shown clean, title in a strip under it (banners that have their own text or logo) */
+.hero-ev.split{display:block;padding:0;min-height:0;background:#1c130b}
+.hero-ev.split::before{display:none}
+/* keeps the banner's 16:7 shape, so phones show the whole width; on wide screens it stops at 240px tall like before */
+.hero-ev.split .bn{width:100%;aspect-ratio:16/7;max-height:240px;background-color:#0d0804;border-bottom:4px solid #000}
+.hero-ev.split .info{padding:20px 26px 24px}
+@media(max-width:760px){.hero-ev.split .info{padding:16px 18px 20px}}
+.facts{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.facts span{background:#000a;border:2px solid #000;padding:7px 10px;font-size:14px}
+.days{display:flex;gap:6px;margin-top:14px;max-width:420px}
+.days i{flex:1;height:14px;background:#3a2a1c}.days i.on{background:var(--accent)}.days i.x{background:var(--bad)}
+.podium{display:grid;gap:8px}
+.podium .item .place{font-family:var(--display);font-size:14px;color:var(--accent);min-width:44px}
+.people{display:flex;flex-wrap:wrap;gap:8px}
+.people span{background:var(--surface2);border:2px solid #000;padding:7px 10px;font-weight:600;overflow-wrap:anywhere}
+.people span em{font-style:normal;color:var(--soft);font-weight:400}
+.ev-strip{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:stretch;margin-bottom:6px}
+.ev-strip>*{margin-bottom:0}
+.ev-strip .winner{margin:0}
+.winner .soft{display:block;margin-top:6px}
+.stats{display:flex;gap:10px;align-items:stretch}
+.stats div{flex:1;background:#0005;border:2px solid #000;padding:12px;text-align:center}
+.stats b{display:block;font-family:var(--display);font-size:20px;color:var(--accent);margin-bottom:6px}
+.stats span{color:var(--soft);font-size:13px}
+.ev-jump{position:sticky;top:64px;z-index:20;display:flex;gap:6px;overflow-x:auto;background:#150E08f2;border:3px solid #000;padding:6px;margin:22px 0;scrollbar-width:none}
+.ev-jump a{flex:none;padding:10px 14px;color:var(--soft);text-decoration:none;font-weight:700;font-size:14px;background:#2a1d12;border:2px solid #000}
+.ev-jump a:hover{color:var(--ink);border-color:var(--accent)}
+.sc-h{display:flex;align-items:center;gap:10px;margin:18px 0 12px;font-size:12px}.sc-h:first-of-type{margin-top:4px}.sc-sort{margin-left:auto;display:inline-flex;gap:4px}.sc-sort button{font:8px var(--display);padding:7px 9px;background:#2a1d12;color:var(--soft);border:2px solid #000;cursor:pointer}
+.sc-sort button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.sc-h .count{background:var(--accent);color:var(--accent-ink);padding:4px 8px;font-size:10px}
+.sv{border-color:#000;background:linear-gradient(180deg,#1f150c,#150e08);box-shadow:inset 0 0 0 2px #35261a}
+.sv.is-on{box-shadow:inset 0 0 0 2px #2f6b2a,0 0 26px #4c9a2a22}.sv.is-off{box-shadow:inset 0 0 0 2px #6b231a}
+.sv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.sv-head h2{margin:0}
+.sv-pill{display:inline-flex;align-items:center;gap:8px;font:9px var(--display);letter-spacing:.06em;padding:7px 11px;border:2px solid #000;background:#0d0804}
+.sv-pill i{width:10px;height:10px;border-radius:50%;background:#a63a2b}
+.sv-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.sv-pill.up{color:#8fe07a;box-shadow:inset 0 -2px 0 #2f6b2a}.sv-pill.up i{background:#5fd35f;animation:svBlink 1.6s ease-in-out infinite}
+.sv-pill.down{color:#ff9a8a;box-shadow:inset 0 -2px 0 #6b231a}
+.sv-pill.wait{color:#f2c230;box-shadow:inset 0 -2px 0 #7a5a12}.sv-pill.wait i{background:#f2c230}
+.sv-txt .wait{color:#f2c230;font-size:14px}
+.sv-sess{display:grid;gap:4px;margin:12px 0 0;padding:14px 16px;border:3px solid #000;background:#1a110a;box-shadow:inset 4px 0 0 #f2c230}
+.sv-sess.open{box-shadow:inset 4px 0 0 #5fd35f}
+.sv-sess small{font:9px var(--display);letter-spacing:.08em;color:#f2c230}.sv-sess.open small{color:#8fe07a}
+.sv-sess b{font:13px/1.5 var(--display);color:var(--ink)}
+.sv-sess span{color:var(--soft)}.sv-sess em{font-style:normal;color:var(--ink);font-variant-numeric:tabular-nums}
+.sv-sess i{font-style:normal;font-size:13px;color:var(--soft);opacity:.8}
+@keyframes svBlink{50%{box-shadow:0 0 0 4px #5fd35f33,0 0 10px #5fd35f}}
+/* the Minecraft multiplayer list entry */
+.sv-entry{display:grid;grid-template-columns:64px 1fr auto;gap:14px;align-items:center;padding:10px;background:#0b0705;border:3px solid #000;box-shadow:inset 0 0 0 2px #2a2018}
+.sv-ico{width:64px;height:64px;image-rendering:pixelated;background:#1a110a}
+.sv-txt{display:grid;gap:3px;min-width:0;font-family:"Press Start 2P",monospace;font-size:10px;line-height:1.5}
+.sv-txt b{color:#fff;font-weight:400;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-txt span{color:#a8a8a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sv-txt span:nth-child(3){color:#7e7e7e}.sv-txt .err{color:#ff7a6b}
+.sv-side{display:flex;align-items:center;gap:10px;align-self:start;padding-top:2px}
+.sv-count{font:10px "Press Start 2P",monospace;color:#a8a8a8}.sv-count b{color:#fff;font-weight:400}
+.sv-txt .mo{display:block;white-space:pre;overflow:hidden;text-overflow:ellipsis}.sv-txt .mo span{white-space:pre}
+.sv-txt .mb{text-shadow:1px 0 0 currentColor}.sv-txt .mi{font-style:italic}.sv-txt .mu{text-decoration:underline}.sv-txt .ms{text-decoration:line-through}
+.sv-txt .mo span{filter:drop-shadow(1px 1px 0 #0009)}
+.sv-ips{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;margin-top:12px}
+.sv-ips .sv-ip:not(.wide) code{font-size:12px}.sv-ip code{overflow-wrap:anywhere;word-break:break-all}
+.sv-ips .sv-ip.wide{grid-column:1/-1}
+.sv-ips .sv-ip{margin-top:0}.sv-ip.k-bedrock{box-shadow:inset 3px 0 0 #4aa3ff}.sv-ip.k-bedrock code{color:#7fc4ff}.sv-ip.k-extra{box-shadow:inset 3px 0 0 #c79bff}.sv-ip.k-extra code{color:#d9bcff}
+
+.sv-note{margin:10px 0 0;padding:8px 12px;font-size:14px;color:var(--soft);background:#1a110a;border-left:3px solid #ffd23f;white-space:pre-line}
+.sv-ip{display:flex;align-items:center;gap:14px;margin-top:12px;padding:10px 12px;background:#0d0804;border:3px solid #000;box-shadow:inset 3px 0 0 var(--accent)}
+.sv-ip>div{flex:1;min-width:0;display:grid;gap:3px}.sv-ip small{font:8px var(--display);letter-spacing:.06em;color:var(--soft)}
+.sv-ip code{font:13px "Press Start 2P",monospace;color:var(--accent);background:none;border:0;padding:0;overflow-wrap:anywhere}
+.sv-ping{display:inline-flex;align-items:flex-end;gap:2px;height:16px;width:22px}
+.sv-ping i{flex:1;background:#3a3a3a;box-shadow:inset 0 -1px 0 #0006}.sv-ping i.on{background:#5fd35f;box-shadow:inset 0 -2px 0 #2e8b2e}
+.sv-ping.off i{background:#6b231a}.sv-ping.off i:nth-child(1){height:20%}.sv-ping.off i:nth-child(2){height:40%}.sv-ping.off i:nth-child(3){height:60%}.sv-ping.off i:nth-child(4){height:80%}.sv-ping.off i:nth-child(5){height:100%}
+/* capacity bar + tiles */
+.sv-cap{position:relative;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;min-height:34px;padding:0 12px;background:#0d0804;border:3px solid #000;overflow:hidden}
+.sv-cap i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#2f6b2a,#5fd35f);opacity:.35;transition:width .6s}
+.sv-cap span,.sv-cap em{position:relative;font-size:13px;font-weight:700}.sv-cap em{font-style:normal;color:var(--soft)}
+.sv-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.sv-tiles div{padding:10px 12px;background:#1a110a;border:2px solid #000;box-shadow:inset 0 -3px 0 #2a1d12}
+.sv-tiles small,.sv-who small{display:block;font:8px var(--display);letter-spacing:.06em;color:var(--soft);margin-bottom:6px}
+.sv-tiles b{font-size:15px;color:var(--ink);overflow-wrap:anywhere}
+.sv-who{margin-top:12px}.sv-who>div{display:flex;flex-wrap:wrap;gap:6px}
+.sv-who span{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 6px;background:#1a110a;border:2px solid #000;font-weight:700;font-size:13px}
+.sv-foot{display:flex;align-items:center;gap:12px;margin-top:12px;font-size:12px;color:var(--soft)}
+.sv-next{flex:1;height:4px;background:#2a1d12;overflow:hidden}.sv-next i{display:block;height:100%;width:0;background:var(--accent)}
+@keyframes svNext{to{width:100%}}
+@media(max-width:560px){.sv-entry{grid-template-columns:44px 1fr;gap:10px}.sv-ico{width:44px;height:44px}.sv-side{grid-column:1/-1;justify-content:flex-end}.sv-txt{font-size:8px}.sv-txt b{font-size:9px}.sv-tiles{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){.is-on .sv-pill i,.sv-next i{animation:none!important}}
+.fbsum{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.stars{color:var(--accent);font-size:24px;letter-spacing:2px}
+.starpick{display:flex;gap:4px;margin:8px 0 12px}.starpick input{position:absolute;opacity:0}.starpick label{cursor:pointer;font-size:34px;color:#4a3a2c;line-height:1;margin:0}
+.starpick label:has(input:checked) span[aria-hidden],.starpick label:has(~ label input:checked) span[aria-hidden]{color:var(--accent)}
+.starpick:hover label span[aria-hidden]{color:var(--accent)}.starpick label:hover ~ label span[aria-hidden]{color:#4a3a2c}
+.starpick label:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:2px}
+.ev-sec{scroll-margin-top:140px;margin-bottom:22px}
+.ev-sec .grid2>.card{margin-bottom:0}
+.ev-sec .grid2{margin-bottom:0}
+.md.rules ul,.md.rules ol{columns:2 280px;column-gap:32px;display:block}
+.md.rules li{break-inside:avoid;margin-bottom:8px}
+h2 .count{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:4px 8px;font-size:10px;vertical-align:middle;margin-left:6px}
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.team{background:var(--surface2);border:3px solid #000;padding:14px}
+.team.dim{opacity:.75}
+.team h3{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--accent);margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+.team h3 span{background:#000;color:#fff;padding:3px 7px;font-size:9px}
+.team ul{list-style:none;display:grid;gap:6px}
+.team li{padding:7px 10px;background:#0004;border-left:3px solid var(--accent);font-weight:600;overflow-wrap:anywhere}
+.team.dim li{border-left-color:#555}
+.team li{display:flex;align-items:center;gap:10px}
+/* face = 8x8 at (8,8) on the skin, hat layer at (40,8); scaled 3x to 24px */
+.head{flex:none;width:28px;height:28px;border:2px solid #000;image-rendering:pixelated;background:#2a1d12}
+i.head{background:var(--s) -140px -28px/224px 224px,var(--s) -28px -28px/224px 224px}
+b.head.ini{display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font:10px var(--display)}
+.podium .item.top1{border-color:#D4AF37}.podium .item.top2{border-color:#c0c0c0}.podium .item.top3{border-color:#cd7f32}
+@media(max-width:760px){.ev-strip{grid-template-columns:1fr}.ev-jump{top:60px}}
+@media(max-width:760px){.hero-ev{min-height:200px;padding:18px}}
+.winner{display:flex;gap:16px;align-items:center;background:linear-gradient(120deg,#5a4510,#2a1d0a);border:4px solid #D4AF37;padding:20px 22px;margin-bottom:22px}
+.winner .crown{font-size:44px;line-height:1}
+.winner b{display:block;font-family:var(--display);font-size:10px;color:#F5D36B;margin-bottom:8px}
+.winner strong{font-family:var(--display);font-size:clamp(14px,3vw,20px);line-height:1.4;overflow-wrap:anywhere}
+.cd{display:flex;gap:8px;margin-top:12px}
+.cd div{flex:1;background:#0006;border:2px solid #000;padding:10px 4px;text-align:center}
+.cd b{display:block;font-family:var(--display);font-size:16px;color:var(--accent)}
+.cd small{color:var(--soft)}
+</style>
+<script src="/assets/px.js"></script>
+</head>
+<body>
+<header id="nav"></header>
+<main id="main">
+  <p class="soft">Loading event...</p>
+</main>
+<script src="/assets/md.js"></script>
+<script src="/assets/app.js"></script>
+<script src="/assets/forms.js"></script>
+<script>
+const {$, esc, api, badge, when, toast, imageToDataUrl, tile, bindGallery, me} = MTC;
+MTC.nav('events');
+const slug = new URLSearchParams(location.search).get('slug') || '';
+const TYPES = {survival:'Survival', minigame:'Minigame', build:'Build', pvp:'PvP', other:'Event'};
+
+async function load() {
+  let d, who;
+  try { [d, who] = await Promise.all([api('/api/events/' + encodeURIComponent(slug)), me()]); }
+  catch (e) { $('#main').innerHTML = `<h1>Event not found</h1><p class="soft">${esc(e.message)}</p><a class="btn" href="/#events">ALL EVENTS</a>`; return; }
+  const e = d.event, u = who.user;
+  document.title = e.title + ' | MTC';
+  const days = e.days ? `<div class="days" aria-label="${e.daysPlayed || e.days} of ${e.days} days played">${Array.from({length: e.days}, (_, i) =>
+      `<i class="${(e.status === 'cancelled' || e.status === 'unsuccessful') && i >= e.daysPlayed ? 'x' : (e.status === 'completed' || i < e.daysPlayed ? 'on' : '')}"></i>`).join('')}</div>` : '';
+  const slots = e.slots ? `${e.taken} / ${e.slots} slots taken` : (e.taken ? e.taken + ' registered' : '');
+  $('#main').innerHTML = `
+    ${e.banner && !e.titleOver ? `<section class="hero-ev split"><div class="bn" style="${MTC.bannerStyle(e)}" role="img" aria-label="${esc(e.title)} banner"></div>`
+      : `<section class="hero-ev${e.bannerFit === 'contain' ? ' whole' : ''}${e.banner ? ' over' : ''}" style="${MTC.bannerStyle(e)}">`}
+      <div class="info">
+        ${badge(e.status)}
+        <h1 style="margin-top:12px">${esc(e.title)}</h1>
+        <div class="facts">
+          <span>${esc(when(e))}</span><span>${esc(TYPES[e.type] || 'Event')}</span>
+          <span>${e.teamSize > 1 ? 'Teams of ' + e.teamSize : 'Solo'}</span>
+          ${slots ? `<span>${esc(slots)}</span>` : ''}${e.prize ? `<span>Prize: ${esc(e.prize)}</span>` : ''}
+        </div>
+        ${days}
+        ${['soon', 'open'].includes(e.status) && e.start ? `<div style="margin-top:12px">${MTC.countdown(e.start, 'Starts in')}</div>` : e.status === 'live' && e.end ? `<div style="margin-top:12px">${MTC.countdown(e.end, 'Ends in')}</div>` : ''}
+      </div>
+    </section>
+    ${(() => {
+      /* ---- organised layout: summary strip, jump bar, then one section per topic ---- */
+      const res = (e.results || []).slice().sort((x, y) => x.place - y.place);
+      const hasArc = (e.files || []).length || e.recreateNotes || e.mcVersion || e.software;
+      const tf = ['open', 'soon'].includes(e.status) && e.teamSize > 1;
+      const win = res[0];
+      const groups = {};
+      for (const p of e.participants) { const k = (p.team || '').trim() || (e.teamSize > 1 ? 'No team yet' : 'Players'); (groups[k] = groups[k] || []).push(p); }
+      const late = k => /not|no team|absent|reserve/i.test(k);   // e.g. "Not Participate" goes last
+      const gnames = Object.keys(groups).sort((x, y) => (late(x) - late(y)) || groups[y].length - groups[x].length || x.localeCompare(y));
+      const jump = [['overview', 'Overview'], e.rules && ['rules', 'Rules'], ['players', `Players (${e.participants.length})`], res.length > 1 && ['results', 'Results'], ['showcase', `Showcase (${d.media.length})`], hasArc && ['recreate', '📦 Recreate'], tf && ['teamfinder', '🤝 Team finder'], e.status === 'completed' && ['feedback', '⭐ Feedback']].filter(Boolean);
+      return `
+    <div class="ev-strip">
+      <div class="card accent" id="reg"></div>
+      ${win ? `<div class="winner"><span class="crown" aria-hidden="true">🏆</span><div><b>WINNER</b><strong>${esc(win.name)}</strong>${win.points ? `<span class="soft small">${esc(win.points)} pts</span>` : ''}</div></div>`
+        : `<div class="card stats"><div><b>${e.participants.length}</b><span>confirmed players</span></div>${e.slots ? `<div><b>${Math.max(0, e.slots - e.taken)}</b><span>slots left</span></div>` : ''}<div><b>${d.media.length}</b><span>showcase items</span></div></div>`}
+    </div>
+    <nav class="ev-jump" aria-label="On this page">${jump.map(([id, l]) => `<a href="#${id}">${l}</a>`).join('')}</nav>
+
+    <section id="overview" class="ev-sec">
+      <div class="grid2">
+        ${e.summary ? `<div class="card"><h2>ABOUT</h2><div class="md">${MTCmd.md(e.summary)}</div></div>` : ''}
+        ${e.notes ? `<div class="card"><h2>${e.status === 'cancelled' || e.status === 'unsuccessful' ? 'WHAT HAPPENED' : 'NOTES'}</h2><div class="md">${MTCmd.md(e.notes)}</div></div>` : ''}
+      </div>
+      ${e.serverInfo && e.status === 'live' && !e.hasStatus ? `<div class="card accent"><h2>SERVER</h2><div class="md">${MTCmd.md(e.serverInfo)}</div></div>` : ''}
+      ${e.hasStatus && e.status === 'live' ? '<div class="card" id="liveStatus"><h2>SERVER STATUS</h2><p class="soft">Checking...</p></div>' : ''}
+    </section>
+
+    ${e.rules ? `<section id="rules" class="ev-sec card"><h2>RULES</h2><div class="md rules">${MTCmd.md(e.rules)}</div></section>` : ''}
+
+    <section id="players" class="ev-sec card">
+      <h2>PLAYERS <span class="count">${e.participants.length}</span></h2>
+      ${e.participants.length ? `<div class="teams">${gnames.map(g => `<div class="team${late(g) ? ' dim' : ''}"><h3>${esc(g)} <span>${groups[g].length}</span></h3><ul>${groups[g].map(p => `<li>${p.skin ? MTC.head3d(p.skin, 32) : p.avatar ? `<img class="head" src="${esc(p.avatar)}" alt="" loading="lazy">` : `<b class="head ini" aria-hidden="true">${esc([...p.name][0] || '?')}</b>`}<span>${esc(p.name)}${MTC.edTag(p.edition)}</span></li>`).join('')}</ul></div>`).join('')}</div>`
+        : '<p class="soft">No confirmed players yet.</p>'}
+    </section>
+
+    ${res.length > 1 ? `<section id="results" class="ev-sec card"><h2>RESULTS</h2><div class="podium">${res.map(r =>
+      `<div class="item${r.place <= 3 ? ' top' + r.place : ''}"><span class="place">#${r.place}</span><b class="grow">${esc(r.name)}</b>${r.points ? `<span class="soft">${esc(r.points)} pts</span>` : ''}${r.note ? `<span class="soft small">${esc(r.note)}</span>` : ''}</div>`).join('')}</div></section>` : ''}
+
+    <section id="showcase" class="ev-sec card">
+      <h2>SHOWCASE</h2>
+      ${(() => { const vids = sortVids(d.media.filter(m => m.type === 'youtube'), 'new'), shots = d.media.filter(m => m.type !== 'youtube').sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+        if (!d.media.length) return '<p class="soft">No screenshots or videos yet.</p>';
+        return (vids.length ? `<h3 class="sc-h">VIDEOS <span class="count">${vids.length}</span>${vids.length > 1 ? '<span class="sc-sort" role="group" aria-label="Sort videos"><button type="button" data-sort="new" aria-pressed="true">NEWEST</button><button type="button" data-sort="old" aria-pressed="false">OLDEST</button></span>' : ''}</h3><div class="gallery" id="galV">${vids.map(m => tile(m)).join('')}</div>` : '')
+          + (shots.length ? `<h3 class="sc-h">SCREENSHOTS <span class="count">${shots.length}</span></h3><div class="gallery" id="galS">${shots.map(m => tile(m)).join('')}</div>` : ''); })()}
+      <div id="submit" style="margin-top:18px"></div>
+    </section>
+    ${tf ? '<section id="teamfinder" class="ev-sec card"><h2>🤝 TEAM FINDER</h2><div id="tfBox"><p class="soft">Loading...</p></div></section>' : ''}
+    ${e.status === 'completed' ? '<section id="feedback" class="ev-sec card"><h2>⭐ FEEDBACK</h2><div id="fbBox"><p class="soft">Loading...</p></div></section>' : ''}
+    ${hasArc ? recreate(e, u) : ''}`; })()}`;
+  if ($('#galV')) { const vids = d.media.filter(m => m.type === 'youtube'); bindGallery($('#galV'), vids);
+    document.querySelectorAll('.sc-sort [data-sort]').forEach(b => b.onclick = () => { $('#galV').innerHTML = sortVids(vids, b.dataset.sort).map(m => tile(m)).join('');
+      document.querySelectorAll('.sc-sort [data-sort]').forEach(x => x.setAttribute('aria-pressed', x === b)); }); }
+  if ($('#galS')) bindGallery($('#galS'), d.media.filter(m => m.type !== 'youtube'));
+  regBox(e, d.mine, u, who);
+  submitBox(e, u);
+  if ($('#liveStatus')) liveStatus(e);
+  if ($('#tfBox')) teamFinder(e, u);
+  if ($('#fbBox')) feedbackBox(e, u);
+  const hashEl = location.hash && document.getElementById(location.hash.slice(1)); if (hashEl) hashEl.scrollIntoView();
+}
+
+/* ---- archive: everything needed to run this event again on your own server ----
+   Entries with the same name are one file with several download links (mirrors), shown as one card. */
+const AR_TYPE = { world: ['🌍', 'World', '#2f6b2a'], plugins: ['🔌', 'Plugins', '#5b3d8a'], mods: ['🧩', 'Mods', '#1f6a6a'], datapack: ['📦', 'Datapack', '#8a5a1c'],
+  resourcepack: ['🎨', 'Resource pack', '#8a3d63'], config: ['⚙️', 'Config', '#4a4f57'], schematic: ['🏗️', 'Schematic', '#2b5486'], other: ['🗃️', 'Files', '#6b4a2b'] };
+const HOSTS = [[/(^|\.)github\.com$/, 'GitHub'], [/drive\.google\.com$/, 'Google Drive'], [/mediafire\.com$/, 'MediaFire'], [/workupload\.com$/, 'Workupload'],
+  [/modrinth\.com$/, 'Modrinth'], [/kovaihost\.cloud$/, 'KovaiHost'], [/pingforge\.cloud$/, 'PingForge'], [/dropbox\.com$/, 'Dropbox'], [/mega\.(nz|io)$/, 'MEGA'],
+  [/curseforge\.com$/, 'CurseForge'], [/planetminecraft\.com$/, 'Planet Minecraft'], [/onedrive\.live\.com|1drv\.ms|sharepoint\.com$/, 'OneDrive']];
+const hostName = f => !f.link ? 'MTC server' : (HOSTS.find(([re]) => re.test(f.host)) || [0, f.host])[1];
+const fsize = n => n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+function recreate(e, u) {
+  const canMem = u && (u.admin || u.inGuild), groups = [];
+  for (const f of e.files || []) { const k = f.name.trim().toLowerCase(), g = groups.find(x => x.key === k); g ? g.links.push(f) : groups.push({ key: k, links: [f] }); }
+  const sizeOf = g => Math.max(0, ...g.links.map(f => f.size || 0)), total = groups.reduce((a, g) => a + sizeOf(g), 0);
+  const href = f => `/api/dl/${encodeURIComponent(e.slug)}/${f.id}`;
+  const btn = (f, first) => f.members && !canMem
+    ? (u ? '<span class="btn grey sm" aria-disabled="true" title="Join the MTC Discord to download this">MEMBERS ONLY</span>' : '<a class="btn discord sm" href="/auth/discord">LOG IN</a>')
+    : `<a class="btn sm${first ? '' : ' grey'}" href="${href(f)}" ${f.link ? `target="_blank" rel="noopener" title="Opens ${esc(f.host)} in a new tab"` : 'download'}>${first ? 'DOWNLOAD' : 'MIRROR'}</a>`;
+  const card = g => {
+    const f0 = g.links[0], [ic, label, col] = AR_TYPE[f0.type] || AR_TYPE.other, size = sizeOf(g), dls = g.links.reduce((a, f) => a + (f.downloads || 0), 0);
+    return `<article class="ar-card" style="--tc:${col}">
+      <header class="ar-head"><span class="ar-ic" aria-hidden="true">${ic}</span>
+        <div class="ar-title"><h3>${esc(f0.name)}</h3>
+          <div class="ar-meta"><span class="ar-type">${label}</span>${size ? `<span>${fsize(size)}</span>` : ''}${g.links.length > 1 ? `<span>${g.links.length} download links</span>` : ''}${dls ? `<span>${dls} download${dls === 1 ? '' : 's'}</span>` : ''}${g.links.some(f => f.members) ? '<span class="ar-mem">MEMBERS</span>' : ''}</div></div></header>
+      <ul class="ar-links">${g.links.map((f, i) => `<li><span class="ar-host" aria-hidden="true">${esc(hostName(f)[0].toUpperCase())}</span>
+          <div class="ar-src"><div><b>${esc(hostName(f))}</b>${i === 0 && g.links.length > 1 ? '<span class="ar-best">MAIN</span>' : ''}</div>
+            <span>${[f.note && esc(f.note), f.link && hostName(f) !== f.host ? esc(f.host) : !f.link ? esc(f.original) : '', g.links.length > 1 && f.size && f.size !== size ? fsize(f.size) : ''].filter(Boolean).join(' · ')}</span>
+            ${f.sha256 ? `<code class="ar-sha" title="SHA-256 checksum: compare it to check the download is complete">SHA-256 ${esc(f.sha256)}</code>` : ''}</div>
+          ${btn(f, i === 0)}</li>`).join('')}</ul></article>`;
+  };
+  return `<section id="recreate" class="ev-sec card">
+    <h2>📦 RECREATE THIS EVENT</h2>
+    <p class="soft">Want to play this on your own server? Grab the files below and follow the steps.</p>
+    ${e.mcVersion || e.software || groups.length ? `<div class="ar-chips">${e.mcVersion ? `<span><small>VERSION</small>${esc(e.mcVersion)}</span>` : ''}${e.software ? `<span><small>SERVER</small>${esc(e.software)}</span>` : ''}${groups.length ? `<span><small>DOWNLOADS</small>${groups.length} file${groups.length === 1 ? '' : 's'}${total ? ' · ' + fsize(total) : ''}</span>` : ''}</div>` : ''}
+    ${groups.length ? `<div class="ar-files">${groups.map(card).join('')}</div>` : ''}
+    ${e.recreateNotes ? `<div class="ar-steps"><h3>📝 HOW TO SET IT UP</h3><div class="md">${MTCmd.md(e.recreateNotes)}</div></div>` : ''}
+  </section>`;
+}
+
+/* ---- live server status (while the event is live): checked every 30 s ---- */
+function liveStatus(e) {
+  const box = $('#liveStatus'), REFRESH = 30;
+  // the server address (first host or IP in the server info), with the rest of the info underneath
+  const info = String(e.serverInfo || '').trim(), m = info.match(/(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d{2,5})?|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{2,5})?/i);
+  const addr = m ? m[0] : info.split('\n')[0], rest = info.replace(addr, '').replace(/^[\s|·:,-]+|[\s|·:,-]+$/g, '');
+  // the join details: Java address, Bedrock IP + port, extra rows; older events only have the free-text server info
+  const beIp = String(e.serverBedrock || '').replace(/:\d+$/, ''), bePort = e.serverBedrockPort || (String(e.serverBedrock || '').match(/:(\d+)$/) || [])[1] || (e.serverBedrock ? '19132' : '');
+  const jHost = String(e.serverJava || '').trim().replace(/:\d+$/, ''), jPort = (String(e.serverJava || '').match(/:(\d+)$/) || [])[1] || '';
+  const same = !!(jHost && beIp && jHost.toLowerCase() === beIp.toLowerCase());   // Java and Bedrock on the same address: show it once
+  const rows = [...(same ? [['SERVER IP (JAVA + BEDROCK)', 'java', jHost], jPort && ['JAVA PORT', 'java', jPort], ['BEDROCK PORT', 'bedrock', bePort]]
+      : [e.serverJava && ['JAVA', 'java', e.serverJava], beIp && ['BEDROCK IP', 'bedrock', beIp], bePort && ['BEDROCK PORT', 'bedrock', bePort]]),
+    ...(e.serverExtra || []).map(x => [x.label.toUpperCase(), 'extra', x.value])].filter(Boolean);
+  if (!rows.length && addr) rows.push(['SERVER ADDRESS', 'java', addr]);
+  const notes = rows.length && (e.serverJava || e.serverBedrock) ? info : rest;
+  // MOTD pieces from the server, with their Minecraft colours and styles
+  const motdHtml = parts => { const lines = [[]];
+    for (const p of parts || []) String(p.t).split('\n').forEach((t, k) => { if (k) lines.push([]); if (t) lines[lines.length - 1].push({ ...p, t }); });
+    return lines.slice(0, 2).map(l => `<span class="mo">${l.map(p => `<span class="${[p.b && 'mb', p.i && 'mi', p.u && 'mu', p.s && 'ms', p.o && 'mo-o'].filter(Boolean).join(' ')}" style="color:${/^#[0-9a-f]{6}$/i.test(p.c || '') ? p.c : '#aaaaaa'}">${esc(p.t)}</span>`).join('') || '&nbsp;'}</span>`).join(''); };
+  const paint = s => {
+    if (!document.body.contains(box)) return clearInterval(t);
+    if (!s.shown) { box.innerHTML = '<h2>SERVER STATUS</h2><p class="soft">Shown while the event is live.</p>'; return; }
+    const ss = s.session, closed = !!(ss && !ss.open);
+    const tm = iso => new Date(iso).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' }).toUpperCase();
+    const hm = v => { const [h, m] = v.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+    const dayOf = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const whenDay = iso => dayOf(iso) === dayOf(Date.now()) ? 'today' : dayOf(iso) === dayOf(Date.now() + 864e5) ? 'tomorrow' : new Date(iso).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'short' });
+    const dayTxt = ss ? `DAY ${ss.day}${ss.days ? ` OF ${ss.days}` : ''}` : '';
+    const sessHtml = !ss ? '' : closed
+      ? `<div class="sv-sess closed">${ss.over ? '<b>ALL PLAY DAYS ARE DONE</b><span>Thanks for playing!</span>'
+          : `<small>${dayTxt}</small><b>The server opens ${esc(whenDay(ss.opensAt))} at ${tm(ss.opensAt)}</b><span>Please be ready on time! Opens in <em data-cd="${esc(ss.opensAt)}"></em></span>`}<i>Daily hours ${hm(ss.from)} – ${hm(ss.to)}</i></div>`
+      : `<div class="sv-sess open"><small>${dayTxt}</small><b>Open now until ${tm(ss.closesAt)}</b><span>Closes in <em data-cd="${esc(ss.closesAt)}"></em></span><i>Daily hours ${hm(ss.from)} – ${hm(ss.to)}</i></div>`;
+    if (closed) s = { ...s, online: false, error: ss.over ? 'All play days are done' : `Closed · opens ${whenDay(ss.opensAt)} at ${tm(ss.opensAt)}` };
+    const on = !!s.online, p = s.players || { online: 0, max: 0, sample: [] }, pct = p.max ? Math.min(100, Math.round(p.online / p.max * 100)) : 0;
+    const icon = /^data:image\/png;base64,/.test(s.icon || '') ? s.icon : '/assets/logo.png';
+    box.className = 'card sv ' + (on ? 'is-on' : 'is-off');
+    box.innerHTML = `
+      <div class="sv-head"><h2>SERVER STATUS</h2><span class="sv-pills"><span class="sv-pill ${on ? 'up' : closed ? 'wait' : 'down'}"><i aria-hidden="true"></i>${on ? 'ONLINE' : closed ? 'CLOSED' : 'OFFLINE'}</span>${s.java && s.bedrock && s.bedrock.online ? '<span class="sv-pill up"><i aria-hidden="true"></i>BEDROCK</span>' : ''}</span></div>
+      <div class="sv-entry">
+        <img class="sv-ico" src="${esc(icon)}" alt="">
+        <div class="sv-txt"><b>${esc(e.title)}</b>${on ? motdHtml(s.motdParts) : `<span class="${closed ? 'wait' : 'err'}">${esc(s.error || 'Cannot reach the server')}</span>`}</div>
+        <div class="sv-side">${on ? `<span class="sv-count"><b>${p.online}</b>/${p.max}</span>` : ''}</div>
+      </div>
+      ${sessHtml}
+      ${rows.length ? `<div class="sv-ips">${rows.map(([label, kind, v]) => `<div class="sv-ip k-${kind}${/IP\b|^JAVA$|ADDRESS/.test(label) ? ' wide' : ''}"><div><small>${esc(label)}</small><code>${esc(v)}</code></div><button class="btn sm" type="button" data-copy="${esc(v)}">COPY</button></div>`).join('')}</div>
+        ${notes ? `<p class="sv-note">${esc(notes)}</p>` : ''}` : ''}
+      ${on ? `<div class="sv-cap" role="img" aria-label="${p.online} of ${p.max} players online"><i style="width:${pct}%"></i><span>${p.online ? `${p.online} player${p.online === 1 ? '' : 's'} in game` : 'Nobody in game yet'}</span><em>${pct}% full</em></div>
+      <div class="sv-tiles"><div><small>VERSION</small><b>${esc(s.version || '–')}</b></div><div><small>EDITION</small><b>${s.java && s.bedrock ? 'Java + Bedrock' : s.edition === 'bedrock' ? 'Bedrock' : 'Java'}</b></div><div><small>SLOTS LEFT</small><b>${Math.max(0, p.max - p.online)}</b></div></div>
+      ${p.sample && p.sample.length ? `<div class="sv-who"><small>IN GAME NOW</small><div>${p.sample.map(n => `<span>${/^\w{3,16}$/.test(n) ? MTC.head3d(MTC.skinUrl(n, 'java'), 22) : ''}${esc(n)}</span>`).join('')}</div></div>` : ''}` : ''}
+      <div class="sv-foot"><span>Checked ${new Date(s.checkedAt || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span><span class="sv-next" aria-hidden="true"><i></i></span></div>`;
+    tick();
+    const bar = box.querySelector('.sv-next i'); if (bar) { bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = `svNext ${REFRESH}s linear forwards`; }
+    box.querySelectorAll('[data-copy]').forEach(cp => cp.onclick = () => navigator.clipboard.writeText(cp.dataset.copy).then(() => { cp.textContent = 'COPIED'; setTimeout(() => { cp.textContent = 'COPY'; }, 1500); }, () => toast('Copy this: ' + cp.dataset.copy)));
+  };
+  // countdowns in the day box
+  const tick = () => box.querySelectorAll('[data-cd]').forEach(el => { const ms = Math.max(0, new Date(el.dataset.cd) - Date.now()), h = Math.floor(ms / 36e5), m = Math.floor(ms / 6e4) % 60, sec = Math.floor(ms / 1e3) % 60;
+    el.textContent = (h ? h + 'h ' : '') + String(m).padStart(h ? 2 : 1, '0') + 'm ' + String(sec).padStart(2, '0') + 's'; if (!ms) { delete el.dataset.cd; setTimeout(go, 1500); } });
+  setInterval(tick, 1000);
+  // obfuscated MOTD text (§k) flickers like in the game
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(() => box.querySelectorAll('.mo-o').forEach(el => { el.textContent = el.textContent.replace(/[^\s]/g, () => '#$%&@*+=?ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 32 | 0]); }), 90);
+  const go = () => api('/api/events/' + encodeURIComponent(e.slug) + '/status').then(paint).catch(() => {});
+  const t = setInterval(go, REFRESH * 1e3); go();
+}
+/* ---- team finder: players looking for a team, and teams looking for players ---- */
+async function teamFinder(e, u) {
+  const box = $('#tfBox'); let d; try { d = await api('/api/events/' + encodeURIComponent(e.slug) + '/lfg'); } catch (x) { box.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
+  const mine = d.posts.find(p => p.mine);
+  const face = p => p.skin ? MTC.head3d(p.skin, 36) : p.avatar ? `<img class="head" src="${esc(p.avatar)}" alt="">` : `<b class="head ini" aria-hidden="true">${esc([...(p.name || '?')][0])}</b>`;
+  box.innerHTML = `<p class="soft">This is a team event (teams of ${d.teamSize}). Find teammates here, then register with the same team name.</p>
+    ${d.canPost ? `<form id="tfF" class="card" style="background:#1a110a;margin:12px 0"><div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="radio" name="tfk" value="player"${!mine || mine.kind === 'player' ? ' checked' : ''}> Looking for a team</label><label class="check" style="margin:0"><input type="radio" name="tfk" value="team"${mine && mine.kind === 'team' ? ' checked' : ''}> My team needs players</label></div>
+      <div class="fields" style="margin-top:10px"><div class="tfT"${mine && mine.kind === 'team' ? '' : ' hidden'}><label for="tf_team">Team name</label><input type="text" id="tf_team" maxlength="40" value="${esc(mine && mine.team || '')}"></div>
+        <div class="tfT"${mine && mine.kind === 'team' ? '' : ' hidden'}><label for="tf_need">Players needed</label><input type="number" id="tf_need" min="1" max="19" value="${mine && mine.need || 1}"></div>
+        <div class="full"><label for="tf_note">About you <span class="soft">(what you are good at, when you can play, language)</span></label><input type="text" id="tf_note" maxlength="300" value="${esc(mine && mine.note || '')}"></div></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" type="submit">${mine ? 'UPDATE MY POST' : 'POST IN THE TEAM FINDER'}</button>${mine ? `<button class="btn ghost sm" type="button" id="tfDel">REMOVE MY POST</button>` : ''}</div></form>`
+      : `<p class="msg info">${u ? 'Only MTC members can post. Join the MTC Discord, then log in again.' : '<a href="/auth/discord">Log in with Discord</a> to post in the team finder.'}</p>`}
+    ${d.posts.length ? `<div class="list">${d.posts.map(p => `<div class="item">${face(p)}<div class="grow"><b class="mtc-user">${esc(p.kind === 'team' ? p.team : p.name)}</b> <span class="badge ${p.kind === 'team' ? 'live' : 'pending'}">${p.kind === 'team' ? 'NEEDS ' + p.need : 'LOOKING FOR A TEAM'}</span>${MTC.edTag(p.edition)}<br>
+      <span class="soft small">${p.kind === 'team' ? 'Captain: <span class="mtc-user">' + esc(p.name) + '</span> · ' : ''}${esc(p.note)}</span></div>${p.contact && !p.mine ? `<a class="btn discord sm" href="${esc(p.contact)}" target="_blank" rel="noopener">MESSAGE ON DISCORD</a>` : ''}</div>`).join('')}</div>` : '<p class="soft">No posts yet.</p>'}`;
+  const f = $('#tfF'); if (!f) return;
+  f.querySelectorAll('input[name=tfk]').forEach(r => r.onchange = () => f.querySelectorAll('.tfT').forEach(x => { x.hidden = f.querySelector('input[name=tfk]:checked').value !== 'team'; }));
+  f.onsubmit = ev => { ev.preventDefault(); api('/api/events/' + encodeURIComponent(e.slug) + '/lfg', {method: 'POST', body: {kind: f.querySelector('input[name=tfk]:checked').value, team: $('#tf_team').value, need: $('#tf_need').value, note: $('#tf_note').value}})
+    .then(() => { toast('Posted.'); teamFinder(e, u); }).catch(x => toast(x.message, true)); };
+  if ($('#tfDel')) $('#tfDel').onclick = () => api('/api/lfg/' + mine.id, {method: 'DELETE'}).then(() => teamFinder(e, u)).catch(x => toast(x.message, true));
+}
+/* ---- feedback after the event: stars, comment, "again?" ---- */
+async function feedbackBox(e, u) {
+  const box = $('#fbBox'); let d; try { d = await api('/api/events/' + encodeURIComponent(e.slug) + '/feedback'); } catch { box.innerHTML = ''; return; }
+  const s = d.summary, m = d.mine || {};
+  box.innerHTML = `${s.count ? `<p class="fbsum"><span class="stars" aria-label="${s.avg} out of 5">${'★'.repeat(Math.round(s.avg))}${'☆'.repeat(5 - Math.round(s.avg))}</span> <b>${s.avg}</b> <span class="soft">from ${s.count} player${s.count === 1 ? '' : 's'}${s.again ? ` · ${s.again} want it again` : ''}</span></p>` : '<p class="soft">No ratings yet.</p>'}
+    ${d.canGive ? `<form id="fbF" class="card" style="background:#1a110a;margin-top:12px"><b>${d.mine ? 'Your rating' : 'How was it?'}</b>
+      <div class="starpick" role="radiogroup" aria-label="Stars">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="fbs" value="${n}"${m.stars === n ? ' checked' : ''}><span aria-hidden="true">★</span><span class="sr">${n} star${n > 1 ? 's' : ''}</span></label>`).join('')}</div>
+      <label for="fb_t">Comment <span class="soft">(only admins see it)</span></label><textarea id="fb_t" maxlength="1000" rows="3" placeholder="What did you like? What should be better next time?">${esc(m.text || '')}</textarea>
+      <label class="check"><input type="checkbox" id="fb_a"${m.again ? ' checked' : ''}> I want this event again</label>
+      <div style="margin-top:10px"><button class="btn sm" type="submit">${d.mine ? 'UPDATE RATING' : 'SEND RATING'}</button></div></form>`
+      : u ? '' : '<p class="soft small">Players who took part can rate this event after logging in.</p>'}`;
+  const f = $('#fbF'); if (!f) return;
+  f.onsubmit = ev => { ev.preventDefault(); const st = f.querySelector('input[name=fbs]:checked'); if (!st) return toast('Pick 1 to 5 stars.', true);
+    api('/api/events/' + encodeURIComponent(e.slug) + '/feedback', {method: 'POST', body: {stars: +st.value, text: $('#fb_t').value, again: $('#fb_a').checked}}).then(() => { toast('Thanks for your rating!'); feedbackBox(e, u); }).catch(x => toast(x.message, true)); };
+}
+
+// videos by their YouTube upload date (falls back to when they were added to the site)
+const vidTime = m => new Date(m.published || m.createdAt || 0).getTime();
+const sortVids = (list, dir) => list.slice().sort((a, b) => dir === 'old' ? vidTime(a) - vidTime(b) : vidTime(b) - vidTime(a));
+
+function regBox(e, mine, u, who) {
+  const box = $('#reg');
+  if (mine) {
+    box.innerHTML = `<h2>YOU ARE IN</h2><p>${badge(mine.status)}</p>${mine.team ? `<p>Team: <b>${esc(mine.team)}</b></p>` : ''}
+      <p class="soft small">${mine.status === 'pending' ? 'An admin will confirm your place soon.' : mine.status === 'approved' ? 'Your place is confirmed. See you in game.' : ''}</p>
+      ${e.status === 'open' ? '<button class="btn red sm" id="withdraw">WITHDRAW</button>' : ''}`;
+    const w = $('#withdraw'); if (w) w.onclick = async () => {
+      if (!confirm('Withdraw from ' + e.title + '?')) return;
+      try { await api('/api/events/' + e.slug + '/register', {method: 'DELETE'}); toast('You have withdrawn.'); load(); } catch (x) { toast(x.message, true); }
+    };
+    return;
+  }
+  if (e.status !== 'open') {
+    const future = e.start && new Date(e.start) > Date.now();
+    box.innerHTML = `<h2>${e.status === 'soon' ? 'COMING SOON' : 'REGISTRATION'}</h2><p class="soft">${e.status === 'live' ? 'This event is running now.' : e.status === 'completed' ? 'This event has finished.' : e.status === 'unsuccessful' ? 'This event did not go as planned. Thanks to everyone who played!' : e.status === 'cancelled' ? 'This event was cancelled.' : 'Registration opens soon. Watch our Discord for the announcement.'}</p>
+      ${future && e.status === 'soon' ? '<div class="cd" id="cd"></div>' : ''}`;
+    if (future && e.status === 'soon') countdown(e.start);
+    return;
+  }
+  if (!u) {
+    box.innerHTML = `<h2>JOIN THIS EVENT</h2><p class="soft">Log in with your Discord account to register. You need to be in the MTC Discord with the Creator role.</p>
+      ${who.discordLogin ? '<a class="btn discord" href="/auth/discord">LOG IN WITH DISCORD</a>' : '<p class="msg info">Discord login is being set up. Ask an admin to register you for now.</p>'}`;
+    return;
+  }
+  if (u.needsSetup) {
+    box.innerHTML = `<h2>JOIN THIS EVENT</h2><p class="soft">Add your Minecraft username first, so your name and skin show in the player list.</p><a class="btn" href="/account.html">FINISH SETTING UP</a>`;
+    return;
+  }
+  const full = e.slots && e.taken >= e.slots;
+  box.innerHTML = `<h2>JOIN THIS EVENT</h2>
+    ${full ? '<p class="msg info">All slots are taken.</p>' : `
+    <form id="regForm">
+      ${MTCForms.render(e.form, 'rq')}
+      ${e.teamSize > 1 ? '<label for="team">Team name <span class="soft">(optional, admins can assign teams)</span></label><input type="text" id="team" maxlength="40">' : ''}
+      <label for="note">Anything admins should know? <span class="soft">(optional)</span></label>
+      <input type="text" id="note" maxlength="300">
+      <div style="margin-top:18px"><button class="btn" type="submit">REGISTER</button></div>
+    </form>`}`;
+  const f = $('#regForm'); if (f) f.onsubmit = async ev => {
+    ev.preventDefault(); const btn = f.querySelector('button'); btn.disabled = true;
+    try { await api('/api/events/' + e.slug + '/register', {method: 'POST', body: {team: $('#team') ? $('#team').value : '', note: $('#note').value, answers: MTCForms.read(e.form, 'rq')}}); toast('Registered. An admin will confirm your place.'); load(); }
+    catch (x) { toast(x.message, true); btn.disabled = false; }
+  };
+}
+
+function countdown(iso) {
+  const t0 = new Date(iso).getTime(), el = $('#cd'); if (!el) return;
+  const tick = () => { const t = Math.max(0, t0 - Date.now()), p = n => String(n).padStart(2, '0');
+    el.innerHTML = [['days', Math.floor(t / 864e5)], ['hours', Math.floor(t / 36e5 % 24)], ['min', Math.floor(t / 6e4 % 60)], ['sec', Math.floor(t / 1e3 % 60)]].map(([l, v]) => `<div><b>${p(v)}</b><small>${l}</small></div>`).join(''); };
+  tick(); clearInterval(window.__cd); window.__cd = setInterval(tick, 1000);
+}
+function submitBox(e, u) {
+  const box = $('#submit');
+  if (!u || e.status === 'draft') { box.innerHTML = u ? '' : '<p class="soft small">Played in this event? Log in to add your screenshots or video.</p>'; return; }
+  box.innerHTML = `<details><summary class="btn ghost sm" style="list-style:none">ADD YOUR SCREENSHOT OR VIDEO</summary>
+    <form id="mediaForm" style="margin-top:14px">
+      <div class="row"><label class="check"><input type="radio" name="mt" value="image" checked> Screenshot</label><label class="check"><input type="radio" name="mt" value="youtube"> YouTube video</label></div>
+      <div id="mImg"><label for="mFile">Image</label><input type="file" id="mFile" accept="image/png,image/jpeg,image/webp,image/gif"></div>
+      <div id="mYt" hidden><label for="mUrl">YouTube video link</label><input type="url" id="mUrl" placeholder="https://www.youtube.com/watch?v=..."></div>
+      <label for="mCap">Caption <span class="soft">(optional)</span></label><input type="text" id="mCap" maxlength="140">
+      <p class="soft small" style="margin-top:10px">${u.admin ? 'Admin uploads appear straight away.' : 'An admin checks every upload before it appears.'}</p>
+      <button class="btn" type="submit">SEND</button>
+    </form></details>`;
+  const f = $('#mediaForm');
+  f.addEventListener('change', ev => { if (ev.target.name === 'mt') { const yt = ev.target.value === 'youtube'; $('#mYt').hidden = !yt; $('#mImg').hidden = yt; } });
+  f.onsubmit = async ev => {
+    ev.preventDefault(); const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+    try {
+      const type = f.querySelector('input[name=mt]:checked').value, body = {type, caption: $('#mCap').value};
+      if (type === 'youtube') body.url = $('#mUrl').value; else { const file = $('#mFile').files[0]; if (!file) throw new Error('Choose an image first.'); body.data = await imageToDataUrl(file); }
+      const r = await api('/api/events/' + e.slug + '/media', {method: 'POST', body});
+      toast(r.status === 'approved' ? 'Added to the showcase.' : 'Sent. It will appear once an admin approves it.'); load();
+    } catch (x) { toast(x.message, true); btn.disabled = false; }
+  };
+}
+load(); MTC.foot();
+</script>
+</body>
+</html>

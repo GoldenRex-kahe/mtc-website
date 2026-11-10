@@ -1,0 +1,8 @@
+.env
+data/
+node_modules/
+# written by the site while it runs
+creators-extra.json
+# plugin build leftovers
+plugin/build/
+*.log

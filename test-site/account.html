@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your account | MTC</title>
+<link rel="icon" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+.me{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.me img{width:64px;height:64px;border:3px solid #000}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.vlogo{width:56px;height:56px;border:3px solid #000;object-fit:cover}
+.mchead{flex:none;width:64px;height:64px;border:3px solid #000;image-rendering:pixelated;background:#2a1d12}
+i.mchead{background:var(--s) -320px -64px/512px 512px,var(--s) -64px -64px/512px 512px}
+.mcrow{display:flex;gap:14px;align-items:center}
+.mcrow .grow input{width:100%}
+.steps{display:grid;gap:4px;margin:0 0 14px;padding-left:20px}
+.bdgrow{display:flex;flex-wrap:wrap;gap:6px}
+</style>
+<script src="/assets/px.js"></script>
+</head>
+<body>
+<header id="nav"></header>
+<main id="main"><p class="soft">Loading...</p></main>
+<script src="/assets/md.js"></script>
+<script src="/assets/app.js"></script>
+<script>
+const {$, esc, api, badge, toast, me, day} = MTC;
+MTC.nav('account');
+const err = new URLSearchParams(location.search).get('error');
+
+async function load() {
+  const d = await me(); const u = d.user;
+  if (!u) {
+    $('#main').innerHTML = `<h1>YOUR ACCOUNT</h1>
+      ${err ? `<p class="msg err">${esc(err)}</p>` : ''}
+      <div class="card accent" style="max-width:560px">
+        <h2>LOG IN</h2>
+        <p>Log in with Discord to register for events, add your YouTube channel to the Creators page, and share your event screenshots and videos.</p>
+        <p class="soft small">We only read your Discord name and picture. We never see your password or messages.</p>
+        ${d.discordLogin ? '<a class="btn discord" href="/auth/discord">LOG IN WITH DISCORD</a>' : '<p class="msg info">Discord login is being set up. Check back soon.</p>'}
+        <p class="small" style="margin-top:22px"><a href="/admin.html">Staff login</a></p>
+      </div>`;
+    return;
+  }
+  if (!u.viaPassword && !u.admin && !u.inGuild) { location.replace('/apply.html'); return; }
+  if (u.needsSetup) {
+    $('#main').innerHTML = `<h1>WELCOME TO MTC</h1>
+      <div class="card accent" style="max-width:640px" id="setup"></div>
+      <p class="small soft" style="margin-top:14px">Not you? <button class="btn grey sm" id="logout">LOG OUT</button></p>`;
+    $('#logout').onclick = async () => { await api('/auth/logout', {method: 'POST'}); location.href = '/'; };
+    setupBox(u, true); return;
+  }
+  const [regs, prof] = await Promise.all([api('/api/me/registrations').catch(() => ({registrations: []})), api('/api/me/profile').catch(() => ({}))]);
+  $('#main').innerHTML = `<h1>YOUR ACCOUNT</h1>
+    ${err ? `<p class="msg err">${esc(err)}</p>` : ''}
+    <div class="card">
+      <div class="me">
+        ${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : ''}
+        <div class="grow"><b style="font-size:20px">${esc(u.name)}</b>
+          <div class="chips">${u.viaPassword ? '<span class="badge live">STAFF PASSWORD LOGIN</span>' :
+            `${u.inGuild ? '<span class="badge approved">IN MTC DISCORD</span>' : '<span class="badge rejected">NOT IN MTC DISCORD</span>'}
+             ${u.creator ? '<span class="badge approved">CREATOR</span>' : '<span class="badge withdrawn">NO CREATOR ROLE</span>'}`}
+             ${u.verified ? '<span class="badge verified">VERIFIED BY ADMIN</span>' : ''}${u.blocked ? '<span class="badge rejected">BLOCKED</span>' : ''}
+             ${u.admin ? '<span class="badge live">ADMIN</span>' : ''}</div></div>
+        <div class="row">${u.admin ? '<a class="btn sm" href="/admin.html">ADMIN DASHBOARD</a>' : ''}<button class="btn grey sm" id="logout">LOG OUT</button></div>
+      </div>
+      ${!u.viaPassword && !u.verified && !u.blocked && (!u.inGuild || !u.creator) ? `<p class="msg info" style="margin-top:16px">${!u.inGuild ? 'Join the MTC Discord server, then log out and in again.' : 'Ask an admin in Discord for the Creator role, then log out and in again.'} You need both to register for events.</p>` : ''}
+    </div>
+    ${u.viaPassword ? '' : '<div class="card" id="setup"></div>'}
+    ${u.viaPassword ? '' : '<div class="card" id="myBadges" hidden><h2>MY BADGES</h2><div class="bdgrow"></div><p class="soft small" style="margin-top:10px">Earn more by playing events, winning and sharing in the showcase. <a href="/leaderboard.html">See the leaderboard</a></p></div>'}
+    <div class="grid2">
+      <div class="card"><h2>MY EVENTS</h2>${regs.registrations.length ? `<div class="list">${regs.registrations.slice().reverse().map(r => `
+        <div class="item"><div class="grow"><b><a href="/event.html?slug=${encodeURIComponent(r.event.slug || '')}" style="color:var(--ink)">${esc(r.event.title || 'Event')}</a></b><br><span class="soft small">${esc(r.event.dateLabel || '')}${r.team ? ' · Team ' + esc(r.team) : ''}</span></div>${badge(r.status)}</div>`).join('')}</div>`
+        : '<p class="soft">You have not registered for an event yet.</p><a class="btn sm" href="/#events">SEE EVENTS</a>'}</div>
+      <div class="card" id="prof"></div>
+    </div>`;
+  $('#logout').onclick = async () => { await api('/auth/logout', {method: 'POST'}); location.href = '/'; };
+  profBox(u, prof);
+  if (!u.viaPassword) setupBox(u, false);
+  if (!u.viaPassword) api('/api/badges/' + u.id).then(b => { const el = $('#myBadges'); if (el && b.badges.length) { el.hidden = false; el.querySelector('.bdgrow').innerHTML = MTC.badgeIcons(b.badges).replace('class="bdgs"', 'class="bdgs big"'); } }).catch(() => {});
+}
+
+/* Minecraft name (required), skin file if the name shows the wrong skin, YouTube link (optional) */
+function setupBox(u, first) {
+  const box = $('#setup');
+  box.innerHTML = `<h2>${first ? 'FINISH SETTING UP' : 'YOUR MINECRAFT'}</h2>
+    ${first ? `<p>MTC is a community for Minecraft content creators. Before you join events, tell us who you are in Minecraft.</p>
+      <ol class="steps small soft"><li>Your Minecraft username (needed)</li><li>Your skin file, only if the skin below is wrong</li><li>Your YouTube channel, or an admin will verify you by hand</li></ol>` : '<p class="soft small">Your Minecraft name and skin show next to your name in events.</p>'}
+    <form id="sf">
+      <label for="su_mc">Minecraft name</label>${MTC.edPicker('su_ed', u.mcEdition)}
+      <div class="mcrow"><i class="mchead" id="su_head" aria-hidden="true"></i><div class="grow"><input type="text" id="su_mc" maxlength="20" required autocomplete="off" placeholder="${u.mcEdition === 'bedrock' ? 'Your Xbox gamertag' : 'e.g. Evil_GOD_NK'}" value="${esc(u.mc || '')}">
+        <span class="small soft" id="su_hint">${u.mc ? '' : 'Your skin shows here once you type your name.'}</span></div></div>
+      <label for="su_skin">Skin file <span class="soft">(optional: only if the skin above is wrong or missing. PNG from your launcher, or NameMC's Download button)</span></label>
+      <input type="file" id="su_skin" accept="image/png">
+      ${u.ownSkin ? '<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="su_clear" style="width:auto"> Remove my uploaded skin and use my Minecraft name\'s skin</label>' : ''}
+      ${first ? `<label for="su_yt">YouTube channel link <span class="soft">(optional: leave empty and an admin will verify you by hand)</span></label>
+      <input type="url" id="su_yt" placeholder="https://www.youtube.com/@yourname">` : ''}
+      <div style="margin-top:18px"><button class="btn" type="submit">${first ? 'SAVE AND CONTINUE' : 'SAVE'}</button></div>
+    </form>`;
+  const head = $('#su_head'), inp = $('#su_mc');
+  const show = url => { head.style.setProperty('--s', url ? `url('${url}')` : 'none'); };
+  let t, upl = null;
+  show(u.ownSkin ? u.skin : MTC.skinUrl(u.mc, u.mcEdition));
+  inp.oninput = () => { clearTimeout(t); t = setTimeout(() => {
+    const n = inp.value.trim(), ed = MTC.readEd('su_ed'); if (upl) return;
+    if (!MTC.validMc(n, ed)) { show(''); $('#su_hint').textContent = n ? (ed === 'bedrock' ? 'Gamertags are 2 to 16 letters, numbers and spaces.' : 'Java names are 3 to 16 letters, numbers or underscores. On Bedrock? Pick Bedrock.') : ''; return; }
+    const img = new Image(); img.onload = () => { show(img.src); $('#su_hint').textContent = 'Is this your skin? If not, add your skin file below.'; };
+    img.onerror = () => { show(''); $('#su_hint').textContent = 'No skin found for that name. Check the spelling, or add your skin file below.'; };
+    if (ed === 'bedrock') img.onload = () => { show(img.src); $('#su_hint').textContent = 'Bedrock skins show after you join a Geyser server once. Showing Steve? Add your skin file below.'; };
+    if (ed === 'offline') img.onload = () => { show(img.src); $('#su_hint').textContent = 'Offline accounts have no official skin, so this is Steve or Alex. Add your skin file below to show yours.'; };
+    img.src = MTC.skinUrl(n, ed);
+  }, 450); };
+  document.querySelectorAll('input[name=su_ed]').forEach(r => r.onchange = () => { inp.placeholder = MTC.readEd('su_ed') === 'bedrock' ? 'Your Xbox gamertag' : MTC.readEd('su_ed') === 'offline' ? 'Your in-game name' : 'e.g. Evil_GOD_NK'; inp.oninput(); });
+  $('#su_skin').onchange = () => { const f = $('#su_skin').files[0]; if (!f) { upl = null; inp.oninput(); return; }
+    const fr = new FileReader(); fr.onload = () => { upl = fr.result; show(upl); $('#su_hint').textContent = 'Using the skin file you chose.'; }; fr.readAsDataURL(f); };
+  $('#sf').onsubmit = async ev => {
+    ev.preventDefault(); const b = ev.target.querySelector('button[type=submit]'); b.disabled = true;
+    try {
+      const r = await api('/api/me/setup', {method: 'PUT', body: {mc: inp.value.trim(), edition: MTC.readEd('su_ed'), skin: upl || undefined, clearSkin: !!($('#su_clear') || {}).checked, youtube: ($('#su_yt') || {value: ''}).value.trim()}});
+      toast(first ? (r.sent ? 'All set. An admin will check your channel.' : 'All set. Welcome to MTC!') : 'Saved.');
+      location.reload();
+    } catch (x) { toast(x.message, true); b.disabled = false; }
+  };
+}
+
+function profBox(u, p) {
+  const box = $('#prof');
+  if (u.viaPassword) { box.innerHTML = '<h2>CREATOR PROFILE</h2><p class="soft">Log in with Discord to set up a creator profile.</p>'; return; }
+  const v = p.verified, q = p.request, s = (q && q.status === 'pending' ? q : null) || {youtube: v ? v.youtube : '', mc: v ? v.mc : '', mcEdition: v ? v.mcEdition : '', socials: v ? v.socials : {}, featured: v ? v.featured : ''};
+  box.innerHTML = `<h2>CREATOR PROFILE</h2>
+    ${v ? `<div class="item" style="margin-bottom:14px"><img class="vlogo" src="${esc(v.logo)}" alt=""><div class="grow"><b>${esc(v.channelName)}</b><br><span class="soft small">Shown on the Creators page</span></div>${badge('verified')}</div>`
+        : '<p class="soft">Add your YouTube channel. Once an admin verifies it, you appear on the Creators page with your channel logo.</p>'}
+    ${q && q.status === 'pending' ? `<p class="msg info">Your changes from ${esc(day(q.submittedAt))} are waiting for an admin.</p>` : ''}
+    ${q && q.status === 'rejected' ? `<p class="msg err">Your last request was not approved${q.reason ? ': ' + esc(q.reason) : '.'}</p>` : ''}
+    <form id="pf">
+      <label for="yt">YouTube channel link</label>
+      <input type="url" id="yt" required placeholder="https://www.youtube.com/@yourname" value="${esc(s.youtube || '')}">
+      <label for="mc">Minecraft username <span class="soft">(shows your 3D skin)</span></label>
+      ${MTC.edPicker('pf_ed', s.mc ? s.mcEdition : u.mcEdition)}<input type="text" id="mc" maxlength="20" placeholder="Java username or Bedrock gamertag" value="${esc(s.mc || u.mc || '')}">
+      <div class="fields">
+        ${['instagram', 'discord', 'x', 'twitch', 'facebook'].map(k => `<div><label for="s_${k}">${{instagram: 'Instagram', discord: 'Discord', x: 'X (Twitter)', twitch: 'Twitch', facebook: 'Facebook'}[k]} <span class="soft">(optional)</span></label><input type="url" id="s_${k}" placeholder="https://..." value="${esc((s.socials || {})[k] || '')}"></div>`).join('')}
+        ${MTC.linkFields('pf_links', s.socials || {})}
+      </div>
+      <label for="skinf">Skin file <span class="soft">(only if your Minecraft name shows no skin; PNG from your launcher or NameMC's Download button)</span></label>
+      <input type="file" id="skinf" accept="image/png">
+      <label for="fv">Featured video <span class="soft">(one of your YouTube videos, plays on your profile)</span></label>
+      <input type="url" id="fv" placeholder="https://www.youtube.com/watch?v=..." value="${esc(s.featured || '')}">
+      <div style="margin-top:18px"><button class="btn" type="submit">${v ? 'SEND CHANGES FOR REVIEW' : 'SEND FOR VERIFICATION'}</button></div>
+    </form>`;
+  MTC.bindLinkFields('pf_links');
+  $('#pf').onsubmit = async ev => {
+    ev.preventDefault(); const b = ev.target.querySelector('button'); b.disabled = true;
+    const socials = MTC.readLinks('pf_links'); for (const k of ['instagram', 'discord', 'x', 'twitch', 'facebook']) socials[k] = $('#s_' + k).value.trim();
+    try { await api('/api/me/profile', {method: 'PUT', body: {youtube: $('#yt').value.trim(), mc: $('#mc').value.trim(), edition: MTC.readEd('pf_ed'), socials, featured: $('#fv').value.trim(), skin: await new Promise(r => { const f = $('#skinf').files[0]; if (!f) return r(undefined); const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); })}}); toast('Sent. An admin will verify your channel.'); load(); }
+    catch (x) { toast(x.message, true); b.disabled = false; }
+  };
+}
+load(); MTC.foot();
+</script>
+</body>
+</html>

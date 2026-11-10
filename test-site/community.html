@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Community | MTC</title>
+<link rel="icon" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+.ctabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 20px}
+.ctabs a{font:10px var(--display);padding:12px 14px;background:#2a1d12;color:var(--soft);border:3px solid #000;text-decoration:none}
+.ctabs a[aria-current]{background:var(--accent);color:var(--accent-ink)}
+.poll{margin-bottom:18px;scroll-margin-top:90px}
+.poll h2{font-size:15px;line-height:1.5;margin:0 0 6px}
+.popt{display:flex;align-items:center;gap:10px;width:100%;position:relative;min-height:48px;margin:8px 0;padding:0 14px;background:#1a110a;border:3px solid #000;color:var(--ink);font:600 16px Archivo,sans-serif;text-align:left;cursor:pointer;overflow:hidden}
+.popt:hover:not(:disabled){border-color:var(--accent)}
+.popt:disabled{cursor:default}
+.popt i{position:absolute;inset:0 auto 0 0;background:#F7931E30;border-right:3px solid var(--accent);transition:width .5s}
+.popt span,.popt b,.popt em{position:relative}
+.popt span{flex:1}.popt b{font-variant-numeric:tabular-nums}.popt em{font-style:normal;font-size:12px;color:var(--soft)}
+.popt[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.popt .tick{width:22px;height:22px;border:2px solid var(--soft);display:grid;place-items:center;flex:none;font-size:14px}
+.popt[aria-pressed=true] .tick{background:var(--accent);border-color:var(--accent);color:#000}
+.idea{display:flex;gap:14px;align-items:flex-start}
+.upv{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:62px;min-height:62px;flex:none;background:#1a110a;border:3px solid #000;color:var(--ink);cursor:pointer;font:700 18px Archivo,sans-serif}
+.upv small{font-size:10px;color:var(--soft);letter-spacing:1px}
+.upv[aria-pressed=true]{border-color:var(--accent);background:#3a250f}
+.upv:disabled{cursor:default;opacity:.7}
+.idea h3{margin:0 0 4px;font-size:13px;line-height:1.5}
+.reply{margin-top:8px;padding:8px 12px;border-left:4px solid var(--accent);background:#1a110a;font-size:14px}
+.lfg{display:flex;gap:12px;align-items:center}
+.lfg .grow b{overflow-wrap:anywhere}
+.head{width:40px;height:40px;border:2px solid #000;flex:none}.head.ini{display:grid;place-items:center;background:#2a1d12;font-weight:800;color:var(--ink)}
+</style>
+<script src="/assets/px.js"></script>
+</head>
+<body>
+<header id="nav"></header>
+<main id="main"><p class="soft">Loading...</p></main>
+<script src="/assets/md.js"></script>
+<script src="/assets/app.js"></script>
+<script>
+const {$, esc, api, toast} = MTC;
+MTC.nav();
+const TYPES = {survival: 'Survival', minigame: 'Minigame', build: 'Build', pvp: 'PvP', other: 'Other'};
+const face = (p, size = 40) => p.skin ? MTC.head3d(p.skin, size) : p.avatar ? `<img class="head" src="${esc(p.avatar)}" alt="" style="width:${size}px;height:${size}px;border:2px solid #000">` : `<b class="head ini" aria-hidden="true">${esc([...(p.name || '?')][0])}</b>`;
+let tab = /ideas/.test(location.hash) ? 'ideas' : /teams/.test(location.hash) ? 'teams' : 'polls', who = null;
+async function render() {
+  who = who || await MTC.me();
+  $('#main').innerHTML = `<h1>COMMUNITY</h1><p class="soft">Vote for what MTC does next, share your event ideas and find a team.</p>
+    <nav class="ctabs" aria-label="Community">${[['polls', '🗳️ Polls'], ['ideas', '💡 Event ideas'], ['teams', '🤝 Team finder']].map(([k, l]) => `<a href="#${k}" data-t="${k}"${tab === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav><div id="cp"><p class="soft">Loading...</p></div>`;
+  document.querySelectorAll('[data-t]').forEach(a => a.onclick = e => { e.preventDefault(); tab = a.dataset.t; history.replaceState(null, '', '#' + tab); render(); });
+  ({polls, ideas, teams})[tab]();
+}
+const needLogin = can => can ? '' : `<p class="msg info">${who.user ? 'Only MTC members can vote and post. Join the MTC Discord, then log in again.' : 'Log in and join the MTC Discord to vote and post.'} ${who.user ? '' : '<a class="btn discord sm" href="/auth/discord" style="margin-left:8px">LOG IN WITH DISCORD</a>'}</p>`;
+
+async function polls() {
+  const d = await api('/api/polls'); const box = $('#cp');
+  const draw = () => {
+    box.innerHTML = needLogin(d.canVote) + (d.polls.length ? d.polls.map(q => { const total = q.options.reduce((a, o) => a + (o.votes || 0), 0), shown = q.options.some(o => o.votes !== null);
+      return `<article class="card poll" id="poll-${q.id}" data-p="${q.id}"><div class="row"><h2 style="flex:1">${esc(q.question)}</h2><span class="badge ${q.open ? 'live' : 'withdrawn'}">${q.open ? 'OPEN' : 'CLOSED'}</span></div>
+        ${q.note ? `<p class="soft">${esc(q.note)}</p>` : ''}
+        <p class="soft small">${q.voters} voter${q.voters === 1 ? '' : 's'}${q.multi ? ' · pick as many as you like' : ' · pick one'}</p>
+        ${q.endsAt && q.open ? `<div style="margin:6px 0 10px">${MTC.countdown(q.endsAt, 'Closes in')}</div>` : ''}
+        ${q.options.map(o => { const pct = shown && total ? Math.round(o.votes / total * 100) : 0, mine = q.mine.includes(o.id);
+          return `<button type="button" class="popt" data-o="${o.id}" aria-pressed="${mine}"${!q.open || !d.canVote ? ' disabled' : ''}>${shown ? `<i style="width:${pct}%"></i>` : ''}<span class="tick" aria-hidden="true">${mine ? '✓' : ''}</span><span>${esc(o.text)}</span>${shown ? `<em>${o.votes}</em><b>${pct}%</b>` : ''}</button>`; }).join('')}
+        ${q.open && d.canVote && q.multi ? `<button class="btn sm" type="button" data-send>${q.mine.length ? 'CHANGE VOTE' : 'VOTE'}</button>` : ''}
+        ${q.open && !shown && q.results === 'closed' ? '<p class="soft small">Results show when the poll closes.</p>' : q.open && !shown ? '<p class="soft small">Vote to see the results.</p>' : ''}</article>`; }).join('')
+      : '<div class="card"><p class="soft">No polls right now.</p></div>');
+    box.querySelectorAll('[data-p]').forEach(card => {
+      const q = d.polls.find(x => x.id === card.dataset.p);
+      const vote = async ids => { try { const r = await api('/api/polls/' + q.id + '/vote', {method: 'POST', body: {options: ids}}); Object.assign(q, r.poll); draw(); toast('Vote saved.'); } catch (x) { toast(x.message, true); } };
+      card.querySelectorAll('.popt').forEach(b => b.onclick = () => {
+        if (!q.multi) return vote([b.dataset.o]);
+        b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); b.querySelector('.tick').textContent = b.getAttribute('aria-pressed') === 'true' ? '✓' : '';
+      });
+      const s = card.querySelector('[data-send]'); if (s) s.onclick = () => vote([...card.querySelectorAll('.popt[aria-pressed=true]')].map(b => b.dataset.o));
+    });
+    const h = location.hash.match(/^#poll-(\w+)/); if (h) { const el = document.getElementById('poll-' + h[1]); if (el) el.scrollIntoView(); }
+  };
+  draw();
+}
+
+async function ideas() {
+  const d = await api('/api/suggestions'); const box = $('#cp');
+  const ST = {new: 'pending', planned: 'live', done: 'approved', declined: 'withdrawn'};
+  box.innerHTML = `${needLogin(d.canPost)}
+    ${d.canPost ? `<details class="card accent"${d.suggestions.length ? '' : ' open'}><summary style="cursor:pointer"><b>💡 SUGGEST AN EVENT</b> <span class="soft small">your idea could be the next MTC event</span></summary>
+      <form id="sf" style="margin-top:14px"><div class="fields"><div class="full"><label for="s_t">Title</label><input type="text" id="s_t" maxlength="80" required placeholder="e.g. Tamil Nadu build battle"></div>
+        <div><label for="s_ty">Game type</label><select id="s_ty">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
+        <div><label for="s_ts">Team size</label><input type="number" id="s_ts" min="1" max="20" value="1"></div>
+        <div class="full"><label for="s_x">How does it work?</label><textarea id="s_x" maxlength="1500" required placeholder="The idea, the rules, how a winner is picked..."></textarea></div></div>
+        <div style="margin-top:12px"><button class="btn" type="submit">SEND IDEA</button></div></form></details>` : ''}
+    ${d.suggestions.length ? d.suggestions.map(s => `<article class="card idea" data-s="${s.id}">
+      <button type="button" class="upv" data-up aria-pressed="${s.voted}" aria-label="${s.voted ? 'Remove your vote' : 'Vote for this idea'}"${d.canPost ? '' : ' disabled'}><span>▲</span>${s.votes}<small>VOTES</small></button>
+      <div class="grow" style="min-width:0"><h3>${esc(s.title)}</h3>
+        <p class="soft small" style="margin:0 0 6px"><span class="badge ${ST[s.status]}">${esc(s.statusLabel).toUpperCase()}</span> ${esc(TYPES[s.type] || s.type)}${s.teamSize > 1 ? ' · teams of ' + s.teamSize : ''} · by <span class="mtc-user">${esc(s.by.name)}</span> · ${esc(MTC.day(s.createdAt))}</p>
+        <div class="md">${MTCmd.md(s.text)}</div>
+        ${s.reply ? `<div class="reply"><b>MTC:</b> ${esc(s.reply)}</div>` : ''}
+        ${s.mine ? '<button type="button" class="btn ghost sm" data-del style="margin-top:8px">DELETE</button>' : ''}</div></article>`).join('')
+      : '<div class="card"><p class="soft">No ideas yet. Be the first!</p></div>'}`;
+  if ($('#sf')) $('#sf').onsubmit = async e => { e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
+    try { await api('/api/suggestions', {method: 'POST', body: {title: $('#s_t').value, type: $('#s_ty').value, teamSize: $('#s_ts').value, text: $('#s_x').value}}); toast('Thanks! Your idea is up. Admins have been told.'); ideas(); }
+    catch (x) { toast(x.message, true); b.disabled = false; } };
+  box.querySelectorAll('[data-s]').forEach(card => {
+    const id = card.dataset.s;
+    card.querySelector('[data-up]').onclick = () => api('/api/suggestions/' + id + '/vote', {method: 'POST'}).then(ideas).catch(x => toast(x.message, true));
+    const del = card.querySelector('[data-del]'); if (del) del.onclick = () => { if (confirm('Delete your idea?')) api('/api/suggestions/' + id, {method: 'DELETE'}).then(ideas).catch(x => toast(x.message, true)); };
+  });
+}
+
+async function teams() {
+  const d = await api('/api/lfg'); const box = $('#cp');
+  box.innerHTML = d.events.length ? `<p class="soft">Team events taking sign-ups. Post on the event page to look for a team, or to find players for yours.</p>` + d.events.map(e => `<div class="card"><div class="row"><h2 style="margin:0;flex:1">${esc(e.title)}</h2><span class="soft small">teams of ${e.teamSize}</span>
+      <a class="btn sm" href="/event.html?slug=${encodeURIComponent(e.slug)}#teamfinder">POST IN THE TEAM FINDER</a></div>
+      ${e.posts.length ? `<div class="list" style="margin-top:12px">${e.posts.map(l => `<div class="item lfg">${face(l)}<div class="grow"><b class="mtc-user">${esc(l.kind === 'team' ? l.team : l.name)}</b> <span class="badge ${l.kind === 'team' ? 'live' : 'pending'}">${l.kind === 'team' ? `NEEDS ${l.need}` : 'LOOKING FOR A TEAM'}</span><br><span class="soft small">${l.kind === 'team' ? 'Team of ' + esc(l.name) + ' · ' : ''}${esc(l.note)}</span></div>${l.contact ? `<a class="btn discord sm" href="${esc(l.contact)}" target="_blank" rel="noopener">MESSAGE ON DISCORD</a>` : ''}</div>`).join('')}</div>` : '<p class="soft small" style="margin-top:10px">No posts yet.</p>'}</div>`).join('')
+    : '<div class="card"><p class="soft">No team events taking sign-ups right now.</p></div>';
+}
+render().catch(x => { $('#main').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; });
+MTC.foot();
+</script>
+</body>
+</html>

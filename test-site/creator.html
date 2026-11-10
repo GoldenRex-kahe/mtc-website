@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Creator | MTC</title>
+<meta name="description" content="A member of MC Thamizh Creators: their skin, latest videos and MTC events.">
+<link rel="icon" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+main{max-width:1180px}
+.c-banner{position:relative;aspect-ratio:1280/212;background:#1c130b center/cover no-repeat;border:4px solid #000;border-bottom:0}
+.c-banner::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#0000 45%,#1c130b99 75%,#1c130b),linear-gradient(90deg,#1c130b66,#0000 18%,#0000 82%,#1c130b66)}
+.c-hero.has-ban{border-top-width:0;margin-top:-1px}
+.c-hero{display:grid;grid-template-columns:minmax(260px,380px) 1fr;border:4px solid #000;background:#1c130b;margin-bottom:22px;position:relative;overflow:hidden}
+/* ---- MTC disco lobby: the club is drawn in 3D in the canvas; the CSS only paints the dark room behind it ---- */
+.c-skin{position:relative;min-height:500px;border-right:4px solid #000;overflow:hidden;isolation:isolate;
+  background:radial-gradient(ellipse 70% 45% at 50% 30%,#3b1a5c 0%,#1a0d2b 55%,#07040c 100%)}
+.c-skin canvas{position:absolute;inset:0;z-index:2;cursor:grab;touch-action:pan-y}
+.c-skin canvas:active{cursor:grabbing}
+.c-skin .none{position:relative;z-index:5;color:#fff;text-align:center;padding:30px;text-shadow:1px 1px #000}
+.lb-emote{position:absolute;z-index:6;bottom:34px;left:50%;translate:-50% 0;font:9px var(--display);color:#fff;background:#000000b0;border:2px solid #000;outline:2px solid #ffffff30;padding:7px 10px;white-space:nowrap;
+  opacity:0;transform:translateY(6px) scale(.9);transition:opacity .25s,transform .25s}
+.lb-emote.on{opacity:1;transform:none}
+.lb-emote small{font:8px var(--display);color:#ffd9a0;opacity:.8}
+.lb-tag{position:absolute;z-index:6;bottom:10px;left:50%;translate:-50% 0;font:8px var(--display);color:#ffffffb0;letter-spacing:.2em;white-space:nowrap;text-shadow:1px 1px #000}
+.c-info{padding:28px 30px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.c-top{display:flex;gap:18px;align-items:center}
+.c-logo{width:96px;height:96px;border:4px solid #000;object-fit:cover;flex:none;background:#2a1d12}
+.c-top h1{margin:0;font-size:clamp(22px,3.6vw,38px);word-break:break-word}
+.c-sub{color:var(--soft);font-size:15px;margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.c-sub img{width:22px;height:22px;border-radius:50%}
+.badges{display:flex;gap:6px;flex-wrap:wrap}
+.stchips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.stchip{display:inline-flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;background:linear-gradient(180deg,#24180e,#120b06);border:3px solid #000;box-shadow:inset 0 -3px 0 var(--sc),inset 0 1px 0 #ffffff14}
+.stchip>svg{width:26px;height:26px;flex:none;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--sc) 55%,transparent))}
+.stchip>span{display:grid;line-height:1.25;font:9px var(--display);color:var(--ink);letter-spacing:.03em}
+.stchip small{font:600 10px Archivo,sans-serif;letter-spacing:.08em;color:var(--soft)}
+.stchip.sc-ver{--sc:#4c9a2a}.stchip.sc-ev{--sc:#3a78b8}.stchip.sc-win{--sc:#d4af37}.stchip.sc-pod{--sc:#c07a3d}
+.stchip{flex:none;width:auto;justify-content:flex-start}.stchip>span{text-align:left}
+.mcname{display:inline-flex;gap:8px;align-items:center;font:11px var(--display);padding:9px 12px;border:3px solid #000;background:#0d0804;color:var(--accent);cursor:pointer}
+.socs{display:flex;gap:8px;flex-wrap:wrap}
+.socs a{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border:3px solid #000;background:#2a1d12;color:var(--ink);font-weight:700;text-decoration:none}
+.socs a:hover{background:#3a2a1c}.socs img{width:22px;height:22px}
+.c-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px}
+.c-stats div{border:3px solid #000;background:#1c130b;padding:14px;text-align:center}
+.c-stats b{display:block;font:20px var(--display);color:var(--accent)}
+.c-stats span{font-size:13px;color:var(--soft)}
+.c-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:22px;align-items:start}
+.vids{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.vid{border:3px solid #000;background:#0d0804;cursor:pointer;text-align:left;padding:0;color:var(--ink);font:inherit}
+.vid .th{aspect-ratio:16/9;background:#2a1d12 center/cover;position:relative}
+.vid .th i{position:absolute;inset:auto 8px 8px auto;background:#000c;color:#fff;font-size:11px;padding:2px 6px;font-style:normal}
+.vid .t{padding:8px 10px 10px;font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vid .m{padding:0 10px 10px;font-size:12px;color:var(--soft)}
+.vid:hover{outline:3px solid var(--accent)}
+.evs{display:grid;gap:10px}
+.ev{display:grid;grid-template-columns:200px 1fr auto;gap:14px;align-items:center;border:3px solid #000;background:#0d0804;color:var(--ink);text-decoration:none;padding:0 14px 0 0;transition:transform .15s}
+/* event banners are 16:7 (1920x840), so the thumbnail uses the same shape and shows the whole image */
+.ev .bn{aspect-ratio:16/7;width:100%;align-self:center;background:#0d0804 center/contain no-repeat;border-right:3px solid #000}
+.ev .tx{min-width:0;padding:10px 0}
+.ev .tx b{display:block;font-size:16px;line-height:1.25}
+.ev .meta{display:block;font-size:13px;color:var(--soft);margin:4px 0 8px}
+.ev .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ev .role{font-size:12px;font-weight:700;padding:3px 8px;border:2px solid #3a2a1c;color:var(--ink)}
+.ev .pl{text-align:center;min-width:56px}
+.ev .pl .md{display:block;font-size:30px;line-height:1}
+.ev .pl small{display:block;font:8px var(--display);color:var(--accent);margin-top:4px}
+.ev:hover{transform:translateY(-2px);outline:3px solid var(--accent)}
+.ev.dim .bn{filter:grayscale(.6) brightness(.7)}
+.tl{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.tl li{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #2a1d12}
+.tl li:last-child{border:0}.tl .ic{font-size:18px}.tl a{color:var(--ink)}.tl small{display:block;color:var(--soft)}
+.feat{aspect-ratio:16/9;border:3px solid #000;background:#000 center/cover;position:relative;cursor:pointer;width:100%}
+.feat i{position:absolute;inset:0;margin:auto;width:72px;height:50px;background:#f00;border-radius:12px;display:grid;place-items:center}
+.feat i::after{content:"";border-left:20px solid #fff;border-top:12px solid transparent;border-bottom:12px solid transparent;margin-left:5px}
+.feat iframe{width:100%;height:100%;border:0;display:block}
+.navc{display:flex;justify-content:space-between;gap:12px;margin:26px 0 10px;flex-wrap:wrap}
+.navc a{display:flex;gap:10px;align-items:center;padding:10px 14px;border:3px solid #000;background:#1c130b;color:var(--ink);text-decoration:none;font-weight:700}
+.navc a img{width:36px;height:36px;border:2px solid #000;object-fit:cover}
+.navc a:hover{background:#2a1d12}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+@media(max-width:900px){.c-hero{grid-template-columns:1fr}.c-skin{border-right:0;border-bottom:4px solid #000;min-height:420px}.c-grid{grid-template-columns:1fr}.c-stats{grid-template-columns:repeat(3,1fr)}}
+.ev .pl .md.num{font:16px var(--display);color:var(--accent)}
+@media(max-width:560px){.c-info{padding:20px 18px}.c-logo{width:72px;height:72px}.c-stats{grid-template-columns:repeat(2,1fr)}.ev{grid-template-columns:120px 1fr auto;gap:10px;padding-right:10px}.ev .tx b{font-size:14px}}
+.bdgrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+</style>
+<script src="/assets/px.js"></script>
+</head>
+<body>
+<header id="nav"></header>
+<main id="main"><p class="soft">Loading creator...</p></main>
+<script src="/assets/md.js"></script>
+<script src="/assets/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/skinview3d@3.0.1/bundles/skinview3d.bundle.js"></script>
+<script>
+const {$, esc, api, toast, badge, bannerStyle} = MTC;
+MTC.nav('creators');
+const key = new URLSearchParams(location.search).get('u') || (location.hash.match(/creator=(.+)/) || [])[1] || '';
+const ago = iso => { if (!iso) return ''; const s = (Date.now() - new Date(iso)) / 1000, U = [['year', 31536e3], ['month', 2592e3], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
+  for (const [n, v] of U) if (s >= v) { const k = Math.floor(s / v); return `${k} ${n}${k > 1 ? 's' : ''} ago`; } return 'just now'; };
+const views = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M views' : n >= 1e3 ? (n / 1e3).toFixed(1).replace('.0', '') + 'K views' : n + ' views';
+const day = iso => iso ? new Intl.DateTimeFormat('en-IN', {month: 'short', year: 'numeric'}).format(new Date(iso)) : '';
+const SOC = {youtube: 'YouTube', instagram: 'Instagram', discord: 'Discord', x: 'X', twitch: 'Twitch', facebook: 'Facebook', website: 'Website'};
+const VI={
+  seal:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" fill="#22a447" stroke="#0d0804" stroke-width="1.6" stroke-linejoin="round"/><path d="m8.6 12.2 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  youtube:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="5" width="22" height="14" rx="4" fill="#ff0033"/><path d="M10 9v6l5.2-3z" fill="#fff"/></svg>',
+  gamepad:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12a5 5 0 0 1 4.9 6l-.8 4a3 3 0 0 1-5.2 1.3L15 16H9l-1.9 2.3A3 3 0 0 1 1.9 17l-.8-4A5 5 0 0 1 6 7z" fill="#4aa3ff"/><path d="M6 10v4M4 12h4" stroke="#0d0804" stroke-width="2"/><circle cx="16" cy="11" r="1.4" fill="#0d0804"/><circle cx="18.6" cy="13.6" r="1.4" fill="#0d0804"/></svg>',
+  trophy:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5H3.5a3.5 3.5 0 0 0 4 4.5M17 5h3.5a3.5 3.5 0 0 1-4 4.5" stroke="#ffd23f" stroke-width="2" fill="none"/><path d="M7 2.5h10V8a5 5 0 0 1-10 0z" fill="#ffd23f"/><path d="M10.8 12.5h2.4V16h-2.4z" fill="#e8861a"/><path d="M8.5 16h7v3h-7z" fill="#e8861a"/><path d="M7 19h10v2.5H7z" fill="#8a5a1c"/></svg>',
+  medal:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 1.5h4.5l2.2 6.5H8.7zM13 1.5h4.5L15.3 8h-4.5z" fill="#4aa3ff"/><circle cx="12" cy="15" r="7.5" fill="#ffd23f"/><circle cx="12" cy="15" r="4.8" fill="none" stroke="#e8861a" stroke-width="1.6"/></svg>',
+};
+const medal = p => p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : p ? '#' + p : '';
+function play(id, title) { MTC.lightbox({type: 'youtube', url: 'https://www.youtube.com/watch?v=' + id, caption: title}); }
+
+async function load() {
+  if (!key) { $('#main').innerHTML = '<h1>CREATOR</h1><p class="soft">No creator picked. <a href="/#creators">See all creators</a></p>'; return; }
+  let d; try { d = await api('/api/creators/' + encodeURIComponent(key)); }
+  catch (x) { $('#main').innerHTML = `<h1>CREATOR</h1><p class="msg err">${esc(x.message)}</p><p><a class="btn" href="/#creators">SEE ALL CREATORS</a></p>`; return; }
+  const c = d.creator, s = d.stats, v = (d.youtube || {}).videos || [];
+  setTimeout(() => api('/api/badges/' + c.id).then(b => { const el = document.getElementById('crBadges'); if (el && b.badges.length) el.innerHTML = MTC.badgeIcons(b.badges).replace('class="bdgs"', 'class="bdgs big"'); }).catch(() => {}), 0);
+  document.title = c.name + ' | MTC';
+  const fv = c.featured && /^[\w-]{11}$/.test(c.featured.id || '') ? c.featured.id : '';
+  const socs = Object.entries(c.socials).filter(([, u]) => u);
+  $('#main').innerHTML = `
+    ${c.banner ? `<div class="c-banner" style="background-image:url('${esc(c.banner)}')" role="img" aria-label="${esc(c.name)} YouTube banner"></div>` : ''}
+    <section class="c-hero${c.banner ? ' has-ban' : ''}">
+      <div class="c-skin" id="skinBox">
+        ${c.skin ? `<canvas id="skin" aria-label="${esc(c.name)}'s Minecraft character in the MTC hub"></canvas><div class="lb-emote" id="emote" aria-hidden="true"></div><div class="lb-tag">DRAG TO LOOK AROUND</div>`
+          : '<p class="none">No Minecraft skin added yet.</p>'}
+      </div>
+      <div class="c-info">
+        <div class="c-top"><img class="c-logo" src="${esc(c.logo)}" alt="" referrerpolicy="no-referrer">
+          <div style="min-width:0"><h1>${esc(c.name.toUpperCase())}</h1>
+            <div class="c-sub">${c.avatar ? `<img src="${esc(c.avatar)}" alt="">` : ''}<span>${esc(c.discordName || c.username)} · @${esc(c.username)} on Discord</span></div></div></div>
+        <div class="stchips"><span class="stchip sc-ver">${VI.seal}<span><small>STATUS</small>VERIFIED CREATOR</span></span>${s.events ? `<span class="stchip sc-ev">${VI.gamepad}<span><small>EVENTS</small>${s.events} PLAYED</span></span>` : ''}${s.wins ? `<span class="stchip sc-win">${VI.trophy}<span><small>WINS</small>${s.wins} WIN${s.wins > 1 ? 'S' : ''}</span></span>` : ''}${s.podiums ? `<span class="stchip sc-pod">${VI.medal}<span><small>TOP 3</small>${s.podiums} TIME${s.podiums > 1 ? 'S' : ''}</span></span>` : ''}</div>
+        <div class="bdgrow" id="crBadges"></div>
+        ${c.mc ? `<div><button class="mcname" id="copyMc" title="Copy Minecraft name">${c.mcEdition === 'bedrock' ? 'BEDROCK' : c.mcEdition === 'offline' ? 'OFFLINE' : 'JAVA'}: ${esc(c.mc)} ⧉</button></div>` : ''}
+        ${socs.length ? `<div class="socs">${socs.map(([k, u]) => { const web = k.startsWith('website');
+          return `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="/assets/icons/${SOC[k] && !web ? k : 'website'}.svg" alt="">${esc(web ? MTC.linkName(u) : SOC[k] || k)}</a>`; }).join('')}</div>` : ''}
+        <div class="row" style="margin-top:auto">${c.skin ? `<a class="btn grey" href="${esc(c.skin)}" download="${esc((c.mc || c.username) + '.png')}">GET SKIN</a>` : ''}<button class="btn ghost" id="share">COPY PROFILE LINK</button></div>
+      </div>
+    </section>
+    <div class="c-stats"><div><b>${s.events}</b><span>events played</span></div><div><b>${s.wins}</b><span>wins</span></div><div><b>${s.podiums}</b><span>top 3 finishes</span></div><div><b>${s.uploads}</b><span>showcase uploads</span></div><div><b>${esc(day(s.memberSince) || '—')}</b><span>member since</span></div></div>
+    <div class="c-grid">
+      <div>
+        <div class="card"><div class="row" style="margin-bottom:12px"><h2 style="margin:0;margin-right:auto">LATEST ON YOUTUBE</h2>${c.socials.youtube ? `<a class="btn sm" href="${esc(c.socials.youtube)}?sub_confirmation=1" target="_blank" rel="noopener">SUBSCRIBE</a>` : ''}</div>
+          ${v.length ? `<div class="vids">${v.slice(0, 9).map(x => `<button class="vid" data-v="${x.id}" data-t="${esc(x.title)}"><div class="th" style="background-image:url('${esc(x.thumb)}')">${x.short ? '<i>SHORT</i>' : ''}</div><div class="t">${esc(x.title)}</div><div class="m">${x.views ? esc(views(x.views)) + ' · ' : ''}${esc(ago(x.published))}</div></button>`).join('')}</div>`
+            : `<p class="soft">${esc((d.youtube && d.youtube.error) || 'No recent Minecraft videos.')}</p>`}</div>
+        <div class="card"><h2>MTC EVENTS</h2>${d.events.length ? `<div class="evs">${d.events.map(e => { const role = !e.confirmed ? 'Waiting for confirmation' : e.status === 'open' || e.status === 'soon' ? 'Registered' : e.status === 'live' ? 'Playing now' : e.status === 'cancelled' ? 'Was in it' : e.status === 'unsuccessful' ? 'Played (unsuccessful)' : 'Played';
+            return `<a class="ev${e.status === 'cancelled' || e.status === 'unsuccessful' ? ' dim' : ''}" href="/event.html?slug=${encodeURIComponent(e.slug)}">
+            <div class="bn" style="${e.banner ? bannerStyle({...e, bannerFit: 'contain', bannerPos: '50% 50%'}) : 'background:linear-gradient(120deg,#3a1f08,#21160D)'}"></div>
+            <div class="tx"><b>${esc(e.title)}</b><span class="meta">${esc(e.start ? new Intl.DateTimeFormat('en-IN', {day: 'numeric', month: 'short', year: 'numeric'}).format(new Date(e.start)) : e.dateLabel || '')}${e.team ? ' · Team ' + esc(e.team) : ''}</span>
+              <div class="chips">${badge(e.status)}<span class="role">${esc(role)}</span></div></div>
+            <div class="pl" title="${e.place ? 'Finished #' + e.place : ''}">${e.place ? `<span class="md${e.place > 3 ? ' num' : ''}">${medal(e.place)}</span><small>${e.points ? esc(e.points) + ' PTS' : e.place === 1 ? 'WINNER' : 'PLACE'}</small>` : ''}</div></a>`; }).join('')}</div>`
+          : '<p class="soft">Has not played an MTC event yet.</p>'}</div>
+        ${d.media.length ? `<div class="card"><h2>SHOWCASE</h2><div class="gal" id="gal">${d.media.map(m => MTC.tile(m, true)).join('')}</div></div>` : ''}
+      </div>
+      <div>
+        ${fv ? `<div class="card"><h2>FEATURED VIDEO</h2><button class="feat" id="feat" style="background-image:url('https://i.ytimg.com/vi/${fv}/hqdefault.jpg')" aria-label="Play featured video"><i></i></button></div>` : ''}
+        <div class="card"><h2>RECENT ACTIVITY</h2>${d.activity.length ? `<ul class="tl">${d.activity.map(a => `<li><span class="ic" aria-hidden="true">${a.icon}</span><div>${a.link ? `<a href="${esc(a.link)}">${esc(a.text)}</a>` : esc(a.text)}<small>${esc(ago(a.at))}</small></div></li>`).join('')}</ul>` : '<p class="soft">Nothing yet.</p>'}</div>
+      </div>
+    </div>
+    <nav class="navc" aria-label="Other creators">${d.prev ? `<a href="/creator.html?u=${encodeURIComponent(d.prev.username)}"><span>←</span><img src="${esc(d.prev.logo)}" alt="" referrerpolicy="no-referrer">${esc(d.prev.name)}</a>` : '<span></span>'}
+      <a href="/#creators">ALL ${d.total} CREATORS</a>
+      ${d.next ? `<a href="/creator.html?u=${encodeURIComponent(d.next.username)}">${esc(d.next.name)}<img src="${esc(d.next.logo)}" alt="" referrerpolicy="no-referrer"><span>→</span></a>` : '<span></span>'}</nav>`;
+
+  document.querySelectorAll('.vid').forEach(b => b.onclick = () => play(b.dataset.v, b.dataset.t));
+  if (fv) $('#feat').onclick = () => { $('#feat').innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${fv}?autoplay=1" title="Featured video" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`; };
+  if ($('#gal')) MTC.bindGallery($('#gal'), d.media);
+  if ($('#copyMc')) $('#copyMc').onclick = () => { navigator.clipboard?.writeText(c.mc); toast('Minecraft username copied.'); };
+  $('#share').onclick = () => { navigator.clipboard?.writeText(location.origin + '/creator.html?u=' + encodeURIComponent(c.username)); toast('Profile link copied.'); };
+  if (c.skin && window.skinview3d) skin(c.skin);
+}
+// ---- the player in the lobby: faces you, breathes, and plays a random emote every few seconds
+// only real Emotecraft emotes are used (the hand-made ones were removed)
+const EMOTES = [];
+// ---- emotes made in Emotecraft (SPEmotes by Milyan), converted to keyframes in /assets/emotes
+const DATA_EMOTES = [ // [label, file, prop, loops, author]
+  ['⚔️ SWORD SWING', 'swing-sword', 'sword', 2, 'SPEmotes'], ['🗡️ BLADE TWIRL', 'spin-sword', 'sword', 2, 'SPEmotes'], ['👑 THRONE', 'throne', 'throne', 1, 'SPEmotes'],
+  ['🟣 THE HONORED ONE', 'honored-one', '', 1, 'TheXFrost', true], ['⭐ JOTARO POSE', 'jotaro-pose', '', 2, 'SPEmotes'], ['🫡 HANDS BEHIND', 'hands-behind', '', 1, 'SPEmotes'],
+  ['🌀 BREAKDANCE FLARE', 'breakdance-flare', '', 6, 'qukens_'], ['💃 TORTURE DANCE', 'gang-torture-dance', '', 1, 'SPEmotes'], ['😴 LAY ON SIDE', 'lay-on-side', '', 2, 'Gray'],
+  ['🕺 GET THE GRIDDY', 'griddy', '', 2, 'SeroRonin'], ['🤪 GO CRAZY', 'go-crazy', '', 1, 'SPEmotes'], ['💪 HANDSTAND PUSH-UPS', 'handstand-pushups', '', 1, 'MineeEmotes'],
+];
+const EASE = { 0: k => k, 1: () => 0, 6: k => 1 - Math.cos(k * Math.PI / 2), 7: k => Math.sin(k * Math.PI / 2), 8: k => -(Math.cos(Math.PI * k) - 1) / 2,
+  9: k => k ** 3, 10: k => 1 - (1 - k) ** 3, 11: k => k < .5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2, 12: k => k * k, 13: k => 1 - (1 - k) ** 2, 14: k => k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2 };
+// value of one axis at a tick (the ease of the keyframe you are moving towards is used, like Emotecraft)
+function axisAt(kf, tick, def) {
+  if (!kf || !kf.length) return def;
+  if (tick <= kf[0][0]) return kf[0][1];
+  for (let i = 1; i < kf.length; i++) if (tick <= kf[i][0]) {
+    const [t0, v0] = kf[i - 1], [t1, v1, e] = kf[i], k = t1 === t0 ? 1 : (tick - t0) / (t1 - t0);
+    return v0 + (v1 - v0) * (EASE[e] || EASE[8])(k);
+  }
+  return kf[kf.length - 1][1];
+}
+// Minecraft model space -> viewer space: y and z are flipped, so yaw and roll change sign
+const MC_DEF = { head: [0, 0, 0], rightArm: [-5, 2, 0], leftArm: [5, 2, 0], rightLeg: [-1.9, 12, .1], leftLeg: [1.9, 12, -.1] };
+function partPose(a, name, tick) {
+  const p = a.parts[name] || {}, d = MC_DEF[name] || [0, 0, 0], g = (ax, def) => axisAt(p[ax], tick, def);
+  const bend = g('bend', 0);
+  // the 3D viewer has no elbows or knees: tilt the whole limb half of the bend so the pose still reads
+  return { x: g('x', d[0]), y: -g('y', d[1]), z: -g('z', d[2]), rx: g('pitch', 0) + (name === 'head' ? 0 : bend / 2), ry: -g('yaw', 0), rz: -g('roll', 0) };
+}
+function loadEmotes() {
+  // long emotes are cut at 10 seconds so the lobby keeps changing
+  return Promise.all(DATA_EMOTES.map(([label, file, prop, loops, author, center]) => fetch('/assets/emotes/' + file + '.json').then(r => r.ok ? r.json() : null)
+    .then(a => a && { label, prop, author, center: !!center, a, ticks: Math.min(200, a.endTick + (a.loop ? (a.endTick - a.returnTick) * (loops - 1) : 0)) }).catch(() => null))).then(l => l.filter(Boolean));
+}
+// tick inside a looping emote: play once, then loop from returnTick
+const loopTick = (a, tick) => tick <= a.endTick || !a.loop ? Math.min(tick, a.endTick) : a.returnTick + (tick - a.endTick) % Math.max(1, a.endTick - a.returnTick);
+
+// ---- the MTC hub: a small Minecraft lobby built with the viewer's own 3D classes (no extra libraries)
+// 16x16 pixel sword (my own pixel art in the Minecraft item style), drawn as an extruded sprite like a held item
+const SWORD_PX = [
+  '.............OOO',
+  '............OWLO',
+  '...........OWLDO',
+  '..........OWLDO.',
+  '.........OWLDO..',
+  '........OWLDO...',
+  '.......OWLDO....',
+  '..OO..OWLDO.....',
+  '..OGOOWLDO......',
+  '...OGWLDO.......',
+  '....OGDO........',
+  '....OHGGO.......',
+  '...OHhO.OGO.....',
+  '.OOHhO...OO.....',
+  'OPHhO...........',
+  'OOO.............'];
+const SWORD_COL = { O: 0x0b3b32, W: 0xeafffb, L: 0x8ff5e3, D: 0x27b8a0, G: 0x2c2c38, H: 0x4a2f15, h: 0x6e4723, P: 0x1e1e26 };
+
+// 16x16 block textures painted in the Minecraft look. Seeded, so the same pixels every time.
+function paint(kind) {
+  const c = document.createElement('canvas'); c.width = c.height = 16; const x = c.getContext('2d');
+  let seed = [...kind].reduce((n, ch) => n * 31 + ch.charCodeAt(0), 7) % 233280;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const pick = l => l[Math.floor(rnd() * l.length)];
+  const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
+  const fill = l => { for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) px(i, j, pick(l)); };
+  switch (kind) {
+    case 'grass': fill(['#5f9f35', '#6aad3c', '#55922f', '#73b844', '#4f8a2b', '#629f38']); break;
+    case 'dirt': fill(['#79553a', '#866043', '#6c4b32', '#8f6a4b', '#5e412b']); break;
+    case 'path': fill(['#8c8f8f', '#979a9a', '#828585', '#a1a3a3']); for (let i = 0; i < 16; i++) { px(i, 0, '#b4b6b6'); px(0, i, '#b4b6b6'); px(i, 15, '#6f7272'); px(15, i, '#6f7272'); } break;
+    case 'bricks': fill(['#7d7d7d', '#858585', '#777777', '#8d8d8d']);
+      for (let i = 0; i < 16; i++) { px(i, 7, '#5a5a5a'); px(i, 15, '#5a5a5a'); px(i, 0, '#999'); px(i, 8, '#999'); }
+      for (let j = 0; j < 7; j++) { px(15, j, '#5a5a5a'); px(7, j + 8, '#5a5a5a'); px(0, j, '#999'); px(8, j + 8, '#999'); } break;
+    case 'log': for (let i = 0; i < 16; i++) { const col = pick(['#6b5132', '#5d4529', '#77593a', '#4e3a22']); for (let j = 0; j < 16; j++) px(i, j, rnd() < .15 ? '#3f2e1a' : col); } break;
+    case 'logTop': fill(['#b49a62']); x.strokeStyle = '#8f7445'; for (const r of [2.5, 4.5, 6.5]) x.strokeRect(8 - r, 8 - r, r * 2, r * 2); x.strokeStyle = '#5d4529'; x.strokeRect(.5, .5, 15, 15); break;
+    case 'planks': for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) { const seam = j % 4 === 3 || i === ((j >> 2) % 2 ? 11 : 4) && j % 4 !== 3; px(i, j, seam ? '#6e5432' : pick(['#b8945f', '#ab8853', '#c29d66', '#a07f4f'])); } break;
+    case 'dark': for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) { const seam = j % 4 === 3 || i === ((j >> 2) % 2 ? 11 : 4) && j % 4 !== 3; px(i, j, seam ? '#2a1a0c' : pick(['#4b321a', '#422c16', '#53381e', '#3d2813'])); } break;
+    case 'door': for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) px(i, j, i === 0 || i === 15 || j === 0 || j === 15 || i === 7 ? '#2a1a0c' : pick(['#4b321a', '#422c16', '#53381e']));
+      for (let j = 3; j < 7; j++) for (let i = 2; i < 6; i++) { px(i, j, '#1b120a'); px(i + 7, j, '#1b120a'); } px(12, 9, '#c9a227'); px(3, 9, '#c9a227'); break;
+    case 'leaves': for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) px(i, j, rnd() < .12 ? '#1f4a14' : pick(['#3c7a22', '#468a2a', '#336b1d', '#4f9631'])); break;
+    case 'lantern': fill(['#2b2b33']); for (let j = 3; j < 13; j++) for (let i = 3; i < 13; i++) px(i, j, pick(['#ffcf5a', '#ffb83a', '#ffe08a', '#ff9e2c'])); for (let i = 0; i < 16; i++) { px(i, 2, '#1c1c22'); px(i, 13, '#1c1c22'); } break;
+    case 'gold': for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) px(i, j, i === 0 || j === 0 || i === 15 || j === 15 ? '#a37708' : i === 1 || j === 1 ? '#fff6a8' : pick(['#f6d23e', '#fadc4c', '#f2c628'])); break;
+    case 'wool': fill(['#9b1d1d', '#a82222', '#8e1a1a', '#b52b2b']); break;
+    case 'banner': c.height = 32; for (let j = 0; j < 32; j++) for (let i = 0; i < 16; i++) px(i, j, pick(['#e8731f', '#df6b1a', '#f07d26']));
+      for (let j = 0; j < 32; j++) { px(0, j, '#1d1d21'); px(15, j, '#1d1d21'); } for (let i = 0; i < 16; i++) { px(i, 0, '#1d1d21'); px(i, 1, '#1d1d21'); }
+      for (let i = 1; i < 15; i++) { const d = Math.abs(i - 7.5) | 0; for (let j = 23 + (7 - d); j < 32; j++) px(i, j, '#1d1d21'); }      // black chevron at the bottom
+      for (const [i, j] of [[4, 6], [4, 7], [4, 8], [4, 9], [4, 10], [4, 11], [5, 7], [6, 8], [7, 9], [8, 8], [9, 7], [10, 6], [10, 7], [10, 8], [10, 9], [10, 10], [10, 11]]) px(i + .5 | 0, j, '#fff3d6'); // M
+      for (let i = 3; i < 13; i++) { px(i, 14, '#1d1d21'); px(i, 17, '#1d1d21'); } break;
+    case 'poppy': x.clearRect(0, 0, 16, 16); for (let j = 9; j < 16; j++) px(7, j, '#3f7a22'); px(6, 12, '#3f7a22'); px(8, 11, '#3f7a22');
+      for (const [i, j] of [[6, 5], [7, 5], [8, 5], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [6, 7], [7, 7], [8, 7], [7, 8]]) px(i, j, '#c8221c'); px(7, 6, '#2b1a10'); break;
+    case 'dandelion': x.clearRect(0, 0, 16, 16); for (let j = 10; j < 16; j++) px(7, j, '#3f7a22'); px(8, 13, '#3f7a22');
+      for (const [i, j] of [[6, 7], [7, 7], [8, 7], [6, 8], [7, 8], [8, 8], [7, 6], [7, 9]]) px(i, j, '#f5d120'); px(7, 7, '#fff37a'); break;
+    case 'tallgrass': x.clearRect(0, 0, 16, 16); for (let i = 1; i < 15; i += 2) { const h = 6 + Math.floor(rnd() * 8); for (let j = 16 - h; j < 16; j++) px(i + (j % 3 === 0 ? 1 : 0), j, pick(['#5f9f35', '#4f8a2b', '#73b844'])); } break;
+    case 'tile': fill(['#e9e9ef', '#f4f4f8', '#dcdce4']); for (let i = 0; i < 16; i++) { px(i, 0, '#9a9aa6'); px(0, i, '#9a9aa6'); px(i, 15, '#9a9aa6'); px(15, i, '#9a9aa6'); }
+      for (let i = 2; i < 6; i++) px(i, 2, '#ffffff'); px(2, 3, '#ffffff'); break;   // glass-like floor tile, tinted by its light colour
+    case 'black': fill(['#0c0b10', '#111017', '#0a0a0d', '#15131b']); break;            // black concrete
+    case 'stagefloor': fill(['#1b1a20', '#16151b', '#201f26']); for (let i = 0; i < 16; i++) { px(i, 0, '#2b2a33'); px(0, i, '#2b2a33'); } break;
+    case 'note': for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) px(i, j, i === 0 || j === 0 || i === 15 || j === 15 ? '#2a150b' : i === 1 || j === 1 ? '#6f4026' : pick(['#55301b', '#5e351e', '#4d2b17', '#653a21']));
+      for (let j = 4; j < 12; j++) for (let i = 4; i < 12; i++) px(i, j, (j % 2 === 0) ? '#1c0e06' : pick(['#3a2112', '#422615'])); break;   // note block: wood with a dark grille
+    case 'notepix': x.clearRect(0, 0, 16, 16); for (let j = 2; j < 12; j++) { px(9, j, '#fff'); px(10, j, '#fff'); } for (const [i, j] of [[11, 2], [12, 3], [12, 4], [13, 5], [12, 6]]) px(i, j, '#fff');
+      for (let j = 10; j < 14; j++) for (let i = 5; i < 10; i++) if (!((i === 5 || i === 9) && (j === 10 || j === 13))) px(i, j, '#fff'); break;   // music note particle
+    case 'speaker': fill(['#18171c', '#1d1c22']); { x.fillStyle = '#0b0b0e'; x.beginPath(); x.arc(8, 10, 5, 0, 7); x.fill(); x.fillStyle = '#2e2d36'; x.beginPath(); x.arc(8, 10, 2, 0, 7); x.fill();
+      x.fillStyle = '#0b0b0e'; x.beginPath(); x.arc(8, 3.5, 2, 0, 7); x.fill(); } break;
+    case 'mirror': fill(['#c9d1dc', '#e8edf3', '#9aa3b0', '#f7fbff', '#b4bdc9']); break;
+    case 'shadow': { x.clearRect(0, 0, 16, 16); const g = x.createRadialGradient(8, 8, 1, 8, 8, 8); g.addColorStop(0, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 16, 16); break; }
+    default: fill(['#ff00ff']);
+  }
+  return c;
+}
+// the MTC logo as a framed painting on the hub wall
+function paintingCanvas(onReady) {
+  const c = document.createElement('canvas'); c.width = 192; c.height = 128; const x = c.getContext('2d');
+  x.fillStyle = '#3d2813'; x.fillRect(0, 0, 192, 128); x.fillStyle = '#22160b'; x.fillRect(8, 8, 176, 112);
+  const g = x.createLinearGradient(0, 12, 0, 116); g.addColorStop(0, '#2a1b10'); g.addColorStop(1, '#5a2f0a'); x.fillStyle = g; x.fillRect(12, 12, 168, 104);
+  const img = new Image(); img.onload = () => { const h = 92, w = h * img.width / img.height; x.drawImage(img, 96 - w / 2, 18, w, h); onReady(); }; img.src = '/assets/logo.png';
+  return c;
+}
+function makeWorld(v, S) {
+  const ref = S.head.innerLayer, Mesh = ref.constructor, Box = ref.geometry.constructor, Mat = ref.material.constructor;
+  const Group = S.rightArm.children[0].constructor, Tex = ref.material.map.constructor, Color = ref.material.color.constructor, cs = ref.material.map.colorSpace;
+  const base = {};
+  const texOf = (kind, rw = 1, rh = 1, linear) => { const src = base[kind] = base[kind] || (kind === 'painting' ? null : paint(kind));
+    const t = new Tex(src); t.magFilter = linear ? 1006 : 1003; t.minFilter = linear ? 1006 : 1003; t.generateMipmaps = false; if (cs) t.colorSpace = cs;
+    t.wrapS = t.wrapT = 1000; t.repeat.set(rw, rh); t.needsUpdate = true; return t; };
+  // Minecraft-style face shading: tops brightest, sides darker, bottom darkest; tinted warm for golden hour
+  const SHADE = [.72, .72, 1, .5, .86, .7], TINT = new Color(0xfff0dc);
+  const shadeMat = (t, k, extra = {}) => new Mat({ color: 0x000000, emissive: TINT.clone().multiplyScalar(k * (extra.bright || 1)), emissiveMap: t, roughness: 1, metalness: 0,
+    ...(extra.alpha ? { map: t, alphaTest: .5, side: 2 } : {}), ...(extra.fog === false ? { fog: false } : {}) });
+  // a box whose faces tile a 16x16 texture once per block (1 block = 16 units, like the player model)
+  const block = (g, w, h, d, x, y, z, kind, extra = {}) => {
+    const k = typeof kind === 'string' ? { side: kind, top: kind, bottom: kind } : kind;
+    const faces = [[k.side, d, h], [k.side, d, h], [k.top, w, d], [k.bottom || k.top, w, d], [k.front || k.side, w, h], [k.side, w, h]];
+    const m = new Mesh(new Box(w, h, d), faces.map(([kd, a, b], i) => shadeMat(extra.once ? texOf(kd) : texOf(kd, a / 16, b / 16), SHADE[i], extra)));
+    m.position.set(x, y, z); g.add(m); return m;
+  };
+  const world = new Group(), B = 16, F = -16; // floor top is at the player's feet
+  // ---- MTC disco: light-up dance floor, disco ball, sweeping beams, note-block speakers
+  const PALETTE = [0xff2fb2, 0x2fd6ff, 0x7dff3a, 0xffd23a, 0xff7a1a, 0x9b5cff]; // Minecraft concrete-ish colours
+  const lit = (kind, col, w, h, d, x, y, z, g = world) => {        // a block that glows in a colour we change every frame
+    const mats = [0, 1, 2, 3, 4, 5].map(i => new Mat({ color: 0, emissive: col, emissiveMap: texOf(kind, (i < 2 ? d : w) / 16, (i === 2 || i === 3 ? d : h) / 16), roughness: 1, metalness: 0 }));
+    const m = new Mesh(new Box(w, h, d), mats); m.position.set(x, y, z); g.add(m); return m; };
+  // floor: dark stage, with a 7x5 dance floor of glowing tiles in the middle
+  block(world, 26 * B, B, 20 * B, 0, F - B / 2, -110, 'stagefloor');
+  const tiles = [];
+  for (let gx = -3; gx <= 3; gx++) for (let gz = -3; gz <= 1; gz++) tiles.push({ m: lit('tile', 0x000000, B - .6, 2, B - .6, gx * B, F - .4, gz * B), gx, gz });
+  // back wall: black concrete, LED strips, the MTC logo in the middle
+  const WZ = -150;
+  block(world, 22 * B, 8 * B, B, 0, F + 4 * B, WZ - B / 2, 'black');
+  const leds = [];
+  for (const y of [F + 1.2 * B, F + 6.4 * B]) leds.push(lit('tile', 0xff2fb2, 22 * B, 2, 2, 0, y, WZ + 1));
+  for (const x of [-120, -40, 40, 120]) leds.push(lit('tile', 0x2fd6ff, 2, 7 * B, 2, x, F + 3.5 * B, WZ + 1));
+  const pt = new Tex(paintingCanvas(() => { pt.needsUpdate = true; })); pt.magFilter = pt.minFilter = 1006; pt.generateMipmaps = false; if (cs) pt.colorSpace = cs; pt.needsUpdate = true;
+  const painting = new Mesh(new Box(4.5 * B, 3 * B, 1), [0, 1, 2, 3, 4, 5].map(i => i === 4 ? shadeMat(pt, 1) : shadeMat(texOf('black'), SHADE[i])));
+  painting.position.set(0, F + 4.85 * B, WZ + 2); world.add(painting);
+  // DJ booth behind the dance floor
+  block(world, 4 * B, B, B, 0, F + B / 2, -78, { side: 'black', top: 'stagefloor', front: 'black' });
+  const booth = lit('tile', 0x9b5cff, 4 * B - 2, 2, 1, 0, F + B - 3, -70.4);
+  // note blocks on both sides of the booth (they bump with the bass and pop music notes, like in Minecraft)
+  const speakers = [];
+  for (const side of [-1, 1]) for (const [cx, cy] of [[0, 0], [1, 0], [0, 1]]) { const g = new Group(); g.position.set(side * (52 + cx * B), F + B / 2 + cy * B, -95); world.add(g);
+    block(g, B, B, B, 0, 0, 0, 'note'); speakers.push(g); }
+  // music-note particles (a small pool, reused)
+  const noteTex = texOf('notepix'), notes = [];
+  for (let i = 0; i < 14; i++) { const m = new Mesh(new Box(9, 9, .01), new Mat({ color: 0, emissive: 0xffffff, emissiveMap: noteTex, map: noteTex, alphaTest: .4, transparent: true, depthWrite: false, roughness: 1 }));
+    m.visible = false; world.add(m); notes.push({ m, born: -9 }); }
+  let lastBeat = -1, nextNote = 0;
+  // disco ball: mirror blocks on a sphere, hanging from a chain, spinning
+  const ball = new Group(); ball.position.set(0, 58, -60); world.add(ball);
+  block(world, 1, 2 * B, 1, 0, 58 + 8 + B, -60, 'black');
+  const mirrors = [];
+  for (let i = 0; i < 90; i++) { const yy = 1 - (i + .5) / 45, r = Math.sqrt(1 - yy * yy) || 0, th = i * 2.399963;   // even spread (golden angle)
+    if (i >= 90) break; const R = 8, m = lit('mirror', 0x888888, 2.6, 2.6, 2.6, Math.cos(th) * r * R, yy * R, Math.sin(th) * r * R, ball); m.lookAt(0, 0, 0); mirrors.push(m); }
+  // light beams: long see-through shafts from lights in the ceiling, sweeping across the floor
+  const beams = [];
+  for (const [bx, col, ph] of [[-110, 0xff2fb2, 0], [110, 0x2fd6ff, 1.6], [-50, 0x7dff3a, 3.1], [50, 0xffd23a, 4.4]]) {
+    const pivot = new Group(); pivot.position.set(bx, F + 7.5 * B, -60); world.add(pivot);
+    block(pivot, 8, 6, 8, 0, 0, 0, 'black');                                        // the lamp
+    const shaft = new Mesh(new Box(10, 170, 10), new Mat({ color: 0, emissive: col, transparent: true, opacity: .16, depthWrite: false, roughness: 1 }));
+    shaft.material.blending = 2; shaft.position.y = -85; pivot.add(shaft); beams.push({ pivot, shaft, col, ph }); }
+  // soft round shadow under the player
+  const shadow = new Mesh(new Box(18, .1, 18), new Mat({ color: 0, emissive: 0, map: texOf('shadow', 1, 1, true), transparent: true, depthWrite: false, roughness: 1 }));
+  shadow.position.set(0, F + 1.2, 0); world.add(shadow);
+  v.scene.add(world);
+  const tmpC = new Color();
+  // throne built from the same blocks: dark oak, red wool, gold
+  const throne = new Group(); throne.visible = false;
+  block(throne, 20, 8, 16, 0, F + 4, -1, 'dark');
+  block(throne, 18, 1, 14, 0, F + 8.5, -1, 'wool');
+  block(throne, 20, 30, 4, 0, F + 15, -9, 'dark');
+  block(throne, 14, 21, 1, 0, F + 14, -6.6, 'wool');
+  block(throne, 22, 4, 5, 0, F + 31, -9, 'gold', { bright: 1.1 });
+  for (const xx of [-8, 8]) block(throne, 4, 4, 4, xx, F + 35, -9, 'gold', { bright: 1.1 });
+  block(throne, 4, 6, 4, 0, F + 36, -9, 'gold', { bright: 1.1 });
+  for (const xx of [-11, 11]) { block(throne, 4, 13, 16, xx, F + 6.5, -1, 'dark'); block(throne, 4, 2, 16, xx, F + 14, -1, 'gold', { bright: 1.1 }); }
+  v.playerWrapper.add(throne);
+  // sword: extruded pixel sprite (1 voxel = 0.75 units), grip in the hand, blade forwards like a held item
+  const sprite = new Group(), V = .75, cache = {};
+  SWORD_PX.forEach((row, j) => [...row].forEach((ch, i) => { if (!SWORD_COL[ch]) return;
+    const m = new Mesh(new Box(V, V, V), cache[ch] = cache[ch] || new Mat({ color: SWORD_COL[ch], roughness: .7, metalness: 0 }));
+    m.position.set(0, (15 - j) * V, i * V); sprite.add(m); }));
+  sprite.position.set(0, -2 * V, -1.5 * V);
+  const sword = new Group(); sword.add(sprite); sword.visible = false; sword.rotation.x = .78;
+  const hand = new Group(); hand.position.set(-1, -10, 0); hand.add(sword); S.rightArm.add(hand);
+  const BPM = 124 / 60;
+  return { sword, throne, shadow, tick(t) {
+    const beat = t * BPM, kick = Math.pow(1 - (beat % 1), 3), bar = Math.floor(beat / 4);
+    // dance floor: a colour wave that changes pattern every bar, flashing on the kick
+    for (const { m, gx, gz } of tiles) {
+      const wave = bar % 3 === 0 ? gx + gz : bar % 3 === 1 ? Math.hypot(gx, gz + 1) * 1.6 : (gx * 7 + gz * 13) % 6;
+      const col = PALETTE[Math.abs(Math.floor(wave + beat)) % PALETTE.length], on = .35 + .65 * kick * ((Math.floor(beat) + gx + gz) % 2 ? 1 : .55);
+      for (const mt of m.material) mt.emissive.setHex(col).multiplyScalar(on); }
+    leds.forEach((l, i) => { const c = PALETTE[(Math.floor(beat / 2) + i) % PALETTE.length]; for (const mt of l.material) mt.emissive.setHex(c).multiplyScalar(.55 + .45 * kick); });
+    for (const mt of booth.material) mt.emissive.setHex(PALETTE[Math.floor(beat) % PALETTE.length]).multiplyScalar(.6 + .4 * kick);
+    speakers.forEach((g, i) => g.scale.setScalar(1 + .08 * kick * (i % 3 === 2 ? .7 : 1)));
+    const whole = Math.floor(beat);
+    if (whole !== lastBeat) { lastBeat = whole; for (let k = 0; k < 2; k++) { const n = notes[nextNote++ % notes.length], sp = speakers[(whole * 5 + k * 3) % speakers.length];
+      n.born = t; n.x = sp.position.x + (Math.random() - .5) * 6; n.y = sp.position.y + B / 2 + 4; n.z = sp.position.z + 4; n.m.visible = true;
+      n.m.material.emissive.setHex(PALETTE[(whole + k * 2) % PALETTE.length]); } }
+    for (const n of notes) { const age = t - n.born; if (age > 1.6 || age < 0) { n.m.visible = false; continue; }
+      n.m.position.set(n.x + Math.sin(age * 4) * 1.5, n.y + age * 14, n.z); n.m.material.opacity = Math.min(1, 2.2 - age * 1.4); n.m.scale.setScalar(.7 + age * .35); }
+    ball.rotation.y = t * .8;
+    mirrors.forEach((m, i) => { const sp = (Math.sin(t * 6 + i * 1.7) + 1) / 2; for (const mt of m.material) mt.emissive.setHex(sp > .93 ? PALETTE[i % PALETTE.length] : 0x7a7f88).multiplyScalar(sp > .93 ? 1.4 : .55 + sp * .45); });
+    beams.forEach(({ pivot, shaft, col, ph }) => { pivot.rotation.z = Math.sin(t * .9 + ph) * .55; pivot.rotation.x = .35 + Math.sin(t * .7 + ph * 1.3) * .25;
+      shaft.material.opacity = .09 + .1 * kick; shaft.material.emissive.setHex(PALETTE[(Math.floor(beat / 4) + Math.round(ph)) % PALETTE.length]); });
+  } };
+}
+
+function skin(url) {
+  const box = $('#skinBox'), cv = $('#skin'), bubble = $('#emote');
+  const size = () => ({w: box.clientWidth, h: box.clientHeight});
+  let sz = size(), v;
+  try { v = new skinview3d.SkinViewer({canvas: cv, width: sz.w, height: sz.h, skin: url}); } catch { cv.remove(); return; }
+  window.MTCLobby = v; // handy for debugging in the browser console
+  // Minecraft-like field of view, camera a little above the player looking slightly down, small look-around range
+  v.fov = 70; v.zoom = .46; v.background = null; v.autoRotate = false;
+  v.controls.enableZoom = false; v.controls.enablePan = false; v.controls.minPolarAngle = v.controls.maxPolarAngle = 1.5;
+  v.controls.minAzimuthAngle = -.6; v.controls.maxAzimuthAngle = .6; v.controls.target.set(0, 2, 0); v.controls.update();
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const P = v.playerObject, S = P.skin, LIMBS = ['head', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg'];
+  const home = {}; for (const n of LIMBS) { S[n].rotation.order = 'ZYX'; home[n] = S[n].position.clone(); }
+  P.rotation.order = 'ZYX';
+  // props need the skin's texture type, so they are built once the skin has loaded
+  let props = null, propsTried = false;
+  const buildProps = () => { if (propsTried || !S.head.innerLayer.material.map) return; propsTried = true; try { props = makeWorld(v, S); } catch (e) { console.warn('hub', e); } };
+  // Emotecraft turns and flips the body around the hips (0.7 blocks above the feet), not around the chest
+  const V3 = P.position.constructor, HIP = new V3(0, -4.8, 0), tmp = new V3();
+  let data = []; loadEmotes().then(l => { data = l; });
+  const qs = new URLSearchParams(location.search), force = (qs.get('emote') || '').toUpperCase(), hold = qs.has('hold');
+  let cur = null, start = 0, nextAt = 1.2, last = '';
+  const ease = k => k < .18 ? (k / .18) ** 2 * (3 - 2 * k / .18) : k > .82 ? ((1 - k) / .18) ** 2 * (3 - 2 * (1 - k) / .18) : 1;
+  v.animation = new skinview3d.FunctionAnimation((pl, t) => {
+    buildProps(); if (props) props.tick(t);
+    // rest pose with gentle breathing
+    const p = {rA: {x: 0, z: -.06}, lA: {x: 0, z: .06}, rL: {x: 0}, lL: {x: 0}, h: {x: 0, y: 0, z: 0}, y: 0, tx: 0, tz: 0, rot: Math.sin(t * .6) * .12};
+    p.rA.z += Math.cos(t * 2) * .03; p.lA.z -= Math.cos(t * 2) * .03; p.h.x = Math.sin(t * 1.3) * .04;
+    let dataPose = null;
+    if (!still) {
+      // every emote (hand-made + Emotecraft); ?emote=throne plays only matching ones, &hold=1 freezes mid-emote
+      const all = [...EMOTES.map(x => ({ label: x[0], dur: x[1], fn: x[2] })), ...data.map(x => ({ label: x.label, dur: x.ticks / 20, data: x }))];
+      const pool = force ? all.filter(x => x.label.includes(force)) : all;
+      if (!cur && t >= nextAt && pool.length) { let pick; do pick = pool[Math.floor(Math.random() * pool.length)]; while (pick.label === last && pool.length > 1);
+        cur = pick; last = pick.label; start = t; if (bubble) { bubble.innerHTML = esc(cur.label) + (cur.data && cur.data.author ? `<small> by ${esc(cur.data.author)}</small>` : ''); bubble.classList.add('on'); } }
+      if (cur) { const k = hold ? (cur.data ? .3 : .5) : (t - start) / cur.dur;
+        if (k >= 1) { cur = null; nextAt = t + 1.4 + Math.random() * 2; if (bubble) bubble.classList.remove('on'); }
+        else if (cur.data) dataPose = { d: cur.data, tick: loopTick(cur.data.a, k * cur.data.ticks), e: ease(k) };
+        else { const base = p.rot; cur.fn(p, t - start, ease(k), k); if (cur.label.includes('🌀')) p.rot += base; } }
+    }
+    // hand-made pose (also the rest pose)
+    for (const n of LIMBS) { S[n].position.copy(home[n]); S[n].rotation.set(0, 0, 0); }
+    S.rightArm.rotation.x = p.rA.x; S.rightArm.rotation.z = p.rA.z; S.leftArm.rotation.x = p.lA.x; S.leftArm.rotation.z = p.lA.z;
+    S.rightLeg.rotation.x = p.rL.x; S.leftLeg.rotation.x = p.lL.x;
+    S.head.rotation.x = p.h.x; S.head.rotation.y = p.h.y; S.head.rotation.z = p.h.z;
+    pl.position.set(0, p.y, 0); pl.rotation.set(p.tx, p.rot, p.tz);
+    if (props) { props.sword.visible = false; props.throne.visible = false; }
+    // Emotecraft pose, blended in and out of the rest pose
+    if (dataPose) {
+      const { d, tick, e } = dataPose, a = d.a, mix = (from, to) => from + (to - from) * e;
+      for (const n of LIMBS) { const q = partPose(a, n, tick), o = S[n];
+        o.position.set(mix(o.position.x, q.x), mix(o.position.y, q.y), mix(o.position.z, q.z));
+        o.rotation.set(mix(o.rotation.x, q.rx), mix(o.rotation.y, q.ry), mix(o.rotation.z, q.rz)); }
+      const b = a.parts.body || {}, g = (ax, def) => axisAt(b[ax], tick, def);
+      // the body's offset is in blocks with y pointing up (unlike the limbs)
+      const lift = y => y > .9 ? .9 + (y - .9) * .12 : y < -.9 ? -.9 + (y + .9) * .5 : y; // big jumps / levitation are squashed to stay in frame
+      // body tilt is in the player's own space (forward = +pitch leans back), so it is turned the other way than the limbs
+      const sideways = d.center ? 0 : 1;   // some emotes drift sideways in the game; in the lobby they stay centred
+      pl.position.set(mix(0, g('x', 0) * 16 * sideways), mix(p.y, lift(g('y', 0)) * 16), mix(0, -g('z', 0) * 16 * sideways));
+      pl.rotation.set(mix(p.tx, -(g('pitch', 0) + g('bend', 0) / 2)), mix(p.rot, -g('yaw', 0)), mix(p.tz, -g('roll', 0)));
+      tmp.copy(HIP).applyEuler(pl.rotation); pl.position.add(HIP).sub(tmp);
+      // centred emotes: keep the middle of the body (between head and hips) in the middle of the lobby, even when lying down
+      if (d.center) { pl.updateMatrixWorld(true); const hd = new V3().setFromMatrixPosition(S.head.matrixWorld), hp = new V3().setFromMatrixPosition(S.rightLeg.matrixWorld).add(new V3().setFromMatrixPosition(S.leftLeg.matrixWorld)).multiplyScalar(.5);
+        pl.position.x -= ((hd.x + hp.x * 3) / 4) * e; pl.position.z -= ((hd.z + hp.z * 3) / 4) * e; }
+      if (props && d.prop === 'sword') { const s = props.sword, it = a.parts.rightItem || {}, gi = (ax, def) => axisAt(it[ax], tick, def);
+        s.visible = e > .05; s.scale.setScalar(Math.max(.01, e));
+        s.position.set(gi('x', 0), -gi('y', 0), -gi('z', 0)); s.rotation.set(.78 + gi('pitch', 0), -gi('yaw', 0), -gi('roll', 0)); }
+      // this emote sits on the ground: lift the player onto the throne's seat
+      if (props && d.prop === 'throne') { props.throne.visible = e > .05; props.throne.scale.setScalar(.6 + .4 * e); pl.position.y += 9 * e; }
+    }
+    // the round shadow follows the player and fades when they leave the ground
+    if (props) { props.shadow.position.x = pl.position.x; props.shadow.position.z = pl.position.z; const up = Math.max(0, pl.position.y); props.shadow.scale.setScalar(Math.max(.4, 1 - up / 40)); }
+  });
+  const fit = () => { sz = size(); if (sz.w && sz.h) v.setSize(sz.w, sz.h); };
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(box); else addEventListener('resize', fit);
+}
+load(); MTC.foot();
+</script>
+</body>
+</html>

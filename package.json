@@ -1,0 +1,13 @@
+{
+  "name": "mtc-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MC Thamizh Creators website and Discord bot. No dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

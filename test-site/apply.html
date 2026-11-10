@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Apply to join | MTC</title>
+<meta name="description" content="Apply to join MC Thamizh Creators, the community for Tamil Minecraft YouTubers.">
+<link rel="icon" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+.wrap{max-width:680px}
+.who{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.who img,.who b.ini{width:48px;height:48px;border:3px solid #000;flex:none}
+.who b.ini{display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font:14px var(--display)}
+.how{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.how label{display:flex;align-items:center;gap:6px;margin:0;padding:8px 12px;border:3px solid #000;background:#2a1d12;cursor:pointer;font-weight:600}
+.how input{width:auto;margin:0;accent-color:var(--accent)}
+.how label:has(input:checked){background:var(--accent);color:var(--accent-ink)}
+.steps{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:10px;counter-reset:s}
+.steps li{display:flex;gap:12px;align-items:flex-start}
+.steps li::before{counter-increment:s;content:counter(s);flex:none;width:28px;height:28px;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font:11px var(--display);border:2px solid #000}
+.big{font-size:18px;padding:16px 26px}
+.chk{display:flex;align-items:center;gap:10px;padding:12px;background:#2a1d12;border:3px solid #000;margin-top:10px}
+.chk img{width:44px;height:44px;border:2px solid #000}
+</style>
+<script src="/assets/px.js"></script>
+</head>
+<body>
+<header id="nav"></header>
+<main id="main" class="wrap"><p class="soft">Loading...</p></main>
+<script src="/assets/md.js"></script>
+<script src="/assets/app.js"></script>
+<script src="/assets/forms.js"></script>
+<script>
+const {$, esc, api, toast, day} = MTC;
+MTC.nav('join');
+const fmt = new Intl.DateTimeFormat('en-IN', {day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'});
+
+async function load() {
+  const [d, me] = await Promise.all([api('/api/apply'), MTC.me()]);
+  const u = d.user, a = d.application;
+  const intro = `<h1>JOIN MTC</h1><p class="lead">MC Thamizh Creators is a community for Tamil Minecraft YouTubers. We run one big event every month and share everyone's videos.</p>`;
+  if (!u) {
+    $('#main').innerHTML = intro + `<div class="card accent"><h2>APPLY TO JOIN</h2>
+      <ol class="steps"><li>Log in with Discord. Discord asks if MTC may add you to a server: say yes, so we can add you as soon as you are approved.</li><li>Send your YouTube channel and tell us how you found us.</li><li>An admin checks your channel. Once approved, you appear in the MTC server automatically.</li></ol>
+      <div style="margin-top:22px">${d.discordLogin ? '<a class="btn discord big" href="/auth/discord?join=1">LOG IN WITH DISCORD TO APPLY</a>' : '<p class="msg info">Applications open soon.</p>'}</div>
+      <p class="soft small" style="margin-top:14px">We only read your Discord name and picture, and only use the add-to-server permission once, to add you to MTC.</p></div>`;
+    return;
+  }
+  const allow = u.canAdd ? '' : `<div class="msg info" style="margin:0 0 16px"><b>Let us add you automatically.</b> Allow MTC to add you to the server, so you are in the moment an admin approves you. No invite link needed.<div style="margin-top:10px"><a class="btn discord sm" href="/auth/discord?join=1">ALLOW WITH DISCORD</a></div></div>`;
+  const head = `<div class="who">${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : `<b class="ini">${esc([...u.name][0] || '?')}</b>`}<div><b>${esc(u.name)}</b><br><span class="soft small">Logged in with Discord</span></div></div>`;
+  if (u.inGuild) {
+    $('#main').innerHTML = intro + `<div class="card accent">${head}<h2>YOU ARE IN MTC</h2><p>${a && a.joinedAt ? 'Welcome! Your application was approved and you joined the Discord.' : 'You are already a member of the MTC Discord.'}</p>
+      <div class="row" style="margin-top:16px"><a class="btn" href="/account.html">GO TO YOUR ACCOUNT</a>${me.invite ? `<a class="btn grey" href="${esc(me.invite)}" target="_blank" rel="noopener">OPEN DISCORD</a>` : ''}</div></div>`;
+    return;
+  }
+  if (a && a.status === 'pending') {
+    $('#main').innerHTML = intro + `<div class="card accent">${head}<h2>APPLICATION SENT</h2>
+      ${allow}<p>Thanks! An admin will check your channel <b>${esc(a.channelName || a.youtube)}</b>. ${u.canAdd ? 'Once approved, you are added to the MTC server automatically and it shows up in your Discord.' : 'Come back to this page to get your invite once approved.'}</p>
+      <p class="badge pending" style="display:inline-block">WAITING FOR AN ADMIN</p><p class="soft small" style="margin-top:12px">Sent ${esc(day(a.submittedAt))}</p></div>`;
+    return;
+  }
+  if (a && a.status === 'approved' && !a.joinedAt) {
+    $('#main').innerHTML = intro + `<div class="card accent">${head}<h2>YOU ARE ACCEPTED!</h2>
+      ${a.invite ? `<p>Your application was approved. This invite is only for you: it works once${a.inviteExpires ? ' and expires on ' + esc(fmt.format(new Date(a.inviteExpires))) : ''}.</p>
+        <div style="margin:18px 0"><a class="btn big" href="${esc(a.invite)}" target="_blank" rel="noopener">JOIN THE MTC DISCORD</a></div>
+        <p class="soft small">After you join, the link is deleted. Come back here and press the button below.</p>`
+      : `<p class="msg info">Your invite link has expired. Ask an admin to send a new one, or message us on YouTube.</p>`}
+      <button class="btn grey sm" id="joined" type="button" style="margin-top:8px">I HAVE JOINED</button></div>`;
+    $('#joined').onclick = async () => { MTC.me = () => api('/api/me'); const m = await api('/api/me'); if (m.user && m.user.inGuild) location.href = '/account.html'; else toast('We cannot see you in the server yet. Use the invite above, then try again.', true); };
+    return;
+  }
+  const again = a && a.status === 'rejected' ? `<p class="msg err">Your last application was not approved${a.reason ? ': ' + esc(a.reason) : '.'} You can apply again 7 days after ${esc(day(a.decidedAt))}.</p>` : '';
+  $('#main').innerHTML = intro + `<div class="card accent">${head}<h2>APPLY TO JOIN</h2>${again}${allow}
+    <form id="af">
+      <label for="a_yt">Your YouTube channel link</label>
+      <div class="row"><input type="url" id="a_yt" required placeholder="https://www.youtube.com/@yourname" style="flex:1;min-width:220px"><button class="btn green sm" type="button" id="a_chk">CHECK</button></div>
+      <div id="a_res"></div>
+      <label for="a_mc">Minecraft name</label>${MTC.edPicker('a_ed', 'java')}
+      <input type="text" id="a_mc" required maxlength="20" placeholder="Java username or Bedrock gamertag" autocomplete="off">
+      ${MTCForms.render(d.form, 'ap')}
+      <div style="margin-top:20px"><button class="btn big" type="submit">SEND APPLICATION</button></div>
+    </form></div>`;
+  const check = async () => {
+    const v = $('#a_yt').value.trim(); if (!v) return;
+    $('#a_res').innerHTML = '<p class="soft small">Checking...</p>';
+    try { const c = await api('/api/apply/check', {method: 'POST', body: {youtube: v}}); $('#a_res').innerHTML = `<div class="chk"><img src="${esc(c.image)}" alt="" referrerpolicy="no-referrer"><div><b>${esc(c.name)}</b><br><span class="soft small">Is this your channel?</span></div></div>`; }
+    catch (x) { $('#a_res').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
+  };
+  $('#a_chk').onclick = check; $('#a_yt').onchange = check;
+  $('#af').onsubmit = async ev => {
+    ev.preventDefault(); const b = ev.target.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'SENDING...';
+    try {
+      await api('/api/apply', {method: 'POST', body: {youtube: $('#a_yt').value.trim(), mc: $('#a_mc').value.trim(), edition: MTC.readEd('a_ed'), answers: MTCForms.read(d.form, 'ap')}});
+      toast('Application sent!'); load();
+    } catch (x) { toast(x.message, true); b.disabled = false; b.textContent = 'SEND APPLICATION'; }
+  };
+}
+load().catch(x => { $('#main').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }); MTC.foot();
+</script>
+</body>
+</html>

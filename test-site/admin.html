@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin | MTC</title>
+<link rel="icon" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+.res-row{display:grid;grid-template-columns:70px 1fr 90px 1fr 44px;gap:8px;margin-bottom:8px}
+.res-row button{min-height:44px}
+.thumb{width:96px;aspect-ratio:16/10;background:#000 center/cover;border:2px solid #000;flex:none}
+.banner-prev{width:100%;max-width:360px;aspect-ratio:16/7;background:#000 center/cover;border:3px solid #000;margin-top:8px}
+.bn-src{position:relative;display:inline-block;max-width:100%;cursor:crosshair;border:3px solid #000;line-height:0}
+.bn-src img{max-width:100%;max-height:300px;display:block}
+.bn-dot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 3px #F7931E,0 0 8px #000;pointer-events:none}
+.bn-prevs{display:grid;grid-template-columns:1fr 1.6fr;gap:14px;margin-top:6px}
+.bn-prevs>div{display:grid;gap:6px}
+.bn-card,.bn-hero{border:3px solid #000;background:#0d0804 no-repeat}
+.bn-card{aspect-ratio:16/7}
+.bn-hero{aspect-ratio:4/1}
+@media(max-width:640px){.bn-prevs{grid-template-columns:1fr}}
+td input[type=text]{padding:7px 8px;font-size:14px;min-width:110px}
+.pick{border:3px solid #000;background:#0d0804}
+.pick input{border:0;border-bottom:2px solid #000}
+.pick-list{max-height:240px;overflow-y:auto;display:grid}
+.pick-list button,.pick-sel{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;background:none;border:0;border-bottom:1px solid #2a1d12;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.pick-list button:hover,.pick-list button:focus-visible{background:#3a2a1c;outline:none}
+.pick-list button>img,.pick-list button>b,.pick-sel>img,.pick-sel>b{width:32px;height:32px;border:2px solid #000;flex:none}
+.pick-list button>b,.pick-sel>b{display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font:10px var(--display)}
+.pick-list span,.pick-sel span{display:grid;min-width:0;flex:1}
+.pick-list small,.pick-sel small{color:var(--soft)}
+.pick-list span b,.pick-sel span b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-sel{border:3px solid var(--accent);background:#2a1d12;cursor:default}
+.pick-list p{padding:10px}
+.item .mv{display:flex;flex-direction:column;gap:4px}.item .mv .btn{min-height:30px;width:40px;padding:0;font-size:11px}
+.mdbar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;background:#0d0804;border:3px solid #000;border-bottom:0;padding:6px}
+.mdbar button{min-width:36px;height:34px;padding:0 8px;background:#3a2c20;color:var(--ink);border:2px solid #000;font:700 14px var(--text);cursor:pointer}
+.mdbar button:hover,.mdbar button.on{background:var(--accent);color:var(--accent-ink)}
+.mdbar button[data-i="1"]{font-style:italic}.mdbar button[data-i="2"]{text-decoration:underline}.mdbar button[data-i="3"]{text-decoration:line-through}
+.mdbar .pv{font:9px var(--display);margin-left:auto}
+.mdhint{width:100%;padding:2px 4px 0}
+.mdprev{border:3px solid #000;border-top:0;background:#1a120a;padding:14px;max-height:320px;overflow:auto}
+.skinface{display:inline-block;width:48px;height:48px;border:3px solid #000;image-rendering:pixelated;background:var(--s) -240px -48px/384px 384px,var(--s) -48px -48px/384px 384px;flex:none}
+@media(max-width:760px){.res-row{grid-template-columns:56px 1fr 44px}.res-row .pts,.res-row .rn{grid-column:2/3}}
+</style>
+<script src="/assets/px.js"></script>
+<script src="/assets/dtpick.js"></script>
+</head>
+<body>
+<header id="nav"></header>
+<main id="main"><p class="soft">Loading...</p></main>
+<script src="/assets/md.js"></script>
+<script src="/assets/app.js"></script>
+<script src="/assets/forms.js"></script>
+<script src="/assets/messages.js"></script>
+<script src="/assets/archive.js"></script>
+<script src="/assets/badgeart.js"></script>
+<script src="/assets/admin-extra.js"></script>
+<script>
+const {$, esc, api, badge, when, toast, imageToDataUrl, tile, day, me} = MTC;
+MTC.nav('admin');
+let D = null, tab = sessionStorage.getItem('mtcTab') || 'events', editing = null, regFilter = '';
+const TYPES = {survival: 'Survival', minigame: 'Minigame', build: 'Build', pvp: 'PvP', other: 'Other'};
+const STATUSES = ['draft', 'soon', 'open', 'live', 'completed', 'unsuccessful', 'cancelled'];
+const evName = id => (D.events.find(e => e.id === id) || {}).title || 'Deleted event';
+const toLocal = iso => iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '';
+const fromLocal = v => v ? new Date(v).toISOString() : '';
+/* date + hour + minute + AM/PM (instead of the browser's datetime box, which looks broken in dark pages) */
+function dtField(id, iso) {
+  const d = iso ? new Date(iso) : null, pad = n => String(n).padStart(2, '0');
+  const date = d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : '';
+  const h12 = d ? (d.getHours() % 12 || 12) : '', min = d ? d.getMinutes() - d.getMinutes() % 5 : '', ap = d ? (d.getHours() < 12 ? 'AM' : 'PM') : 'PM';
+  return `<div class="dt" id="${id}">
+    <input type="date" aria-label="Date" value="${date}">
+    <select aria-label="Hour"><option value="">Hour</option>${Array.from({length: 12}, (_, i) => i + 1).map(h => `<option${h === h12 ? ' selected' : ''}>${h}</option>`).join('')}</select>
+    <select aria-label="Minutes"><option value="">Min</option>${Array.from({length: 12}, (_, i) => i * 5).map(m => `<option value="${m}"${m === min ? ' selected' : ''}>${pad(m)}</option>`).join('')}</select>
+    <select aria-label="AM or PM"><option${ap === 'AM' ? ' selected' : ''}>AM</option><option${ap === 'PM' ? ' selected' : ''}>PM</option></select>
+    <button type="button" class="btn grey sm clr" aria-label="Clear date and time" title="Clear">✕</button></div>`;
+}
+/* a time of day: hour + minutes + AM/PM, stored as "14:30" */
+function tmField(id, v) {
+  const [H, M] = /^\d\d:\d\d$/.test(v || '') ? v.split(':').map(Number) : [null, 0], pad = n => String(n).padStart(2, '0');
+  const h12 = H === null ? '' : H % 12 || 12, ap = H !== null && H < 12 ? 'AM' : 'PM';
+  return `<span class="tm" id="${id}" style="display:inline-flex;gap:6px"><select aria-label="Hour" style="width:auto"><option value="">--</option>${Array.from({length: 12}, (_, i) => i + 1).map(h => `<option${h === h12 ? ' selected' : ''}>${h}</option>`).join('')}</select>
+    <select aria-label="Minutes" style="width:auto">${Array.from({length: 12}, (_, i) => i * 5).map(m => `<option value="${m}"${m === M ? ' selected' : ''}>${pad(m)}</option>`).join('')}</select>
+    <select aria-label="AM or PM" style="width:auto"><option${ap === 'AM' ? ' selected' : ''}>AM</option><option${ap === 'PM' ? ' selected' : ''}>PM</option></select></span>`;
+}
+function readTm(id) {
+  const [h, m, ap] = [...$('#' + id).querySelectorAll('select')].map(x => x.value);
+  if (!h) return '';
+  return String((+h % 12) + (ap === 'PM' ? 12 : 0)).padStart(2, '0') + ':' + String(+m).padStart(2, '0');
+}
+function readDt(id, label) {
+  const box = $('#' + id), [date, h, m, ap] = [box.querySelector('input'), ...box.querySelectorAll('select')].map(x => x.value);
+  if (!date) return '';
+  if (!h) throw new Error(`Pick the hour for "${label}".`);
+  const [Y, M, D] = date.split('-').map(Number);
+  return new Date(Y, M - 1, D, (+h % 12) + (ap === 'PM' ? 12 : 0), +(m || 0)).toISOString();
+}
+document.addEventListener('click', e => { const c = e.target.closest('.dt .clr'); if (c) c.closest('.dt').querySelectorAll('input,select').forEach(x => { if (x.tagName === 'INPUT') x.value = ''; else if (x.options[0].value === '') x.value = ''; }); });
+
+async function start() {
+  const m = await me();
+  if (!m.user || !m.user.admin) return loginView(m);
+  await reload();
+}
+function loginView(m) {
+  $('#main').innerHTML = `<h1>STAFF LOGIN</h1>
+    <div class="card accent" style="max-width:480px">
+      ${m.user ? `<p class="msg info">You are logged in as ${esc(m.user.name)}, who is not an admin.</p>` : ''}
+      ${m.discordLogin ? '<p>Admins can log in with Discord.</p><a class="btn discord" href="/auth/discord">LOG IN WITH DISCORD</a><hr style="border:0;border-top:3px solid #000;margin:22px 0">' : ''}
+      <form id="pw"><label for="p">Admin password <span class="soft">(ADMIN_PASSWORD in the .env file)</span></label>
+      <input type="password" id="p" autocomplete="current-password" required>
+      <div style="margin-top:16px"><button class="btn" type="submit">LOG IN</button></div></form>
+    </div>`;
+  $('#pw').onsubmit = async e => {
+    e.preventDefault();
+    try { await api('/auth/admin', {method: 'POST', body: {password: $('#p').value}}); location.reload(); } catch (x) { toast(x.message, true); }
+  };
+}
+
+async function reload() {
+  try { D = await api('/api/admin/data'); } catch (x) { if (x.status === 401 || x.status === 403) return loginView(await me()); toast(x.message, true); return; }
+  render();
+}
+function render() {
+  const pendRegs = D.registrations.filter(r => r.status === 'pending').length, pendMedia = D.media.filter(m => m.status === 'pending').length, pendProf = D.profiles.filter(p => p.status === 'pending').length;
+  const c = D.config;
+  const warn = [];
+  if (!c.discordLogin) warn.push(`<b>Discord login is off.</b> In the Discord Developer Portal, open your bot's app, go to OAuth2, copy the <b>Client Secret</b> into <code>DISCORD_CLIENT_SECRET</code> in <code>.env</code>, add the redirect <code>${esc(c.redirectUri)}</code>, then restart the server. Until then creators cannot log in, and you use the admin password.`);
+  // any channel can be picked when posting, so a default announcement channel is optional
+  if (c.discordReady && !c.botOnline) warn.push(`<b>The Discord bot is offline.</b> Slash commands and instant join checks are paused; it reconnects by itself.${c.botError ? ' ' + esc(c.botError) : ''}`);
+  else if (c.botOnline && c.botMembersIntent === false) warn.push('<b>Tip:</b> turn on <b>Server Members Intent</b> for the bot in the Discord Developer Portal (Bot page) so new members are noticed instantly.');
+  if (!c.discordReady) warn.push('<b>Discord sync is off.</b> The bot token, server ID or Creator role ID is missing in <code>.env</code>.');
+  $('#main').innerHTML = `<h1>ADMIN</h1>
+    ${warn.map(w => `<p class="msg info small">${w}</p>`).join('')}
+    <div class="card ${D.maintenance && D.maintenance.on ? 'accent' : ''}" id="mtCard" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:14px 18px;${D.maintenance && D.maintenance.on ? 'border-color:#c0392b;background:#3a1410' : ''}">
+      <div style="flex:1;min-width:220px"><b>${D.maintenance && D.maintenance.on ? '🔒 ADMIN-ONLY MODE IS ON' : '🌐 Website is open to everyone'}</b><br>
+        <span class="soft small">${D.maintenance && D.maintenance.on ? 'Visitors see a "Back soon" page. Only admins can use the site.' : 'Turn on admin-only mode while you set things up or fix something.'}</span></div>
+      <button class="btn ${D.maintenance && D.maintenance.on ? 'green' : 'red'} sm" id="mtBtn" type="button">${D.maintenance && D.maintenance.on ? 'OPEN THE WEBSITE' : 'TURN ON ADMIN-ONLY MODE'}</button>
+    </div>
+    <div class="tabs" role="tablist">
+      ${[['apps', 'APPLICATIONS', D.pendingApps || 0], ['events', 'EVENTS', 0], ['regs', 'REGISTRATIONS', pendRegs], ['media', 'SHOWCASE', pendMedia], ['creators', 'CREATORS', pendProf], ['members', 'MEMBERS', 0], ['news', 'MESSAGES', D.failedDms || 0], ['community', 'COMMUNITY', 0], ['season', 'SEASON & BADGES', 0], ['stats', 'STATS', 0], ['activity', 'ACTIVITY', 0], ['backups', 'BACKUPS', 0]]
+        .map(([k, l, n]) => `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${l}${n ? `<span class="count">${n}</span>` : ''}</button>`).join('')}
+    </div>
+    <div id="pane"></div>`;
+  $('#mtBtn').onclick = () => {
+    const on = !(D.maintenance && D.maintenance.on);
+    let message = '';
+    if (on) { message = prompt('Message visitors will see (optional):', (D.maintenance && D.maintenance.message) || 'We are updating the website. Please come back soon!'); if (message === null) return; }
+    else if (!confirm('Open the website to everyone again?')) return;
+    act(() => api('/api/admin/maintenance', {method: 'PUT', body: {on, message}}), on ? 'Admin-only mode is on. Visitors see the "Back soon" page.' : 'The website is open again.');
+  };
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.tab; sessionStorage.setItem('mtcTab', tab); editing = null; render(); });
+  ({apps: appsTab, events: eventsTab, regs: regsTab, media: mediaTab, creators: creatorsTab, members: membersTab, news: newsTab, activity: activityTab, backups: backupsTab, community: () => MTCX.community($('#pane')), season: () => MTCX.season($('#pane')), stats: () => MTCX.stats($('#pane'))}[tab] || eventsTab)();
+}
+async function act(fn, ok) { try { const r = await fn(); if (ok) toast(typeof ok === 'function' ? ok(r) : ok); await reload(); return r; } catch (x) { toast(x.message, true); } }
+
+/* ---------------- applications to join ---------------- */
+let appFilter = 'pending';
+async function appsTab() {
+  $('#pane').innerHTML = '<p class="soft">Loading applications...</p>';
+  let d; try { d = await api('/api/admin/applications'); } catch (x) { $('#pane').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
+  const all = d.applications, cnt = k => all.filter(a => k === 'waiting' ? a.status === 'approved' && !a.joinedAt : k === 'joined' ? !!a.joinedAt : a.status === k).length;
+  const pick = a => appFilter === 'waiting' ? a.status === 'approved' && !a.joinedAt : appFilter === 'joined' ? !!a.joinedAt : appFilter === 'all' || a.status === appFilter;
+  const list = all.filter(pick);
+  const fmt = iso => iso ? new Intl.DateTimeFormat('en-IN', {day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'}).format(new Date(iso)) : '';
+  const face = a => a.avatar ? `<img src="${esc(a.avatar)}" alt="" style="width:48px;height:48px;border:3px solid #000">` : `<b style="width:48px;height:48px;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);border:3px solid #000;font:12px var(--display)">${esc([...(a.name || '?')][0])}</b>`;
+  const state = a => {
+    if (a.status === 'pending') return badge('pending');
+    if (a.status === 'rejected') return badge('rejected');
+    if (a.joinedAt) return `<span class="badge approved">JOINED ${esc(fmt(a.joinedAt))}</span>`;
+    const exp = a.invite && a.invite.expires && Date.parse(a.invite.expires) < Date.now();
+    return `<span class="badge ${exp ? 'rejected' : 'live'}">${exp ? 'INVITE EXPIRED' : 'INVITE SENT, NOT JOINED YET'}</span>`;
+  };
+  $('#pane').innerHTML = `<p class="soft small" style="margin-bottom:12px">People who are not in the Discord apply on <a href="/apply.html" target="_blank">/apply.html</a>. When you approve, the bot adds them to the server straight away if they allowed it. If not, it makes a one-time invite that skips the Discord application and shows it on their apply page; the invite is deleted when they join.</p>
+    <div class="row" style="margin-bottom:14px">${[['pending', 'WAITING'], ['waiting', 'APPROVED, NOT JOINED'], ['joined', 'JOINED'], ['rejected', 'REJECTED'], ['all', 'ALL']].map(([k, l]) =>
+      `<button class="btn sm ${appFilter === k ? '' : 'grey'}" data-af="${k}">${l} (${k === 'all' ? all.length : cnt(k)})</button>`).join('')}<button class="btn ghost sm" id="afEdit" style="margin-left:auto">✎ EDIT APPLICATION FORM</button></div>
+    <div class="card accent" id="afBox" hidden><h2>APPLICATION FORM</h2><p class="soft small">Discord login, YouTube channel link and Minecraft username are always asked. Add, change or reorder the other questions here.</p>
+      <div id="fbApp"></div><div class="row" style="margin-top:14px"><button class="btn" id="afSave" type="button">SAVE FORM</button><button class="btn ghost" id="afReset" type="button">RESET TO DEFAULT</button></div></div>
+    ${list.length ? `<div class="list">${list.map(a => `<div class="card" style="margin:0">
+      <div class="item" style="padding:0;border:0;align-items:flex-start">${face(a)}<div class="grow">
+        <b style="font-size:18px">${esc(a.name)}</b> <span class="soft small">@${esc(a.username)}</span> ${state(a)}<br>
+        <span class="small">YouTube: <a href="${esc(a.youtube)}" target="_blank" rel="noopener">${esc(a.channelName || a.youtube)}</a> · MC: <b>${esc(a.mc)}</b></span><br>
+        <div style="margin-top:6px">${MTCForms.answers(d.form, a.answers) || '<span class="small soft">No other answers.</span>'}</div>
+        <p class="soft small" style="margin:6px 0 0">Applied ${esc(fmt(a.submittedAt))}${a.decidedAt ? ` · ${a.status === 'rejected' ? 'rejected' : 'approved'} by ${esc(a.decidedBy || '')} ${esc(fmt(a.decidedAt))}` : ''}${a.reason ? ' · reason: ' + esc(a.reason) : ''}</p>
+        ${a.status === 'approved' && !a.joinedAt && a.invite ? `<p class="small" style="margin:6px 0 0">Invite: <code>discord.gg/${esc(a.invite.code)}</code> ${a.invite.bypass ? '<span class="badge verified">SKIPS DISCORD APPLICATION</span>' : '<span class="badge rejected">NORMAL INVITE</span>'} · expires ${esc(fmt(a.invite.expires))}</p>
+          ${a.inviteNote ? `<p class="msg info small" style="margin:6px 0 0">${esc(a.inviteNote)}</p>` : ''}
+          <p class="small" style="margin:4px 0 0">${a.dm && a.dm.ok ? 'DM sent ✓' : `<span style="color:#ffb4a0">DM not sent: ${esc((a.dm && a.dm.error) || '')}</span>`}</p>` : ''}
+        ${a.status === 'pending' ? (a.canAdd ? '<p class="small" style="margin:6px 0 0;color:#9fe39f">✓ Allowed MTC to add them: approving puts them straight into the server.</p>' : '<p class="small soft" style="margin:6px 0 0">Did not allow auto-add: approving makes a one-time invite link they open from the website.</p>') : ''}
+        ${a.added ? `<p class="small" style="margin:6px 0 0;color:#9fe39f">Added to the server by the bot ${esc(fmt(a.added.at))}${a.dm && a.dm.ok ? ' · welcome DM sent' : ''}</p>` : ''}${a.addError ? `<p class="msg info small">${esc(a.addError)}</p>` : ''}
+        ${a.roleError ? `<p class="msg err small">Could not give the Creator role: ${esc(a.roleError)}</p>` : ''}${a.siteError ? `<p class="msg err small">Creators page: ${esc(a.siteError)}</p>` : ''}
+      </div></div>
+      ${a.status === 'pending' ? `<div class="row" style="margin-top:12px;align-items:center">
+          <label class="small" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" data-role="${a.id}" checked style="width:auto"> Give Creator role when they join</label>
+          <label class="small" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" data-site="${a.id}" style="width:auto"> Show on Creators page</label>
+        </div><div class="row" style="margin-top:10px"><button class="btn green sm" data-ap="${a.id}">APPROVE AND SEND INVITE</button><button class="btn red sm" data-rj="${a.id}">REJECT</button></div>`
+      : a.status === 'approved' && !a.joinedAt ? `<div class="row" style="margin-top:12px"><button class="btn sm" data-ck="${a.id}">CHECK IF JOINED</button><button class="btn grey sm" data-rs="${a.id}">SEND A NEW INVITE</button></div>` : ''}
+    </div>`).join('')}</div>` : '<p class="soft">Nothing here.</p>'}`;
+  document.querySelectorAll('[data-af]').forEach(b => b.onclick = () => { appFilter = b.dataset.af; appsTab(); });
+  let appForm = null;
+  $('#afEdit').onclick = () => { const bx = $('#afBox'); bx.hidden = !bx.hidden; if (!bx.hidden && !appForm) appForm = MTCForms.builder($('#fbApp'), d.form); };
+  $('#afSave').onclick = async () => { try { await api('/api/admin/apply-form', {method: 'PUT', body: {form: appForm.get()}}); toast('Application form saved.'); appsTab(); } catch (x) { toast(x.message, true); } };
+  $('#afReset').onclick = async () => { if (!confirm('Go back to the default questions?')) return; try { await api('/api/admin/apply-form', {method: 'PUT', body: {reset: true}}); toast('Back to the default form.'); appsTab(); } catch (x) { toast(x.message, true); } };
+  const run = async (id, body, ok, b) => { b.disabled = true; try { const r = await api('/api/admin/applications/' + id, {method: 'POST', body}); toast(typeof ok === 'function' ? ok(r.application) : ok); await reload(); } catch (x) { toast(x.message, true); b.disabled = false; } };
+  document.querySelectorAll('[data-ap]').forEach(b => b.onclick = () => { const id = b.dataset.ap;
+    run(id, {action: 'approve', giveRole: document.querySelector(`[data-role="${id}"]`).checked, showOnSite: document.querySelector(`[data-site="${id}"]`).checked}, a => 'Approved. ' + (a.added ? 'They were added to the server.' : a.dm && a.dm.ok ? 'Invite sent in DM.' : 'Invite link is on their apply page.'), b); });
+  document.querySelectorAll('[data-rj]').forEach(b => b.onclick = () => { const reason = prompt('Reason (they will see it, optional):', ''); if (reason === null) return; run(b.dataset.rj, {action: 'reject', reason}, 'Rejected.', b); });
+  document.querySelectorAll('[data-rs]').forEach(b => b.onclick = () => { if (confirm('Delete the old invite and send a new one?')) run(b.dataset.rs, {action: 'resend'}, 'New invite made.', b); });
+  document.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => run(b.dataset.ck, {action: 'check'}, a => a.joinedAt ? 'They joined. Invite deleted.' : 'Not in the server yet.', b));
+}
+
+/* channel + ping picker (event cards) */
+let dcMeta = null;
+function dcTarget(box, opt = {}) {
+  const st = { channelId: '', ping: { everyone: false, here: false, roles: [] } };
+  box.innerHTML = '<p class="soft small">Loading channels...</p>';
+  (dcMeta ? Promise.resolve(dcMeta) : api('/api/admin/discord/meta').then(m => (dcMeta = m))).then(m => {
+    st.channelId = m.defaultChannel || (m.channels[0] || {}).id || '';
+    let cat = null, opts = '';
+    for (const c of m.channels) { if (c.category !== cat) { if (cat !== null) opts += '</optgroup>'; cat = c.category; opts += `<optgroup label="${esc(cat || 'No category')}">`; }
+      opts += `<option value="${c.id}"${c.id === st.channelId ? ' selected' : ''}>${c.news ? '📢' : '#'} ${esc(c.name)}</option>`; }
+    box.innerHTML = `<div class="fields"><div><label>Channel</label><select class="dct-ch">${opts}</optgroup></select></div>
+      <div class="full"><label>Ping <span class="soft">(optional)</span></label><div class="row" style="gap:6px">
+        <button type="button" class="btn grey sm" data-p="everyone" aria-pressed="false">@everyone</button><button type="button" class="btn grey sm" data-p="here" aria-pressed="false">@here</button>
+        ${m.roles.map(r => `<button type="button" class="btn grey sm" data-r="${r.id}" aria-pressed="false">@${esc(r.name)}</button>`).join('')}</div></div></div>`;
+    box.querySelector('.dct-ch').onchange = ev => { st.channelId = ev.target.value; };
+    const tog = (b, on) => { b.setAttribute('aria-pressed', on); b.classList.toggle('grey', !on); };
+    box.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { st.ping[b.dataset.p] = !st.ping[b.dataset.p]; tog(b, st.ping[b.dataset.p]); });
+    box.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { const l = st.ping.roles, id = b.dataset.r; l.includes(id) ? l.splice(l.indexOf(id), 1) : l.push(id); tog(b, l.includes(id)); });
+  }).catch(x => { box.innerHTML = `<p class="msg err small">${esc(x.message)}</p>`; });
+  return { get: () => ({ channelId: st.channelId, ping: st.ping }) };
+}
+
+/* ---------------- events ---------------- */
+function eventsTab() {
+  if (editing) return eventForm(editing === 'new' ? null : D.events.find(e => e.id === editing));
+  $('#pane').innerHTML = `<div class="row" style="margin-bottom:18px"><button class="btn" id="newEv">+ NEW EVENT</button><span class="row" id="tplBar" style="gap:6px"></span></div>
+    <p class="soft small" style="margin-bottom:12px">Use ▲ ▼ to set the order events appear in on the site.</p>
+    <div class="list">${D.events.map((e, i) => {
+      const regs = D.registrations.filter(r => r.eventId === e.id), ok = regs.filter(r => r.status === 'approved').length, pend = regs.filter(r => r.status === 'pending').length;
+      return `<div class="item"><div class="mv"><button class="btn grey sm" data-mv="${e.id}" data-d="-1" aria-label="Move ${esc(e.title)} up" title="Move up"${i === 0 ? ' disabled' : ''}>▲</button><button class="btn grey sm" data-mv="${e.id}" data-d="1" aria-label="Move ${esc(e.title)} down" title="Move down"${i === D.events.length - 1 ? ' disabled' : ''}>▼</button></div><div class="grow"><b>${esc(e.title)}</b> ${badge(e.status)}<br><span class="soft small">${esc(when(e))} · ${ok} confirmed${pend ? ', ' + pend + ' waiting' : ''}${e.slots ? ' · ' + e.slots + ' slots' : ''}</span></div>
+        <a class="btn grey sm" href="/event.html?slug=${encodeURIComponent(e.slug)}" target="_blank" rel="noopener">VIEW</a>${D.config.discordReady && e.status !== 'draft' ? `<button class="btn grey sm" data-post="${e.id}" title="${e.discordPostedAt ? 'Last posted ' + esc(day(e.discordPostedAt)) : 'Not posted yet'}">POST TO DISCORD</button>` : ''}<button class="btn grey sm" data-dup="${e.id}" title="Copy this event as a new draft">DUPLICATE</button><button class="btn sm" data-edit="${e.id}">EDIT</button></div>`; }).join('') || '<p class="soft">No events yet.</p>'}</div>`;
+  $('#newEv').onclick = () => { editing = 'new'; render(); };
+  const openNew = ev => reload().then(() => { editing = ev.id; render(); });
+  MTCX.templateBar($('#tplBar'), openNew);
+  $('#pane').insertAdjacentHTML('beforeend', '<div id="scBox"></div><div id="promoBox"></div>'); MTCX.serverControl($('#scBox')); MTCX.promoCard($('#promoBox'));
+  document.querySelectorAll('[data-dup]').forEach(b => b.onclick = () => MTCX.duplicate(b.dataset.dup).then(r => { toast('Copied as a draft. Set the new dates, then save.'); openNew(r.event); }).catch(x => toast(x.message, true)));
+  document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { editing = b.dataset.edit; render(); });
+  document.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => {
+    const ids = D.events.map(e => e.id), i = ids.indexOf(b.dataset.mv), j = i + +b.dataset.d;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    act(() => api('/api/admin/events-order', {method: 'PUT', body: {ids}}), 'Order saved.');
+  });
+  document.querySelectorAll('[data-post]').forEach(b => b.onclick = () => {
+    const row = b.closest('.item'), old = document.getElementById('dcPost'); if (old) { old.remove(); if (old.dataset.ev === b.dataset.post) return; }
+    const box = document.createElement('div'); box.id = 'dcPost'; box.dataset.ev = b.dataset.post; box.className = 'card accent'; box.style.margin = '8px 0 12px';
+    const ev = D.events.find(x => x.id === b.dataset.post) || {};
+    box.innerHTML = `<h3 style="margin-top:0">POST TO DISCORD</h3><label>What to post</label><div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="radio" name="dcWhat" value="card" checked> Event card</label><label class="check" style="margin:0"><input type="radio" name="dcWhat" value="rules"${ev.rules ? '' : ' disabled'}> Rules${ev.rules ? '' : ' (no rules written yet)'}${ev.rulesPostedAt ? ` <span class="soft small">(last posted ${esc(day(ev.rulesPostedAt))})</span>` : ''}</label><label class="check" style="margin:0"><input type="radio" name="dcWhat" value="server"${ev.serverInfo || ev.serverJava || ev.serverBedrock ? '' : ' disabled'}> Server IPs + live status${ev.serverInfo || ev.serverJava || ev.serverBedrock ? '' : ' (no server address yet)'}${ev.serverPostedAt ? ` <span class="soft small">(last posted ${esc(day(ev.serverPostedAt))})</span>` : ''}</label><label class="check" style="margin:0"><input type="radio" name="dcWhat" value="ended"${['completed', 'unsuccessful'].includes(ev.status) || (ev.results || []).length ? '' : ' disabled'}> Event ended + winner${['completed', 'unsuccessful'].includes(ev.status) || (ev.results || []).length ? '' : ' (mark the event Completed first)'}${ev.endPostedAt ? ` <span class="soft small">(last posted ${esc(day(ev.endPostedAt))})</span>` : ''}</label></div><div class="dct"></div><div class="row" style="margin-top:12px"><button class="btn sm" type="button" data-go>POST</button><button class="btn ghost sm" type="button" data-x>CANCEL</button></div>`;
+    row.after(box); const t = dcTarget(box.querySelector('.dct'));
+    box.querySelector('[data-x]').onclick = () => box.remove();
+    box.querySelector('[data-go]').onclick = clk => { const o = t.get(); if (!o.channelId) return toast('Pick a channel.', true); clk.target.disabled = true;
+      const what = box.querySelector('input[name=dcWhat]:checked').value;
+      if (what === 'server' && ev.status !== 'live' && !confirm('This event is not Live now, so the website still hides the server address. Post the IP to Discord anyway?')) { clk.target.disabled = false; return; }
+      act(() => api('/api/admin/events/' + b.dataset.post + '/discord', {method: 'POST', body: {...o, what}}), what === 'rules' ? 'Rules posted to Discord.' : what === 'server' ? 'Server IP posted to Discord.' : what === 'ended' ? 'Event ended post sent to Discord.' : 'Event card posted to Discord.'); };
+  });
+}
+function eventForm(e) {
+  const v = e || {status: 'draft', type: 'minigame', teamSize: 1, results: []};
+  $('#pane').innerHTML = `<div class="card accent"><h2>${e ? 'EDIT EVENT' : 'NEW EVENT'}</h2>
+    <form id="ef"><div class="fields">
+      <div class="full"><label for="f_title">Title</label><input type="text" id="f_title" maxlength="80" required value="${esc(v.title || '')}"></div>
+      <div><label for="f_status">Status</label><select id="f_status">${STATUSES.map(s => `<option value="${s}"${v.status === s ? ' selected' : ''}>${MTC.STATUS[s]}${s === 'draft' ? ' (hidden from public)' : ''}</option>`).join('')}</select></div>
+      <div><label for="f_type">Type</label><select id="f_type">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}"${v.type === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="full"><label>Starts <span class="soft">(shows a countdown on the site; optional)</span></label>${dtField('f_start', v.start)}</div>
+      <div class="full"><label>Ends <span class="soft">(optional)</span></label>${dtField('f_end', v.end)}</div>
+      <div><label for="f_dateLabel">Date text <span class="soft">(if no exact time, e.g. "January 2027")</span></label><input type="text" id="f_dateLabel" maxlength="40" value="${esc(v.dateLabel || '')}"></div>
+      <div><label for="f_prize">Prize <span class="soft">(optional)</span></label><input type="text" id="f_prize" maxlength="120" value="${esc(v.prize || '')}"></div>
+      <div><label for="f_slots">Slots <span class="soft">(0 = no limit)</span></label><input type="number" id="f_slots" min="0" max="1000" value="${v.slots || 0}"></div>
+      <div><label for="f_teamSize">Players per team <span class="soft">(1 = solo)</span></label><input type="number" id="f_teamSize" min="1" max="20" value="${v.teamSize || 1}"></div>
+      <div><label for="f_days">Event days <span class="soft">(for the day bar, 0 = hide)</span></label><input type="number" id="f_days" min="0" max="365" value="${v.days || 0}"></div>
+      <div><label for="f_daysPlayed">Days played so far</label><input type="number" id="f_daysPlayed" min="0" max="365" value="${v.daysPlayed || 0}"></div>
+      <div class="full"><label for="f_summary">Short description</label><textarea data-md id="f_summary" maxlength="600" style="min-height:80px">${esc(v.summary || '')}</textarea></div>
+      <div class="full"><label for="f_rules">Rules</label><textarea data-md id="f_rules" maxlength="8000">${esc(v.rules || '')}</textarea></div>
+      <div class="full srv-sec"><h3 style="margin:8px 0 4px">HOW TO JOIN <span class="soft small" style="font-family:inherit">(shown on the event page and in Discord only while the event is Live now)</span></h3></div>
+      <div class="full"><label>Daily server hours <span class="soft">(India time; leave empty if the server is open all the time while the event is live)</span></label>
+        <div class="row" style="gap:10px;align-items:center">${tmField('f_hoursFrom', v.hoursFrom)}<b>to</b>${tmField('f_hoursTo', v.hoursTo)}</div></div>
+      <div class="full"><label for="f_serverJava">Java address</label><input type="text" id="f_serverJava" maxlength="120" placeholder="e.g. 51.79.163.46:25515 or play.example.com" value="${esc(v.serverJava || '')}"></div>
+      <div><label for="f_serverBedrock">Bedrock IP <span class="soft">(Geyser)</span></label><input type="text" id="f_serverBedrock" maxlength="120" placeholder="e.g. 51.79.163.46" value="${esc(v.serverBedrock || '')}"></div>
+      <div><label for="f_serverBedrockPort">Bedrock port</label><input type="number" id="f_serverBedrockPort" min="1" max="65535" placeholder="19132" value="${esc(v.serverBedrockPort || '')}"></div>
+      <div class="full"><label>Other details <span class="soft">(for example "Voice chat port (BE)" · 19141; up to 6)</span></label><div id="srvExtra"></div><button type="button" class="btn grey sm" id="srvAdd" style="margin-top:6px">+ ADD A ROW</button></div>
+      <div class="full"><label for="f_serverInfo">Important notes for players <span class="soft">(optional; shown under the addresses and in the Discord post)</span></label><input type="text" id="f_serverInfo" maxlength="300" placeholder="e.g. Join with the edition you registered with. Voice chat mod recommended." value="${esc(v.serverInfo || '')}"></div>
+      <div class="full"><label for="f_notes">Notes <span class="soft">(what happened, lessons learned)</span></label><textarea data-md id="f_notes" maxlength="1500" style="min-height:80px">${esc(v.notes || '')}</textarea></div>
+      <div class="full"><label for="f_banner">Banner image <span class="soft">(best size 1920 × 840 px, a wide 16:7 image; optional)</span></label><input type="file" id="f_banner" accept="image/png,image/jpeg,image/webp">
+        <div id="bnEdit"${v.banner ? '' : ' hidden'}>
+          <p class="soft small" style="margin:10px 0 6px"><b>Click the important part of the image</b> (a face, the logo) to keep it in view when the banner is cropped.</p>
+          <div class="bn-src" id="bnSrc"><img id="bnImg" alt="Banner" src="${esc(v.banner || '')}"><i class="bn-dot" id="bnDot"></i></div>
+          <label class="check"><input type="checkbox" id="f_whole"${v.bannerFit === 'contain' ? ' checked' : ''}> Show the whole image (no cropping)</label>
+          <label class="check"><input type="checkbox" id="f_over"${v.titleOver ? ' checked' : ''}> Put the event title on top of the banner <span class="soft">(only for banners without their own text; otherwise the title shows under the banner)</span></label>
+          <div class="bn-prevs"><div><span class="soft small">Home page card</span><div class="bn-card" id="bnCard"></div></div><div><span class="soft small">Event page header</span><div class="bn-hero" id="bnHero"></div></div></div>
+          ${v.banner ? '<label class="check"><input type="checkbox" id="f_noBanner"> Remove banner</label>' : ''}
+        </div></div>
+    </div>
+    ${MTCArchive.section(e)}
+    <h3 style="margin-top:24px">📝 REGISTRATION FORM</h3><p class="soft small">Extra questions people answer when they register for this event (for example their Minecraft version, or whether they can record). Their Discord name, Minecraft name, team and a note are always asked.</p>
+    <div id="fbEv"></div>
+    <h3 style="margin-top:24px">🏆 WINNER AND RESULTS</h3><p class="soft small">Fill in when the event ends. Place 1 is shown as the winner on the site and in Discord. Add more places if you want.</p>
+    <div id="res"></div><button type="button" class="btn grey sm" id="addRes">+ ADD PLACE</button>
+    <label class="check" style="margin-top:22px"><input type="checkbox" id="f_post"> Post the event card to Discord when I save</label>
+    <div id="f_dc" hidden style="margin-top:8px"></div>
+    <div class="row" style="margin-top:26px"><button class="btn" type="submit">SAVE EVENT</button><button type="button" class="btn ghost" id="cancel">CANCEL</button>${e ? '<button type="button" class="btn grey sm" id="saveTpl" title="Reuse this setup for future events">SAVE AS TEMPLATE</button><button type="button" class="btn red" id="del" style="margin-left:auto">DELETE</button>' : ''}</div>
+    </form></div>`;
+  const resBox = $('#res');
+  const evForm = MTCForms.builder($('#fbEv'), v.form || []);
+  MTCArchive.bind(e);
+  let evDc = null; $('#f_post').onchange = () => { $('#f_dc').hidden = !$('#f_post').checked; if ($('#f_post').checked && !evDc) evDc = dcTarget($('#f_dc')); };
+  const addRow = (r = {}) => { const d = document.createElement('div'); d.className = 'res-row';
+    const place = r.place || resBox.children.length + 1;
+    d.innerHTML = `<input type="number" min="1" aria-label="Place" value="${place}"><input type="text" class="rn" aria-label="Player or team" maxlength="60" placeholder="${place == 1 ? '🏆 Winner (player or team)' : 'Player or team'}" value="${esc(r.name || '')}"><input type="text" class="pts" aria-label="Points" maxlength="20" placeholder="pts" value="${esc(r.points || '')}"><input type="text" class="rn" aria-label="Note" maxlength="80" placeholder="note" value="${esc(r.note || '')}"><button type="button" class="btn red sm" aria-label="Remove place">✕</button>`;
+    d.querySelector('button').onclick = () => d.remove(); resBox.appendChild(d); };
+  (v.results || []).forEach(addRow); if (!resBox.children.length) addRow();
+  $('#addRes').onclick = () => addRow();
+  /* banner focus point */
+  let bnPos = v.bannerPos || '50% 50%', bnSrc = v.banner || '';
+  const bnPaint = () => {
+    const fit = $('#f_whole').checked ? 'contain' : 'cover', [x, y] = bnPos.split(' ');
+    for (const id of ['bnCard', 'bnHero']) Object.assign($('#' + id).style, {backgroundImage: bnSrc ? `url('${bnSrc}')` : '', backgroundPosition: bnPos, backgroundSize: fit});
+    Object.assign($('#bnDot').style, {left: x, top: y});
+    $('#bnDot').hidden = fit === 'contain';
+  };
+  $('#bnSrc').onclick = ev => { const r = $('#bnImg').getBoundingClientRect(); const px = v => Math.max(0, Math.min(100, Math.round(v)));
+    bnPos = `${px((ev.clientX - r.left) / r.width * 100)}% ${px((ev.clientY - r.top) / r.height * 100)}%`; bnPaint(); };
+  $('#f_whole').onchange = bnPaint;
+  $('#f_banner').onchange = () => { const f = $('#f_banner').files[0]; if (!f) return; bnSrc = URL.createObjectURL(f); $('#bnImg').src = bnSrc; bnPos = '50% 50%'; $('#bnEdit').hidden = false; bnPaint(); };
+  if (bnSrc) bnPaint();
+  $('#cancel').onclick = () => { editing = null; render(); };
+  // "other details" rows (label + value), e.g. Voice chat port (BE)
+  const sxRow = (x = {}) => `<div class="sx row" style="gap:6px;margin-top:6px"><input type="text" class="sxl" maxlength="40" placeholder="Label, e.g. Voice chat port (BE)" value="${esc(x.label || '')}" style="flex:1;min-width:160px"><input type="text" class="sxv" maxlength="120" placeholder="Value, e.g. 19141" value="${esc(x.value || '')}" style="flex:1;min-width:120px"><button type="button" class="btn grey sm" data-sxx aria-label="Remove row">✕</button></div>`;
+  $('#srvExtra').innerHTML = (v.serverExtra || []).map(sxRow).join('');
+  $('#srvAdd').onclick = () => { if ($('#srvExtra').children.length >= 6) return toast('Up to 6 rows.', true); $('#srvExtra').insertAdjacentHTML('beforeend', sxRow()); };
+  $('#srvExtra').onclick = ev => { const x = ev.target.closest('[data-sxx]'); if (x) x.closest('.sx').remove(); };
+  if (e) $('#saveTpl').onclick = () => MTCX.saveTemplate(e.id, e.title);
+  if (e) $('#del').onclick = () => { const t = prompt(`Type DELETE to delete "${e.title}" with all its registrations and showcase items. A backup is taken first.`); if (t === 'DELETE') act(() => api('/api/admin/events/' + e.id, {method: 'DELETE'}), 'Event deleted.').then(() => { editing = null; render(); }); };
+  $('#ef').onsubmit = async ev => {
+    ev.preventDefault(); const btn = ev.target.querySelector('button[type=submit]'); btn.disabled = true;
+    try {
+      const g = id => $('#f_' + id).value;
+      const body = {title: g('title'), status: g('status'), type: g('type'), start: readDt('f_start', 'Starts'), end: readDt('f_end', 'Ends'), dateLabel: g('dateLabel'), prize: g('prize'),
+        slots: g('slots'), teamSize: g('teamSize'), days: g('days'), daysPlayed: g('daysPlayed'), summary: g('summary'), rules: g('rules'), serverInfo: g('serverInfo'), serverJava: g('serverJava'), serverBedrock: g('serverBedrock'), serverBedrockPort: g('serverBedrockPort'), hoursFrom: readTm('f_hoursFrom'), hoursTo: readTm('f_hoursTo'),
+        serverExtra: [...document.querySelectorAll('#srvExtra .sx')].map(r => ({label: r.querySelector('.sxl').value, value: r.querySelector('.sxv').value})), statusAddr: '', notes: g('notes'),
+        results: [...resBox.children].map(d => { const i = d.querySelectorAll('input'); return {place: i[0].value, name: i[1].value, points: i[2].value, note: i[3].value}; }), postDiscord: $('#f_post').checked, ...($('#f_post').checked && evDc ? evDc.get() : {}), form: evForm.get(), ...(e ? MTCArchive.read() : {})};
+      if (body.start && body.end && body.end < body.start) throw new Error('The end time is before the start time.');
+      body.bannerPos = bnPos; body.bannerFit = $('#f_whole').checked ? 'contain' : 'cover'; body.titleOver = $('#f_over').checked;
+      const f = $('#f_banner').files[0]; if (f) body.banner = await imageToDataUrl(f, 2400); else if ($('#f_noBanner') && $('#f_noBanner').checked) body.banner = '';
+      const r = e ? await api('/api/admin/events/' + e.id, {method: 'PUT', body}) : await api('/api/admin/events', {method: 'POST', body});
+      toast(r.discordError ? 'Saved, but Discord failed: ' + r.discordError : r.posted ? 'Event saved and posted to Discord.' : 'Event saved.', !!r.discordError); editing = null; await reload();
+    } catch (x) { toast(x.message, true); btn.disabled = false; }
+  };
+}
+
+/* ---------------- formatting toolbar: wraps the selected text in Discord-style marks, with a live preview ---------------- */
+const MD_TOOLS = [['B', '**', '**', 'Bold'], ['I', '*', '*', 'Italic'], ['U', '__', '__', 'Underline'], ['S', '~~', '~~', 'Strikethrough'],
+  ['H', '# ', '', 'Heading', 1], ['•', '- ', '', 'Bullet list', 1], ['1.', '1. ', '', 'Numbered list', 1], ['❝', '> ', '', 'Quote', 1], ['🔗', '[', '](https://)', 'Link']];
+function mdTools(root = document) {
+  root.querySelectorAll('textarea[data-md]:not(.mdwired)').forEach(ta => {
+    ta.classList.add('mdwired');
+    const bar = document.createElement('div'); bar.className = 'mdbar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Text formatting');
+    bar.innerHTML = MD_TOOLS.map(([l, , , t], i) => `<button type="button" data-i="${i}" title="${t}" aria-label="${t}">${l}</button>`).join('') +
+      '<button type="button" class="pv" aria-pressed="false">PREVIEW</button><span class="soft small mdhint">Same formatting as Discord</span>';
+    const prev = document.createElement('div'); prev.className = 'mdprev md'; prev.hidden = true;
+    ta.before(bar); ta.after(prev);
+    const show = () => { prev.innerHTML = MTCmd.md(ta.value) || '<p class="soft">Nothing to preview yet.</p>'; };
+    ta.addEventListener('input', () => { if (!prev.hidden) show(); });
+    bar.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.classList.contains('pv')) { prev.hidden = !prev.hidden; b.setAttribute('aria-pressed', !prev.hidden); b.classList.toggle('on', !prev.hidden); if (!prev.hidden) show(); return; }
+      const [, before, after, , perLine] = MD_TOOLS[+b.dataset.i];
+      const st = ta.selectionStart, en = ta.selectionEnd, v = ta.value;
+      if (perLine) {
+        const ls = v.lastIndexOf('\n', st - 1) + 1, le = v.indexOf('\n', en); const end = le < 0 ? v.length : le;
+        const block = v.slice(ls, end).split('\n').map((line, i) => (before === '1. ' ? (i + 1) + '. ' : before) + line).join('\n');
+        ta.value = v.slice(0, ls) + block + v.slice(end); ta.setSelectionRange(ls, ls + block.length);
+      } else {
+        const sel = v.slice(st, en) || (before === '[' ? 'link text' : 'text');
+        ta.value = v.slice(0, st) + before + sel + after + v.slice(en);
+        ta.setSelectionRange(st + before.length, st + before.length + sel.length);
+      }
+      ta.focus(); ta.dispatchEvent(new Event('input', {bubbles: true}));
+    });
+  });
+}
+new MutationObserver(() => mdTools()).observe(document.getElementById('main'), {childList: true, subtree: true});
+
+/* ---------------- registrations ---------------- */
+function regsTab() {
+  if (!regFilter) { const o = D.events.find(e => e.status === 'open' || e.status === 'live'); regFilter = o ? o.id : 'all'; }
+  const list = D.registrations.filter(r => (regFilter === 'all' || r.eventId === regFilter) && r.status !== 'withdrawn').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const pend = list.filter(r => r.status === 'pending');
+  $('#pane').innerHTML = `<div class="row" style="margin-bottom:16px"><label for="rf" class="sr">Event</label><select id="rf" style="max-width:360px"><option value="all">All events</option>${D.events.map(e => `<option value="${e.id}"${regFilter === e.id ? ' selected' : ''}>${esc(e.title)}</option>`).join('')}</select>
+      ${pend.length ? `<button class="btn green sm" id="okAll">APPROVE ALL ${pend.length} WAITING</button>` : ''}
+      ${regFilter !== 'all' ? `<button class="btn grey sm" id="wlBtn">WHITELIST</button><button class="btn grey sm" id="ciAll" title="Mark every confirmed player who is not checked yet as present">CHECK IN EVERYONE</button>` : ''}</div>
+    <div id="wlBox"></div>
+    ${list.length ? `<div class="tablewrap"><table><thead><tr><th>PLAYER</th>${regFilter === 'all' ? '<th>EVENT</th>' : ''}<th>TEAM</th><th>NOTE</th><th>STATUS</th><th title="Check-in: ✓ was there, ✗ no-show">CHECK-IN</th><th></th></tr></thead><tbody>${list.map(r => `
+      <tr><td><b>${esc(r.name)}</b>${r.mc ? `<br><span class="small" style="color:var(--accent)">MC: ${esc(r.mc)}</span>${MTC.edTag(r.mcEdition)}` : '<br><span class="small soft">no Minecraft name</span>'}<br><span class="soft small">${r.addedByAdmin ? 'added by admin' : esc(r.username || '')} · ${esc(day(r.createdAt))}</span></td>${regFilter === 'all' ? `<td>${esc(evName(r.eventId))}</td>` : ''}
+        <td><input type="text" maxlength="40" value="${esc(r.team || '')}" data-team="${r.id}" aria-label="Team for ${esc(r.name)}"></td><td class="small">${esc(r.note || '')}${MTCForms.answers((D.events.find(x => x.id === r.eventId) || {}).form, r.answers)}</td><td>${badge(r.status)}</td><td>${MTCX.checkCell(r)}</td>
+        <td><div class="row"><button class="btn grey sm" data-rm="${r.id}" title="Remove from event">REMOVE</button>${r.status !== 'approved' ? `<button class="btn green sm" data-st="approved" data-id="${r.id}">APPROVE</button>` : ''}${r.status !== 'rejected' ? `<button class="btn red sm" data-st="rejected" data-id="${r.id}">REJECT</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="soft">No registrations here yet.</p>'}`;
+  const evSel = regFilter !== 'all' ? regFilter : (D.events[0] || {}).id;
+  $('#pane').insertAdjacentHTML('afterbegin', `<div class="card accent"><h2>ADD A PLAYER BY HAND</h2>
+    <p class="soft small">For players who joined in game or through Discord, including events that are already over. They are added as confirmed.</p>
+    <form id="addp"><div class="fields">
+      <div><label for="ap_ev">Event</label><select id="ap_ev">${D.events.map(e => `<option value="${e.id}"${e.id === evSel ? ' selected' : ''}>${esc(e.title)}</option>`).join('')}</select></div>
+      <div><label for="ap_name">Player <span class="soft">(type to pick a Discord member, or any name)</span></label><input type="text" id="ap_name" list="ap_list" maxlength="60" required autocomplete="off"><datalist id="ap_list"></datalist></div>
+      <div><label for="ap_mc">Minecraft name <span class="soft">(filled in if they set it up)</span></label>${MTC.edPicker('ap_ed', 'java')}<input type="text" id="ap_mc" maxlength="20"></div>
+      <div><label for="ap_team">Team <span class="soft">(optional)</span></label><input type="text" id="ap_team" maxlength="40"></div>
+    </div><div style="margin-top:14px"><button class="btn" type="submit">ADD PLAYER</button></div></form></div>`);
+  let people = [];
+  api('/api/admin/members').then(d => { people = d.members; $('#ap_list').innerHTML = people.map(m => `<option value="${esc(m.name)}">@${esc(m.username)}</option>`).join(''); }).catch(() => {});
+  const findP = name => people.find(x => x.name === name || x.username.toLowerCase() === name.replace(/^@/, '').toLowerCase());
+  $('#ap_name').addEventListener('change', () => { const m = findP($('#ap_name').value.trim()); if (m && m.mc) { $('#ap_mc').value = m.mc; const r = document.querySelector(`input[name=ap_ed][value=${m.mcEdition === 'bedrock' ? 'bedrock' : 'java'}]`); if (r) r.checked = true; } });
+  $('#addp').onsubmit = ev => {
+    ev.preventDefault(); const name = $('#ap_name').value.trim();
+    const m = people.find(x => x.name === name || x.username.toLowerCase() === name.replace(/^@/, '').toLowerCase());
+    const evId = $('#ap_ev').value;
+    act(() => api('/api/admin/events/' + evId + '/registrations', {method: 'POST', body: {name: m ? m.name : name, userId: m ? m.id : '', username: m ? m.username : '', mc: $('#ap_mc').value.trim(), edition: MTC.readEd('ap_ed'), team: $('#ap_team').value.trim()}}),
+      (m ? m.name : name) + ' added.').then(() => { regFilter = evId; render(); });
+  };
+  document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { if (confirm('Remove this player from the event?')) act(() => api('/api/admin/registrations/' + b.dataset.rm, {method: 'PUT', body: {status: 'withdrawn'}}), 'Removed.'); });
+  $('#rf').onchange = e => { regFilter = e.target.value; render(); };
+  MTCX.bindCheck($('#pane'), list);
+  if ($('#wlBtn')) { const ev = D.events.find(x => x.id === regFilter) || {}; $('#wlBtn').onclick = () => MTCX.whitelist($('#wlBox'), {...ev, teams: list.map(r => r.team)}); }
+  if ($('#ciAll')) $('#ciAll').onclick = () => act(() => api('/api/admin/events/' + regFilter + '/checkin-all', {method: 'POST', body: {attended: true}}), r => `Checked in ${r.changed} player${r.changed === 1 ? '' : 's'}.`);
+  if ($('#okAll')) $('#okAll').onclick = () => act(async () => { for (const r of pend) await api('/api/admin/registrations/' + r.id, {method: 'PUT', body: {status: 'approved'}}); }, 'All approved.');
+  document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { let reason;
+    if (b.dataset.st === 'rejected') { reason = prompt('Reason (sent to them in a Discord DM, optional):', ''); if (reason === null) return; }
+    act(() => api('/api/admin/registrations/' + b.dataset.id, {method: 'PUT', body: {status: b.dataset.st, reason}}), b.dataset.st === 'approved' ? 'Approved. They get a Discord DM.' : 'Updated.'); });
+  document.querySelectorAll('[data-team]').forEach(i => i.onchange = () => act(() => api('/api/admin/registrations/' + i.dataset.team, {method: 'PUT', body: {team: i.value}}), 'Team saved.'));
+}
+
+/* ---------------- showcase ---------------- */
+function mediaTab() {
+  const pend = D.media.filter(m => m.status === 'pending'), live = D.media.filter(m => m.status === 'approved').slice().reverse();
+  const row = (m, btns) => `<div class="item"><a class="thumb" href="${esc(m.url)}" target="_blank" rel="noopener" style="background-image:url('${esc(m.thumb)}')" aria-label="Open"></a>
+    <div class="grow"><b>${esc(m.caption || (m.type === 'youtube' ? 'Video' : 'Screenshot'))}</b><br><span class="soft small">${esc(evName(m.eventId))} · by ${esc(m.creator || '')} · ${esc(day(m.createdAt))}</span></div><div class="row">${btns}</div></div>`;
+  $('#pane').innerHTML = `
+    <div class="card"><h2>WAITING FOR REVIEW (${pend.length})</h2>${pend.length ? `<div class="list">${pend.map(m => row(m, `<button class="btn green sm" data-ms="approved" data-id="${m.id}">APPROVE</button><button class="btn red sm" data-ms="rejected" data-id="${m.id}">REJECT</button>`)).join('')}</div>` : '<p class="soft">Nothing waiting.</p>'}</div>
+    <div class="card accent"><h2>ADD TO SHOWCASE</h2>
+      <form id="mf"><div class="fields">
+        <div><label for="m_ev">Event</label><select id="m_ev" required>${D.events.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join('')}</select></div>
+        <div><label for="m_type">Type</label><select id="m_type"><option value="image">Screenshot</option><option value="youtube">YouTube video</option></select></div>
+        <div id="m_img" class="full"><label for="m_file">Images <span class="soft">(you can pick several)</span></label><input type="file" id="m_file" accept="image/png,image/jpeg,image/webp,image/gif" multiple></div>
+        <div id="m_yt" class="full" hidden><label for="m_url">YouTube video link</label><input type="url" id="m_url" placeholder="https://www.youtube.com/watch?v=..."></div>
+        <div><label for="m_cap">Caption</label><input type="text" id="m_cap" maxlength="140"></div>
+        <div><label for="m_by">By <span class="soft">(creator name)</span></label><input type="text" id="m_by" maxlength="60" value="MTC"></div>
+      </div><div style="margin-top:16px"><button class="btn" type="submit">ADD</button></div></form></div>
+    <div class="card"><h2>ON THE SITE (${live.length})</h2>${live.length ? `<div class="list">${live.map(m => row(m, `<button class="btn red sm" data-ms="rejected" data-id="${m.id}">REMOVE</button>`)).join('')}</div>` : '<p class="soft">Nothing yet.</p>'}</div>`;
+  document.querySelectorAll('[data-ms]').forEach(b => b.onclick = () => { let reason;
+    if (b.dataset.ms === 'rejected') { reason = prompt('Reason (sent to them in a Discord DM, optional):', ''); if (reason === null) return; }
+    act(() => api('/api/admin/media/' + b.dataset.id, {method: 'PUT', body: {status: b.dataset.ms, reason}}), 'Updated.'); });
+  $('#m_type').onchange = e => { const yt = e.target.value === 'youtube'; $('#m_yt').hidden = !yt; $('#m_img').hidden = yt; };
+  $('#mf').onsubmit = async ev => {
+    ev.preventDefault(); const btn = ev.target.querySelector('button'); btn.disabled = true;
+    try {
+      const base = {caption: $('#m_cap').value, creator: $('#m_by').value}, url = '/api/admin/events/' + $('#m_ev').value + '/media';
+      if ($('#m_type').value === 'youtube') await api(url, {method: 'POST', body: {...base, type: 'youtube', url: $('#m_url').value}});
+      else { const files = [...$('#m_file').files]; if (!files.length) throw new Error('Choose at least one image.');
+        for (const f of files) await api(url, {method: 'POST', body: {...base, type: 'image', data: await imageToDataUrl(f)}}); }
+      toast('Added to the showcase.'); await reload();
+    } catch (x) { toast(x.message, true); btn.disabled = false; }
+  };
+}
+
+/* ---------------- creators ---------------- */
+function creatorsTab() {
+  const pend = D.profiles.filter(p => p.status === 'pending');
+  $('#pane').innerHTML = `
+    <div class="card"><h2>CHANNELS TO VERIFY (${pend.length})</h2>
+      <p class="soft small">Check in Discord that the person really owns the channel before approving. Approving reads the channel from YouTube and puts the creator on the Creators page with their channel logo.</p>
+      ${pend.length ? `<div class="list">${pend.map(p => `<div class="item"><div class="grow"><b>${esc(p.name)}</b> <span class="soft small">@${esc(p.username || '')}</span><br>
+        <a href="${esc(p.youtube)}" target="_blank" rel="noopener">${esc(p.youtube)}</a>${p.mc ? `<br><span class="soft small">Minecraft: ${esc(p.mc)}</span>` : ''}
+        ${Object.keys(p.socials || {}).length ? `<br><span class="soft small">${Object.entries(p.socials).map(([k, u]) => `${esc(k)}: ${esc(u)}`).join(' · ')}</span>` : ''}${p.featured ? `<br><span class="soft small">Featured video: <a href="${esc(p.featured.url)}" target="_blank" rel="noopener">${esc(p.featured.url)}</a></span>` : ''}</div>
+        <div class="row"><button class="btn green sm" data-ok="${p.id}">VERIFY</button><button class="btn red sm" data-no="${p.id}">REJECT</button></div></div>`).join('')}</div>` : '<p class="soft">Nothing waiting.</p>'}</div>
+    <div class="grid2">
+      <div class="card accent"><h2>VERIFY BY HAND</h2><p class="soft small">For creators who sent their channel link in Discord.</p>
+        <form id="vf">
+          <label for="v_q">1. Creator <span class="soft">(members with the Creator role who are not on the site yet)</span></label>
+          <div class="pick" id="v_pick"><input type="search" id="v_q" placeholder="Search name or @username" autocomplete="off" aria-controls="v_list">
+            <div class="pick-list" id="v_list" role="listbox" aria-label="Creators"><p class="soft small">Loading members...</p></div></div>
+          <div id="v_sel" class="pick-sel" hidden></div>
+          <label for="v_y">2. YouTube channel link</label>
+          <div class="row"><input type="url" id="v_y" required placeholder="https://www.youtube.com/@..." style="flex:1;min-width:200px"><button class="btn green sm" type="button" id="v_chk">CHECK CHANNEL</button></div>
+          <div id="v_res" style="margin-top:8px"></div>
+          <label for="v_m">3. Minecraft name <span class="soft">(optional, shows their 3D skin)</span></label>${MTC.edPicker('v_ed', 'java')}<input type="text" id="v_m" maxlength="20">
+          <div style="margin-top:16px"><button class="btn" type="submit" id="v_go" disabled>VERIFY AND SHOW ON SITE</button></div>
+        </form></div>
+      <div class="card"><div class="row" style="margin-bottom:12px"><h2 style="margin:0;margin-right:auto">ON THE SITE <span class="soft small" id="ver_n"></span></h2>
+        <label for="ver_q" class="sr">Search creators on the site</label><input type="search" id="ver_q" placeholder="Search" style="max-width:180px"></div>
+        <div id="ver" class="list"><p class="soft">Loading...</p></div></div>
+    </div>`;
+  document.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => { b.disabled = true; act(() => api('/api/admin/profiles/' + b.dataset.ok + '/approve', {method: 'POST'}), r => 'Verified: ' + r.channel); });
+  document.querySelectorAll('[data-no]').forEach(b => b.onclick = () => { const reason = prompt('Reason (the creator sees this):', ''); if (reason !== null) act(() => api('/api/admin/profiles/' + b.dataset.no + '/reject', {method: 'POST', body: {reason}}), 'Rejected.'); });
+  /* creator picker */
+  let pool = [], picked = null, checked = false;
+  const face = m => m.avatar ? `<img src="${esc(m.avatar)}" alt="" loading="lazy">` : `<b>${esc([...(m.name || '?')][0])}</b>`;
+  const ready = () => { $('#v_go').disabled = !(picked && $('#v_y').value.trim()); };
+  function drawPool() {
+    const q = $('#v_q').value.trim().toLowerCase().replace(/^@/, '');
+    const list = pool.filter(m => !q || m.name.toLowerCase().includes(q) || m.username.toLowerCase().includes(q)).slice(0, 60);
+    $('#v_list').innerHTML = list.length ? list.map(m => `<button type="button" role="option" data-id="${m.id}">${face(m)}<span><b>${esc(m.name)}</b><small>@${esc(m.username)}</small></span></button>`).join('')
+      : `<p class="soft small">${pool.length ? 'Nobody matches.' : 'Every creator is already on the site.'}</p>`;
+  }
+  function pick(m) {
+    picked = m; $('#v_pick').hidden = true; $('#v_sel').hidden = false;
+    $('#v_sel').innerHTML = `${face(m)}<span><b>${esc(m.name)}</b><small>@${esc(m.username)}</small></span><button type="button" class="btn grey sm" id="v_chg">CHANGE</button>`;
+    $('#v_chg').onclick = () => { picked = null; $('#v_sel').hidden = true; $('#v_pick').hidden = false; $('#v_q').focus(); ready(); };
+    $('#v_y').focus(); ready();
+  }
+  api('/api/admin/members').then(d => {
+    pool = d.members.filter(m => m.creator && m.inGuild && !m.onSite && !m.blocked).sort((a, b) => a.name.localeCompare(b.name));
+    drawPool();
+  }).catch(x => { $('#v_list').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; });
+  $('#v_q').oninput = drawPool;
+  $('#v_list').onclick = e => { const b = e.target.closest('[data-id]'); if (b) pick(pool.find(m => m.id === b.dataset.id)); };
+  $('#v_y').oninput = () => { checked = false; $('#v_res').innerHTML = ''; ready(); };
+  $('#v_chk').onclick = async () => {
+    const b = $('#v_chk'); b.disabled = true; $('#v_res').innerHTML = '<p class="soft small">Checking with YouTube...</p>';
+    try { const c = await api('/api/admin/channel-check', {method: 'POST', body: {youtube: $('#v_y').value.trim()}}); checked = true;
+      $('#v_res').innerHTML = `<div class="item"><img src="${esc(c.image)}" alt="" referrerpolicy="no-referrer" style="width:44px;height:44px;border:2px solid #000"><div class="grow"><b>${esc(c.name)}</b> <span class="badge verified">REAL CHANNEL</span><br><a class="small" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></div></div>`;
+    } catch (x) { checked = false; $('#v_res').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
+    b.disabled = false;
+  };
+  $('#vf').onsubmit = ev => { ev.preventDefault();
+    if (!picked) return toast('Pick the creator first.', true);
+    if (!checked && !confirm('You have not checked this channel yet. Verify anyway?')) return;
+    $('#v_go').disabled = true;
+    act(() => api('/api/admin/creators/verify', {method: 'POST', body: {username: picked.username, youtube: $('#v_y').value.trim(), mc: $('#v_m').value.trim(), edition: MTC.readEd('v_ed')}}), r => 'Verified: ' + r.channel); };
+  api('/api/creators').then(d => {
+    const drawVer = () => { const q = ($('#ver_q').value || '').trim().toLowerCase();
+      const list = d.creators.filter(c => !q || c.name.toLowerCase().includes(q) || c.username.toLowerCase().includes(q));
+      $('#ver_n').textContent = `${d.creators.length} of ${d.total}`;
+      $('#ver').innerHTML = list.length ? list.map(c => `<div class="item"><img src="${esc(c.logo)}" alt="" style="width:40px;height:40px;border:2px solid #000"><div class="grow"><b>${esc(c.name)}</b><br><span class="soft small">@${esc(c.username)}</span></div><button class="btn sm" data-ed="${esc(c.id)}">EDIT</button><button class="btn red sm" data-un="${esc(c.username)}">HIDE</button></div>`).join('') : '<p class="soft">No match.</p>';
+      document.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => { pendingEdit = b.dataset.ed; tab = 'members'; sessionStorage.setItem('mtcTab', tab); render(); });
+      document.querySelectorAll('[data-un]').forEach(b => b.onclick = () => { if (confirm('Hide ' + b.dataset.un + ' from the Creators page?')) act(() => api('/api/admin/creators/unverify', {method: 'POST', body: {username: b.dataset.un}}), 'Hidden.'); });
+    };
+    $('#ver_q').oninput = drawVer; drawVer();
+    return;
+    $('#ver').innerHTML = d.creators.length ? d.creators.map(c => `<div class="item"><img src="${esc(c.logo)}" alt="" style="width:40px;height:40px;border:2px solid #000"><div class="grow"><b>${esc(c.name)}</b><br><span class="soft small">@${esc(c.username)}</span></div><button class="btn red sm" data-un="${esc(c.username)}">HIDE</button></div>`).join('') + `<p class="soft small">${d.creators.length} of ${d.total} creators verified.</p>` : '<p class="soft">No verified creators yet.</p>';
+    document.querySelectorAll('[data-un]').forEach(b => b.onclick = () => { if (confirm('Hide ' + b.dataset.un + ' from the Creators page?')) act(() => api('/api/admin/creators/unverify', {method: 'POST', body: {username: b.dataset.un}}), 'Hidden.'); });
+  }).catch(x => $('#ver').innerHTML = `<p class="msg err">${esc(x.message)}</p>`);
+}
+
+/* ---------------- members: everyone in the Discord server, manual verification, profile editing ---------------- */
+let memQuery = '', memFilter = 'all', memShown = 50, memData = null, pendingEdit = null;
+const SOCIALS = [['instagram', 'Instagram', 'https://instagram.com/...'], ['discord', 'Discord', 'https://discord.com/users/... or an invite link'], ['x', 'X (Twitter)', 'https://x.com/...'],
+  ['twitch', 'Twitch', 'https://twitch.tv/...'], ['facebook', 'Facebook', 'https://facebook.com/...']]; // + up to 3 "website or other" links (MTC.linkFields)
+let modSum = {};
+function membersTab() {
+  $('#pane').innerHTML = `<div class="card">
+    <div class="row" style="margin-bottom:14px"><h2 style="margin:0;margin-right:auto">MEMBERS <span class="soft small" id="mtotal"></span></h2>
+      <button class="btn grey sm" id="mrefresh">REFRESH FROM DISCORD</button></div>
+    <div class="row" style="margin-bottom:14px">
+      <label for="mfilter" class="sr">Search members</label><input type="search" id="mfilter" placeholder="Search name, @username or ID" value="${esc(memQuery)}" style="flex:1;min-width:200px">
+      <label for="mkind" class="sr">Show</label><select id="mkind" style="max-width:230px">${[['all', 'Everyone'], ['creator', 'Creator role'], ['onsite', 'On the Creators page'], ['verified', 'Verified by admin'], ['loggedin', 'Logged in to the site'], ['blocked', 'Blocked'], ['left', 'Not in the server']]
+        .map(([k, l]) => `<option value="${k}"${memFilter === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div id="mwarn"></div><div id="mlist" class="list"><p class="soft">Loading members from Discord...</p></div>
+    <div style="text-align:center;margin-top:14px"><button class="btn ghost sm" id="mmore" hidden>SHOW MORE</button></div>
+    <p class="soft small" style="margin-top:12px"><b>Verify</b> lets a member register, upload and add a channel even without the Creator role. <b>Edit profile</b> sets their channel, socials and featured video, and whether they appear on the Creators page.</p></div>
+    <div id="medit"></div>`;
+  const badges = m => [m.blocked && '<span class="badge rejected">BLOCKED</span>', m.verified && '<span class="badge verified">VERIFIED BY ADMIN</span>',
+    m.onSite && '<span class="badge live">ON CREATORS PAGE</span>', m.creator && '<span class="badge approved">CREATOR ROLE</span>', !m.inGuild && '<span class="badge withdrawn">NOT IN SERVER</span>'].filter(Boolean).join(' ');
+  const face = m => m.avatar ? `<img src="${esc(m.avatar)}" alt="" loading="lazy" style="width:40px;height:40px;border:2px solid #000">` : `<b class="badge" style="width:40px;height:40px;display:grid;place-items:center">${esc([...(m.name || '?')][0])}</b>`;
+  const keep = m => ({all: 1, creator: m.creator, onsite: m.onSite, verified: m.verified, loggedin: !!m.lastLogin, blocked: m.blocked, left: !m.inGuild})[memFilter];
+  function draw() {
+    const q = memQuery.trim().toLowerCase();
+    const rows = memData.members.filter(m => keep(m) && (!q || m.name.toLowerCase().includes(q) || m.username.toLowerCase().includes(q) || m.id.includes(q)));
+    $('#mtotal').textContent = `${rows.length} of ${memData.total}`;
+    $('#mlist').innerHTML = rows.slice(0, memShown).map(m => `<div class="item">${face(m)}<div class="grow"><b>${esc(m.name)}</b> ${badges(m)}<br>
+      <span class="soft small">@${esc(m.username)}${m.lastLogin ? ' · last login ' + esc(day(m.lastLogin)) : ''}${m.verified && m.verifiedBy ? ' · verified by ' + esc(m.verifiedBy) : ''}</span></div>
+      <div class="row"><button class="btn grey sm" data-mn="${m.id}" data-nm="${esc(m.name)}">NOTES${modSum[m.id] && (modSum[m.id].warnings || modSum[m.id].noShows || modSum[m.id].notes) ? ` (${[modSum[m.id].warnings && modSum[m.id].warnings + '⚠️', modSum[m.id].noShows && modSum[m.id].noShows + ' no-show', modSum[m.id].notes && modSum[m.id].notes + '🗒️'].filter(Boolean).join(' ')})` : ''}</button><button class="btn sm" data-me="${m.id}">EDIT PROFILE</button>
+      ${m.verified ? `<button class="btn grey sm" data-mv="${m.id}" data-v="0">UNVERIFY</button>` : `<button class="btn green sm" data-mv="${m.id}" data-v="1">VERIFY</button>`}
+      ${m.blocked ? `<button class="btn grey sm" data-mb="${m.id}" data-v="0">UNBLOCK</button>` : `<button class="btn red sm" data-mb="${m.id}" data-v="1">BLOCK</button>`}</div></div>`).join('')
+      || `<p class="soft">${q || memFilter !== 'all' ? 'No members match.' : 'No members found.'}</p>`;
+    $('#mmore').hidden = rows.length <= memShown;
+    const put = (id, body, msg) => api('/api/admin/members/' + id, {method: 'PUT', body}).then(() => { toast(msg); load(); }).catch(x => toast(x.message, true));
+    document.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => put(b.dataset.mv, {verified: b.dataset.v === '1'}, b.dataset.v === '1' ? 'Member verified.' : 'Verification removed.'));
+    document.querySelectorAll('[data-mb]').forEach(b => b.onclick = () => { if (b.dataset.v === '0' || confirm('Block this member? They will not be able to register, upload or add a channel.')) put(b.dataset.mb, {blocked: b.dataset.v === '1'}, b.dataset.v === '1' ? 'Member blocked.' : 'Member unblocked.'); });
+    document.querySelectorAll('[data-me]').forEach(b => b.onclick = () => editProfile(b.dataset.me));
+    document.querySelectorAll('[data-mn]').forEach(b => b.onclick = () => MTCX.notes($('#medit'), b.dataset.mn, b.dataset.nm));
+  }
+  async function load(refresh) {
+    try { [memData, modSum] = await Promise.all([api('/api/admin/members' + (refresh ? '?refresh' : '')), MTCX.modSummary()]); } catch (x) { $('#mlist').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
+    $('#mwarn').innerHTML = memData.warning ? `<p class="msg info">${esc(memData.warning)} Showing members who logged in only.</p>` : '';
+    draw();
+  }
+  async function editProfile(id) {
+    const box = $('#medit'); box.innerHTML = '<div class="card accent"><p class="soft">Loading profile...</p></div>'; box.scrollIntoView({behavior: 'smooth', block: 'start'});
+    let d; try { d = await api('/api/admin/members/' + id + '/profile'); } catch (x) { box.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
+    const p = d.profile;
+    box.innerHTML = `<div class="card accent"><div class="row" style="margin-bottom:6px">${p.logo ? `<img src="${esc(p.logo)}" alt="" style="width:56px;height:56px;border:3px solid #000">` : ''}
+      <div class="grow"><h2 style="margin:0">EDIT PROFILE: ${esc(d.name)}</h2><span class="soft small">@${esc(d.username)}${p.channelName ? ' · channel: ' + esc(p.channelName) : ''}</span></div></div>
+      <form id="pe"><div class="fields">
+        <div class="full"><label for="pe_yt">YouTube channel link</label>
+          <div class="row"><input type="url" id="pe_yt" placeholder="https://www.youtube.com/@name" value="${esc(p.youtube)}" style="flex:1;min-width:220px"><button class="btn green sm" type="button" id="pe_check">VERIFY CHANNEL</button></div>
+          <div id="pe_chk" style="margin-top:10px">${p.channelName ? `<p class="soft small">Channel verified${p.verifiedAt ? ' on ' + esc(p.verifiedAt) : ''}: <b>${esc(p.channelName)}</b>. Press Verify channel to check it again.</p>` : '<p class="soft small">Press Verify channel to check the link with YouTube before saving.</p>'}</div></div>
+        ${SOCIALS.map(([k, l, ph]) => `<div><label for="pe_${k}">${l}</label><input type="url" id="pe_${k}" placeholder="${esc(ph)}" value="${esc((p.socials || {})[k] || '')}"></div>`).join('')}
+        ${MTC.linkFields('pe_links', p.socials || {})}
+        <div><label for="pe_mc">Minecraft name <span class="soft">(3D skin)</span></label>${MTC.edPicker('pe_ed', p.mcEdition)}<input type="text" id="pe_mc" maxlength="20" value="${esc(p.mc)}"></div>
+        <div><label for="pe_skin">Skin file <span class="soft">(PNG, if their name shows no skin)</span></label><input type="file" id="pe_skin" accept="image/png">
+          ${p.skin ? '<label class="check"><input type="checkbox" id="pe_noskin"> Remove uploaded skin</label>' : ''}</div>
+        <div class="full"><div class="row" id="pe_skinprev">${p.skin || p.mc ? `<i class="skinface" style="--s:url('${esc(p.skin || MTC.skinUrl(p.mc, p.mcEdition))}')" title="Current skin"></i><span class="soft small">${p.skin ? 'Uploaded skin in use.' : 'Skin from their Minecraft name.'}</span>` : ''}</div>
+          <p class="soft small" style="margin-top:6px">No skin showing? Find the player on <a href="https://namemc.com" target="_blank" rel="noopener">namemc.com</a>, open the skin, press <b>Download</b>, then upload that PNG here.</p></div>
+        <div class="full"><label for="pe_fv">Featured video <span class="soft">(a YouTube video by this creator, plays on their profile)</span></label><input type="url" id="pe_fv" placeholder="https://www.youtube.com/watch?v=..." value="${esc(p.featured)}">
+          <div id="pe_prev" style="margin-top:10px"></div></div>
+      </div>
+      <label class="check"><input type="checkbox" id="pe_show"${p.show ? ' checked' : ''}> Show on the Creators page</label>
+      <div class="row" style="margin-top:10px"><button class="btn" type="submit">SAVE PROFILE</button><button class="btn ghost" type="button" id="pe_x">CLOSE</button></div></form></div>`;
+    const prev = () => { const m = /(?:v=|youtu\.be\/|shorts\/|live\/)([\w-]{11})/.exec($('#pe_fv').value); $('#pe_prev').innerHTML = m ? `<img src="https://i.ytimg.com/vi/${m[1]}/mqdefault.jpg" alt="Featured video thumbnail" style="width:240px;border:3px solid #000">` : ''; };
+    $('#pe_fv').oninput = prev; prev();
+    MTC.bindLinkFields('pe_links');
+    let skinData;
+    $('#pe_skin').onchange = () => { const f = $('#pe_skin').files[0]; if (!f) return; const fr = new FileReader();
+      fr.onload = () => { skinData = fr.result; $('#pe_skinprev').innerHTML = `<i class="skinface" style="--s:url('${fr.result}')"></i><span class="soft small">New skin, saved when you press Save profile.</span>`; }; fr.readAsDataURL(f); };
+    let recheck = false;
+    $('#pe_yt').oninput = () => { recheck = false; $('#pe_chk').innerHTML = '<p class="soft small">Link changed. Press Verify channel to check it.</p>'; };
+    $('#pe_check').onclick = async () => {
+      const b = $('#pe_check'), out = $('#pe_chk'); b.disabled = true; out.innerHTML = '<p class="soft small">Checking with YouTube...</p>';
+      try {
+        const c = await api('/api/admin/channel-check', {method: 'POST', body: {youtube: $('#pe_yt').value.trim()}});
+        recheck = true;
+        out.innerHTML = `<div class="item"><img src="${esc(c.image)}" alt="" referrerpolicy="no-referrer" style="width:48px;height:48px;border:2px solid #000"><div class="grow"><b>${esc(c.name)}</b> <span class="badge verified">REAL CHANNEL</span><br><a class="small" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></div></div>
+          <p class="soft small" style="margin-top:6px">Make sure this is really their channel (check with them in Discord), then press Save profile. The logo and name are saved then.</p>`;
+      } catch (x) { recheck = false; out.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
+      b.disabled = false;
+    };
+    $('#pe_x').onclick = () => { box.innerHTML = ''; };
+    $('#pe').onsubmit = async ev => {
+      ev.preventDefault(); const btn = ev.target.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'SAVING...';
+      const socials = MTC.readLinks('pe_links'); SOCIALS.forEach(([k]) => socials[k] = $('#pe_' + k).value.trim());
+      try {
+        const r = await api('/api/admin/members/' + id + '/profile', {method: 'PUT', body: {youtube: $('#pe_yt').value.trim(), mc: $('#pe_mc').value.trim(), edition: MTC.readEd('pe_ed'), featured: $('#pe_fv').value.trim(), socials, show: $('#pe_show').checked, recheck, skin: skinData !== undefined ? skinData : ($('#pe_noskin') && $('#pe_noskin').checked ? '' : undefined)}});
+        toast('Profile saved' + (r.shown ? ' and shown on the Creators page.' : '.')); box.innerHTML = ''; load();
+      } catch (x) { toast(x.message, true); btn.disabled = false; btn.textContent = 'SAVE PROFILE'; }
+    };
+  }
+  $('#mfilter').oninput = e => { memQuery = e.target.value; memShown = 50; draw(); };
+  $('#mkind').onchange = e => { memFilter = e.target.value; memShown = 50; draw(); };
+  $('#mmore').onclick = () => { memShown += 50; draw(); };
+  $('#mrefresh').onclick = () => { $('#mlist').innerHTML = '<p class="soft">Refreshing...</p>'; load(true); };
+  load().then(() => { if (pendingEdit) { const id = pendingEdit; pendingEdit = null; editProfile(id); } });
+}
+
+/* ---------------- announcements ---------------- */
+function newsTab() {
+  $('#pane').innerHTML = '<div id="mgPane"></div>';
+  MTCMessages.tab($('#mgPane'));
+}
+function oldNews() {
+  $('#oldNews').innerHTML = `<details style="margin-top:22px"><summary class="small"><b>Website-only news</b> (publish without Discord, and delete news from the home page)</summary><div class="card accent"><h2>NEW ANNOUNCEMENT</h2>
+    <form id="nf"><label for="n_t">Title</label><input type="text" id="n_t" maxlength="120" required>
+    <label for="n_b">Message</label><textarea data-md id="n_b" maxlength="2000"></textarea>
+    <label for="n_u">Link <span class="soft">(optional, e.g. an event page)</span></label><input type="url" id="n_u" placeholder="https://...">
+    <label class="check"><input type="checkbox" id="n_d"${D.config.announceChannel ? '' : ' disabled'}> Also post in Discord${D.config.announceChannel ? '' : ' (not set up yet)'}</label>
+    <button class="btn" type="submit">PUBLISH</button></form>
+    <p class="soft small" style="margin-top:12px">The latest announcement shows on the home page.</p></div>
+    <div class="card"><h2>PUBLISHED</h2>${D.announcements.length ? `<div class="list">${D.announcements.map(a => `<div class="item"><div class="grow"><b>${esc(a.title)}</b><br><span class="soft small">${esc(day(a.createdAt))}${a.postedToDiscord ? ' · posted in Discord' : a.discordError ? ' · Discord failed: ' + esc(a.discordError) : ''}</span><div class="md small" style="margin:6px 0 0">${MTCmd.md(a.body)}</div></div><button class="btn red sm" data-del="${a.id}">DELETE</button></div>`).join('')}</div>` : '<p class="soft">None yet.</p>'}</div></details>`;
+  $('#nf').onsubmit = ev => { ev.preventDefault(); ev.target.querySelector('button').disabled = true;
+    act(() => api('/api/admin/announce', {method: 'POST', body: {title: $('#n_t').value, body: $('#n_b').value, url: $('#n_u').value, discord: $('#n_d').checked}}),
+      r => r.discordError ? 'Published here, but Discord failed: ' + r.discordError : r.postedToDiscord ? 'Published and posted in Discord.' : 'Published.'); };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { if (confirm('Delete this announcement from the site?')) act(() => api('/api/admin/announcements/' + b.dataset.del, {method: 'DELETE'}), 'Deleted.'); });
+}
+
+/* ---------------- activity log ---------------- */
+let actQ = '', actKind = 'all';
+async function activityTab() {
+  $('#pane').innerHTML = '<p class="soft">Loading...</p>';
+  let d; try { d = await api('/api/admin/activity'); } catch (x) { $('#pane').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
+  const chName = id => { const c = dcMeta && dcMeta.channels.find(x => x.id === id); return c ? '#' + c.name : '#channel'; };
+  const roleName = id => { const r = dcMeta && dcMeta.roles.find(x => x.id === id); return r ? '@' + r.name : '@role'; };
+  const pretty = v => esc(String(v)).replace(/&lt;#(\d+)&gt;/g, (m, id) => esc(chName(id))).replace(/&lt;@&amp;(\d+)&gt;/g, (m, id) => esc(roleName(id)));
+  const fmt = iso => new Intl.DateTimeFormat('en-IN', {day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', second: '2-digit'}).format(new Date(iso));
+  const KINDS = [['all', 'All'], ['admin', 'By admins'], ['member', 'By members'], ['approve', 'Approvals'], ['reject', 'Rejections'], ['delete', 'Deletes'], ['discord', 'Discord posts'], ['login', 'Logins'], ['security', 'Security']];
+  const draw = () => {
+    const q = actQ.toLowerCase();
+    const list = d.log.filter(x => (actKind === 'all' || (actKind === 'admin' ? x.who && x.who.admin : actKind === 'member' ? !(x.who && x.who.admin) : x.kind === actKind))
+      && (!q || JSON.stringify([x.title, x.who, x.details]).toLowerCase().includes(q)));
+    $('#actList').innerHTML = list.length ? list.slice(0, 200).map(x => `<div class="item" style="align-items:flex-start">
+      ${x.who && x.who.avatar ? `<img src="${esc(x.who.avatar)}" alt="" style="width:36px;height:36px;border:2px solid #000">` : `<b style="width:36px;height:36px;display:grid;place-items:center;background:#2a1d12;border:2px solid #000">${esc(x.icon || '•')}</b>`}
+      <div class="grow"><b>${esc(x.icon || '')} ${pretty(x.title)}</b><br><span class="soft small">${esc(fmt(x.at))} · ${esc((x.who && x.who.name) || 'Someone')}${x.who && x.who.admin ? ' <span class="badge live">ADMIN</span>' : ''}</span>
+      ${(x.details || []).filter(([, v]) => v !== '' && v != null).length ? `<div class="small" style="margin-top:4px">${x.details.filter(([, v]) => v !== '' && v != null).map(([k, v]) => `<span class="soft">${esc(k)}:</span> ${pretty(v)}`).join(' · ')}</div>` : ''}</div></div>`).join('')
+      : '<p class="soft">Nothing matches.</p>';
+  };
+  $('#pane').innerHTML = `<p class="soft small" style="margin-bottom:12px">Every change made on the website, newest first. To also get it in Discord, pick a log channel in MESSAGES → ALERTS.</p>
+    <div class="row" style="margin-bottom:12px"><input type="search" id="actQ" placeholder="Search name, event, action" value="${esc(actQ)}" style="max-width:280px">
+      ${KINDS.map(([k, l]) => `<button class="btn sm ${actKind === k ? '' : 'grey'}" data-ak="${k}">${l}</button>`).join('')}</div>
+    <div class="card"><div class="list" id="actList"></div></div>`;
+  $('#actQ').oninput = () => { actQ = $('#actQ').value; draw(); };
+  document.querySelectorAll('[data-ak]').forEach(b => b.onclick = () => { actKind = b.dataset.ak; activityTab(); });
+  draw();
+  if (!dcMeta) api('/api/admin/discord/meta').then(m => { dcMeta = m; draw(); }).catch(() => {});
+}
+
+/* ---------------- backups ---------------- */
+function backupsTab() {
+  $('#pane').innerHTML = `<div class="grid2">
+    <div class="card accent"><h2>KEEP A COPY</h2>
+      <p>The site saves a backup every day and keeps the last 30. Download a copy now and then and keep it somewhere else too (Google Drive, a USB stick).</p>
+      <div class="row"><a class="btn" href="/api/admin/export">DOWNLOAD ALL DATA</a><button class="btn grey" id="bk">BACKUP NOW</button></div>
+      <p class="soft small" style="margin-top:14px">Uploaded screenshots live in the <code>data/uploads</code> folder. Copy that folder too.</p></div>
+    <div class="card"><h2>SAVED BACKUPS</h2>${D.backups.length ? `<div class="list">${D.backups.map(b => `<div class="item"><span class="grow small">${esc(b.name)}<br><span class="soft">${Math.round(b.size / 1024)} KB</span></span><a class="btn grey sm" href="/api/admin/backups/${encodeURIComponent(b.name)}">DOWNLOAD</a></div>`).join('')}</div>` : '<p class="soft">None yet.</p>'}</div></div>`;
+  $('#bk').onclick = () => act(() => api('/api/admin/backups', {method: 'POST'}), r => 'Saved ' + r.name);
+}
+start(); MTC.foot();
+</script>
+</body>
+</html>

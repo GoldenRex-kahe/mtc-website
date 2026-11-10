@@ -1,0 +1,109 @@
+{
+ "looking": [
+  {
+   "kind": "player",
+   "group": 0,
+   "src": "assets/scenes/looking/Player-1727-978.png",
+   "illum": null,
+   "u": null,
+   "v": null,
+   "x": 1727,
+   "y": 978,
+   "hd": false
+  }
+ ],
+ "atriptothenether": [
+  {
+   "kind": "hat",
+   "group": 0,
+   "src": "assets/scenes/atriptothenether/Hat-936-0-group1.png",
+   "illum": "assets/scenes/atriptothenether/Hat-936-0-group1.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 936,
+   "y": 0,
+   "hd": true
+  },
+  {
+   "kind": "player",
+   "group": 0,
+   "src": "assets/scenes/atriptothenether/Player-363-0-group1.png",
+   "illum": "assets/scenes/atriptothenether/Player-363-0-group1.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 363,
+   "y": 0,
+   "hd": true
+  }
+ ],
+ "broadcasting": [
+  {
+   "kind": "hat",
+   "group": 0,
+   "src": "assets/scenes/broadcasting/Hat-1890-257-group1.png",
+   "illum": "assets/scenes/broadcasting/Hat-1890-257-group1.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 1890,
+   "y": 257,
+   "hd": true
+  },
+  {
+   "kind": "player",
+   "group": 0,
+   "src": "assets/scenes/broadcasting/Player-1622-287-group1.png",
+   "illum": "assets/scenes/broadcasting/Player-1622-287-group1.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 1622,
+   "y": 287,
+   "hd": true
+  }
+ ],
+ "totheend": [
+  {
+   "kind": "hat",
+   "group": 1,
+   "src": "assets/scenes/totheend/Hat-2067-817-group2.png",
+   "illum": "assets/scenes/totheend/Hat-2067-817-group2.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 2067,
+   "y": 817,
+   "hd": true
+  },
+  {
+   "kind": "player",
+   "group": 1,
+   "src": "assets/scenes/totheend/Player-1695-596-group2.png",
+   "illum": "assets/scenes/totheend/Player-1695-596-group2.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 1695,
+   "y": 596,
+   "hd": true
+  },
+  {
+   "kind": "hat",
+   "group": 0,
+   "src": "assets/scenes/totheend/Hat-1067-343-group1.png",
+   "illum": "assets/scenes/totheend/Hat-1067-343-group1.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 1067,
+   "y": 343,
+   "hd": true
+  },
+  {
+   "kind": "player",
+   "group": 0,
+   "src": "assets/scenes/totheend/Player-943-355-group1.png",
+   "illum": "assets/scenes/totheend/Player-943-355-group1.jpg",
+   "u": "r",
+   "v": "g",
+   "x": 943,
+   "y": 355,
+   "hd": true
+  }
+ ]
+}

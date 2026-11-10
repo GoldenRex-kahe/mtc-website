@@ -1,0 +1,20 @@
+name: MTCServerControl
+version: 1.0.0
+main: cloud.kovaihost.mtc.MTCServerControl
+api-version: '1.18'
+author: MC Thamizh Creators
+website: https://mtc.kovaihost.cloud
+description: Opens and closes the MTC event server on the website's schedule, with kick messages and MOTD.
+commands:
+  mtcserver:
+    description: MTC Server Control status, refresh and reload
+    usage: /mtcserver <status|refresh|reload>
+    aliases: [mtcs]
+    permission: mtc.admin
+permissions:
+  mtc.admin:
+    description: Use /mtcserver
+    default: op
+  mtc.bypass:
+    description: Join and stay while the server is closed (staff)
+    default: false

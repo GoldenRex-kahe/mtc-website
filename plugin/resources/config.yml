@@ -1,0 +1,33 @@
+# MTC Server Control - connects this Minecraft server to the MTC website.
+# The website decides when the server is open (each event's daily server hours, or the
+# OPEN NOW / CLOSE NOW buttons in Admin > Events > Server control).
+
+# The MTC website
+site: "https://mtc.kovaihost.cloud"
+
+# The plugin key from the website: Admin > Events > Server control. Keep it secret.
+key: ""
+
+# The event this server is for, as its slug (the part after ?slug= in the event link), e.g. hide-and-seek.
+# Leave empty to follow whichever event is live on the website.
+event: ""
+
+# How often to ask the website, in seconds
+poll-seconds: 15
+
+# Who can always join and stay, even while the server is closed.
+# LuckPerms gives every member of a group the permission group.<name>, so these cover the staff groups.
+bypass-permissions:
+  - mtc.bypass
+  - group.admin
+  - group.dev
+  - group.founder
+  - group.owner
+# Server operators (/op) can always join too
+ops-bypass: true
+
+# Show the open / closed message in the server list (MOTD)
+change-motd: true
+
+# Warn players this many minutes before the server closes
+warn-minutes: [10, 5, 1]
