@@ -11,7 +11,7 @@ The site has no npm packages, so any **Node.js egg** works (often called "Generi
 
 Nothing else is needed:
 
-- **Port**: the site uses the port Pterodactyl gives it (`SERVER_PORT`), and listens on all addresses when it sees it is inside a panel. `PORT` / `HOST` in `.env` override this.
+- **Port**: inside the panel the site always uses the port Pterodactyl gives it (`SERVER_PORT`) and listens on all addresses, even if `.env` (copied from a PC) says `PORT=4500`.
 - **Stop button**: the site saves its data and shuts down cleanly on Stop (Ctrl+C / SIGTERM, or typing `stop` in the console). The console also takes `save` and `backup`.
 - **Health check**: `GET /healthz` answers `ok` (for uptime monitors).
 - **Data folder**: `data/` by default; `DATA_DIR=/home/container/data` in `.env` moves it.

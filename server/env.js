@@ -24,8 +24,9 @@ if (!clientId && env.DISCORD_TOKEN) { try { clientId = Buffer.from(env.DISCORD_T
 
 // Pterodactyl (and most game panels) hand the server its port in SERVER_PORT and expect it to listen on every address
 const panel = !!(process.env.SERVER_PORT || process.env.P_SERVER_UUID || process.env.P_SERVER_LOCATION);
-const port = +(env.PORT || process.env.PORT || process.env.SERVER_PORT || 4500);
-const host = env.HOST || process.env.HOST || (panel ? '0.0.0.0' : '127.0.0.1');
+// inside a panel its port and 0.0.0.0 always win, so a .env copied from a PC (PORT=4500, HOST=127.0.0.1) still works there
+const port = +((panel && process.env.SERVER_PORT) || env.PORT || process.env.PORT || 4500);
+const host = panel ? '0.0.0.0' : (env.HOST || process.env.HOST || '127.0.0.1');
 module.exports = {
   ROOT,
   SITE: path.join(ROOT, 'test-site'),
