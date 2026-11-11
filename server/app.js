@@ -716,25 +716,65 @@ on('GET', '/api/creators', async (req, res, p, url) => {
 // --- one creator's page: profile, latest YouTube uploads, MTC event history, showcase, activity
 const ytFeeds = new Map();
 const MC_WORDS = /minecraft|\bmcpe\b|\bmc\b|\bsmp\b|bedwars|skywars|skyblock|hypixel|lifesteal|creeper|enderman|ender dragon|\bnether\b|redstone|manhunt|hardcore|speedrun|\bmods?\b|craft|\bbedrock\b|java edition|herobrine|villager|pillager|warden|elytra|netherite|\bmobs?\b/i;
+const TAMIL_MC = /மைன்கிராஃப்ட்|மைன்கிராப்ட்|மைன்கிராஃபட்|மின்கிராஃப்ட்|மைன்கிராஃட்/;
+const isMcText = t => MC_WORDS.test(t) || TAMIL_MC.test(t);
+const YT_PAGE_HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', 'Accept-Language': 'en', Cookie: 'SOCS=CAI; CONSENT=PENDING+987' };
+const ytDec = t => String(t || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+// 1) the channel's RSS feed (cheap and exact, but YouTube answers 404 for some channels and servers)
+async function ytFromFeed(id) {
+  const r = await fetch('https://www.youtube.com/feeds/videos.xml?channel_id=' + id, { headers: YT_PAGE_HEADERS, signal: AbortSignal.timeout(12000) });
+  if (!r.ok) throw new Error('feed ' + r.status);
+  const xml = await r.text();
+  return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(([, e]) => {
+    const g = re => (e.match(re) || [])[1] || '';
+    const vid = g(/<yt:videoId>([\w-]{11})<\/yt:videoId>/), title = ytDec(g(/<title>([\s\S]*?)<\/title>/));
+    return { id: vid, title, published: g(/<published>([^<]+)<\/published>/), views: +g(/<media:statistics views="(\d+)"/) || 0,
+      short: /\/shorts\//.test(g(/<link rel="alternate" href="([^"]+)"/)), thumb: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`,
+      mc: isMcText(title + ' ' + ytDec(g(/<media:description>([\s\S]*?)<\/media:description>/))) };
+  }).filter(v => v.id);
+}
+// 2) the channel's videos page: used when the feed fails. It only says "2w ago", so the date is approximate.
+const agoToIso = t => {
+  const m = /(\d+)\s*(mo|y|w|d|h|m|s)\b/i.exec(String(t || '')); if (!m) return '';
+  const unit = { s: 1e3, m: 60e3, h: 36e5, d: 864e5, w: 6048e5, mo: 2592e6, y: 31536e6 }[m[2].toLowerCase()];
+  return new Date(Date.now() - m[1] * unit).toISOString();
+};
+const countOf = t => { const m = /([\d.,]+)\s*([KMB])?/i.exec(String(t || '').replace(/,/g, '')); if (!m) return 0; return Math.round(parseFloat(m[1]) * ({ K: 1e3, M: 1e6, B: 1e9 }[(m[2] || '').toUpperCase()] || 1)) || 0; };
+async function ytFromPage(id) {
+  const r = await fetch('https://www.youtube.com/channel/' + id + '/videos', { headers: YT_PAGE_HEADERS, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('page ' + r.status);
+  const html = await r.text(), m = html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
+  if (!m) throw new Error('page has no video data');
+  const found = [];
+  (function walk(o) {
+    if (!o || typeof o !== 'object') return;
+    if (o.lockupViewModel && o.lockupViewModel.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO') found.push(o.lockupViewModel);
+    if (o.videoRenderer && o.videoRenderer.videoId) found.push({ old: o.videoRenderer });
+    for (const k in o) walk(o[k]);
+  })(JSON.parse(m[1]));
+  return found.map(v => {
+    if (v.old) { const o = v.old, t = (o.title.runs || []).map(x => x.text).join('') || (o.title.simpleText || '');
+      return { id: o.videoId, title: t, published: agoToIso((o.publishedTimeText || {}).simpleText), views: countOf((o.viewCountText || {}).simpleText), short: false, thumb: `https://i.ytimg.com/vi/${o.videoId}/mqdefault.jpg`, mc: isMcText(t) }; }
+    const md = v.metadata.lockupMetadataViewModel, parts = (((md.metadata || {}).contentMetadataViewModel || {}).metadataRows || []).flatMap(r => (r.metadataParts || []).map(p => (p.text || {}).content || ''));
+    const title = ytDec(md.title.content);
+    return { id: v.contentId, title, published: agoToIso(parts.find(p => /\bago\b/i.test(p))), views: countOf(parts.find(p => !/\bago\b/i.test(p))), short: false,
+      thumb: `https://i.ytimg.com/vi/${v.contentId}/mqdefault.jpg`, mc: isMcText(title) };
+  }).filter(v => /^[\w-]{11}$/.test(v.id || ''));
+}
 async function ytLatest(channelUrl) {
   const id = (String(channelUrl || '').match(/\/channel\/(UC[\w-]{22})/) || [])[1]; if (!id) return null;
   const hit = ytFeeds.get(id); if (hit && Date.now() - hit.at < 30 * 60e3) return hit.data;
   try {
-    const r = await fetch('https://www.youtube.com/feeds/videos.xml?channel_id=' + id, { headers: { 'User-Agent': 'Mozilla/5.0 MTC-Website' } });
-    if (!r.ok) throw new Error('feed ' + r.status);
-    const xml = await r.text(), dec = t => String(t || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-    const all = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(([, e]) => {
-      const g = re => (e.match(re) || [])[1] || '';
-      const vid = g(/<yt:videoId>([\w-]{11})<\/yt:videoId>/);
-      return { id: vid, title: dec(g(/<title>([\s\S]*?)<\/title>/)), published: g(/<published>([^<]+)<\/published>/), views: +g(/<media:statistics views="(\d+)"/) || 0,
-        short: /\/shorts\//.test(g(/<link rel="alternate" href="([^"]+)"/)), thumb: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`,
-        mc: MC_WORDS.test(dec(g(/<title>([\s\S]*?)<\/title>/)) + ' ' + dec(g(/<media:description>([\s\S]*?)<\/media:description>/))) };
-    }).filter(v => v.id);
+    let all, via = 'feed';
+    try { all = await ytFromFeed(id); } catch (e1) { all = await ytFromPage(id); via = 'page'; }
     // only Minecraft videos (title or description mentions Minecraft or a well-known Minecraft term)
     const videos = all.filter(v => v.mc).slice(0, 12).map(({ mc, ...v }) => v);
-    const data = { channelId: id, videos, hidden: all.length - all.filter(v => v.mc).length };
+    const data = { channelId: id, videos, hidden: all.length - all.filter(v => v.mc).length, via };
     ytFeeds.set(id, { at: Date.now(), data }); return data;
-  } catch (e) { return hit ? hit.data : { channelId: id, videos: [], error: 'YouTube could not be reached right now.' }; }
+  } catch (e) {
+    logErr('YouTube videos ' + id, e);
+    return hit ? hit.data : { channelId: id, videos: [], error: 'YouTube could not be reached right now.' };
+  }
 }
 on('GET', '/api/creators/:key', async (req, res, p) => {
   const key = String(p.key || '').toLowerCase();
