@@ -474,19 +474,34 @@ module.exports = function install(x) {
 
   // ================================================================ LIVE NOW: verified creators streaming Minecraft on YouTube
   const live = new Map();   // creator id -> { videoId, title, since }
+  const liveLog = new Map();   // creator id -> what the last check saw (for /api/admin/live-status)
+  // Tamil spellings of Minecraft, for streams titled only in Tamil
+  const TAMIL_MC = /மைன்கிராஃப்ட்|மைன்கிராப்ட்|மைன்கிராஃபட்|மின்கிராஃப்ட்|மைன்கிராஃட்/;
+  const YT_HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', 'Accept-Language': 'en',
+    Cookie: 'SOCS=CAI; CONSENT=PENDING+987' };   // skips YouTube's cookie-consent page that data-centre addresses often get
+  const decode = t => String(t || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
   async function checkLive(c) {
     const base = String((c.socials || {}).youtube || '').replace(/\/+$/, '').replace(/\/(videos|featured|streams|shorts)$/, '');
     if (!base) return;
+    const note = (reason, extra = {}) => liveLog.set(c.id, { name: c.name, at: now(), reason, ...extra });
     try {
-      const r = await fetch(base + '/live', { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', 'Accept-Language': 'en' }, signal: AbortSignal.timeout(15000) });
+      const r = await fetch(base + '/live', { headers: YT_HEADERS, signal: AbortSignal.timeout(15000) });
       const html = await r.text();
+      if (/consent\.youtube\.com/.test(r.url) || (!/ytInitialData|ytInitialPlayerResponse/.test(html) && /consent/i.test(html.slice(0, 5000)))) return note('YouTube showed its consent page, so this check could not see the channel');
       const vid = (html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/) || [])[1];
       const isLive = !!vid && /"isLiveNow":true/.test(html);
-      const title = ((html.match(/<meta name="title" content="([^"]*)"/) || [])[1] || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-      if (isLive && MC_WORDS.test(title + ' ' + ((html.match(/<meta name="description" content="([^"]*)"/) || [])[1] || ''))) {
-        const was = live.get(c.id); live.set(c.id, { videoId: vid, title, since: was && was.videoId === vid ? was.since : now(), creator: { id: c.id, username: c.username, name: c.name, logo: c.logo } });
-      } else live.delete(c.id);
-    } catch { /* keep the last known state on a network error */ }
+      const title = decode((html.match(/<meta name="title" content="([^"]*)"/) || [])[1]);
+      const desc = decode((html.match(/<meta name="description" content="([^"]*)"/) || [])[1]);
+      const gaming = /"category":"Gaming"/.test(html);
+      if (!isLive) { if (live.has(c.id)) console.log(`[live] ${c.name} is no longer live`); live.delete(c.id); return note('Not live'); }
+      // a verified MTC creator streaming a game, or anything that mentions Minecraft in English or Tamil
+      if (gaming || MC_WORDS.test(title + ' ' + desc) || TAMIL_MC.test(title + ' ' + desc)) {
+        const was = live.get(c.id); if (!was) console.log(`[live] ${c.name} is live: ${title}`);
+        live.set(c.id, { videoId: vid, title, since: was && was.videoId === vid ? was.since : now(), creator: { id: c.id, username: c.username, name: c.name, logo: c.logo } });
+        return note('LIVE', { title, gaming });
+      }
+      live.delete(c.id); note('Live, but not a game or Minecraft stream (category is not Gaming and the title has no Minecraft words)', { title });
+    } catch (e) { note('Check failed: ' + (e.message || e)); /* keep the last known state on a network error */ }
   }
   async function liveLoop() {
     try {
@@ -494,9 +509,11 @@ module.exports = function install(x) {
       for (const c of cs) { await checkLive(c); await new Promise(s => setTimeout(s, 1500)); }
       for (const k of [...live.keys()]) if (!cs.some(c => c.id === k)) live.delete(k);
     } catch (e) { logErr('live check', e); }
-    setTimeout(liveLoop, 3 * 60e3).unref();
+    setTimeout(liveLoop, 2 * 60e3).unref();
   }
   if (!process.env.MTC_NO_LIVE) setTimeout(liveLoop, 8e3).unref();
+  const liveOf = id => { const l = live.get(id); return l ? { videoId: l.videoId, title: l.title, since: l.since, url: 'https://www.youtube.com/watch?v=' + l.videoId } : null; };
+  on('GET', '/api/admin/live-status', async req => { needAdmin(req); return { live: [...live.values()], checks: [...liveLog.values()] }; });
   on('GET', '/api/live', async () => ({ live: [...live.values()].map(l => ({ ...l, url: 'https://www.youtube.com/watch?v=' + l.videoId, thumb: `https://i.ytimg.com/vi/${l.videoId}/mqdefault.jpg` })) }));
 
   // ================================================================ stats dashboard
@@ -657,5 +674,5 @@ module.exports = function install(x) {
     S().promo = p; store.save(); return { ok: true, promo: p, active: !!promoPublic() };
   });
 
-  return { bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
+  return { liveOf, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
 };

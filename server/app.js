@@ -709,7 +709,7 @@ on('GET', '/api/creators', async (req, res, p, url) => {
   const list = publicCreators(r.members);
   // the creator cards use each channel's YouTube banner; wait a few seconds for new ones, otherwise use what is cached
   await Promise.race([Promise.all(list.map(c => community.bannerOf((c.socials || {}).youtube))), new Promise(res => setTimeout(res, 4000))]);
-  for (const c of list) { c.banner = community.bannerCached((c.socials || {}).youtube);
+  for (const c of list) { c.banner = community.bannerCached((c.socials || {}).youtube); c.live = community.liveOf(c.id);
     c.badges = community.badgesOf(c.id).map(b => ({ name: b.name, desc: b.desc, color: b.color, image: b.image, icon: b.icon })); }
   return { source: r.source, at: r.at, warning: r.error, total: r.members.length, creators: list };
 });
@@ -771,7 +771,7 @@ on('GET', '/api/creators/:key', async (req, res, p) => {
   await Promise.race([community.bannerOf((c.socials || {}).youtube), new Promise(res => setTimeout(res, 4000))]);
   const banner = community.bannerCached((c.socials || {}).youtube);
   const nb = k => { const o = list[(i + k + list.length) % list.length]; return o && o.id !== c.id ? { username: o.username, name: o.name, logo: o.logo } : null; };
-  return { creator: { banner, id: c.id, username: c.username, name: c.name, discordName: g.name || u.name || '', avatar: g.avatar || u.avatar || '', logo: c.logo, mc, mcEdition, skin: c.skin || skinUrl(mc, mcEdition),
+  return { creator: { banner, live: community.liveOf(c.id), id: c.id, username: c.username, name: c.name, discordName: g.name || u.name || '', avatar: g.avatar || u.avatar || '', logo: c.logo, mc, mcEdition, skin: c.skin || skinUrl(mc, mcEdition),
       socials: c.socials || {}, featured: c.featured }, stats, events, media, activity, youtube: yt1, prev: nb(-1), next: nb(1), total: list.length };
 });
 on('GET', '/api/events', async () => ({ events: sortEvents(D().events.filter(e => e.status !== 'draft')).map(pubEvent) }));

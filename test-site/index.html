@@ -403,6 +403,11 @@ html,body{max-width:100%;overflow-x:clip}
 .ev.next{margin:0}
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.marq span{transform:none!important}*{animation:none!important}.hero h1 .w>span,.hero p,.hero .cta,.hero .logo{opacity:1;transform:none}}
 .livenow{display:flex;align-items:center;gap:14px;padding:12px 4vw;background:linear-gradient(90deg,#3a0d0d,#1a0d06);border-top:3px solid #000;border-bottom:3px solid #000;overflow-x:auto;scrollbar-width:none}
+.lvbadge{display:inline-flex;align-items:center;gap:7px;font:8px 'Press Start 2P',monospace;letter-spacing:.06em;color:#fff;background:#c4302b;padding:6px 9px;border:3px solid #000;box-shadow:0 0 14px #c4302b88;text-decoration:none}
+.lvbadge i{width:8px;height:8px;border-radius:50%;background:#fff;animation:lnp 1.2s ease-in-out infinite}
+.cr .lvbadge{position:absolute;left:10px;top:10px;z-index:3}
+.cr.is-live{outline:3px solid #c4302b;outline-offset:-3px;box-shadow:0 0 22px #c4302b66}
+@media(prefers-reduced-motion:reduce){.lvbadge i{animation:none}}
 .ln-tag{display:flex;align-items:center;gap:8px;font:11px 'Press Start 2P',monospace;color:#fff;background:#c4302b;padding:9px 12px;border:3px solid #000;flex:none}
 .ln-tag i{width:10px;height:10px;border-radius:50%;background:#fff;animation:lnp 1.2s ease-in-out infinite}@keyframes lnp{50%{opacity:.25}}
 .ln-list{display:flex;gap:10px}.ln{display:flex;align-items:center;gap:10px;background:#150E08;border:3px solid #000;padding:6px 10px 6px 6px;color:#F7EBD8;text-decoration:none;flex:none;max-width:420px}
@@ -689,9 +694,11 @@ function nextCard(e){
     ${future?'<div class="count" id="count"><div><b id="d">00</b><small>days</small></div><div><b id="h">00</b><small>hours</small></div><div><b id="m">00</b><small>min</small></div><div><b id="s">00</b><small>sec</small></div></div>':''}
     <a class="btn" href="/event.html?slug=${encodeURIComponent(e.slug)}">${e.status==='open'?'REGISTER':'VIEW EVENT'}</a></div></article>`}
 /* creators streaming Minecraft right now, and an open poll */
-const liveNow=()=>fetch('/api/live').then(r=>r.ok?r.json():null).then(d=>{const box=$('#liveNow');if(!d||!d.live.length){box.hidden=true;return}box.hidden=false;
+const liveNow=()=>fetch('/api/live').then(r=>r.ok?r.json():null).then(d=>{const box=$('#liveNow');
+  if(d&&typeof creators!=='undefined'&&creators.length){const on=new Map(d.live.map(l=>[l.creator.id,l]));let ch=false;for(const c of creators){const l=on.get(c.id)||null;if((!!l)!==(!!c.live)||(l&&c.live&&l.videoId!==c.live.videoId)){c.live=l?{url:l.url,title:l.title,videoId:l.videoId}:null;ch=true}}if(ch)renderCreators()}
+  if(!d||!d.live.length){box.hidden=true;return}box.hidden=false;
   box.innerHTML=`<span class="ln-tag"><i aria-hidden="true"></i>LIVE NOW</span><div class="ln-list">${d.live.map(l=>`<a class="ln" href="${escH(l.url)}" target="_blank" rel="noopener"><img src="${escH(l.thumb)}" alt="" loading="lazy"><span><b>${escH(l.creator.name)}</b><small>${escH(l.title)}</small></span><em>WATCH</em></a>`).join('')}</div>`}).catch(()=>{});
-liveNow();setInterval(liveNow,120e3);
+liveNow();setInterval(liveNow,60e3);
 fetch('/api/polls').then(r=>r.ok?r.json():null).then(d=>{const q=d&&d.polls.find(p=>p.open);if(!q)return;const a=$('#pollCta');a.hidden=false;a.href='/community.html#poll-'+q.id;
   a.innerHTML=`<span class="pc-ico" aria-hidden="true">🗳️</span><span><small>VOTE NOW</small><b>${escH(q.question)}</b></span><em>${q.voters} voted →</em>`}).catch(()=>{});
 fetch('/api/events').then(r=>r.ok?r.json():Promise.reject()).then(d=>{
@@ -743,8 +750,9 @@ function renderCreators(){
   const list=creators.map((c,i)=>[c,i]).filter(([c])=>!q||c.n.toLowerCase().includes(q)||(c.u||'').includes(q));
   $('#grid').innerHTML=list.slice(0,shown).map(([c,i],k)=>{const col=logoCol[c.logo]||cols[i%cols.length],yt=c.socials&&c.socials.youtube,ed=c.mcEdition==='bedrock'?'BEDROCK':c.mcEdition==='offline'?'OFFLINE':'JAVA';
     const bd=(c.badges||[]).filter(b=>b.image).slice(0,6);
-    return `<div class="cr fresh" tabindex="0" role="link" aria-label="${esc(c.n)}: open profile" data-i="${i}" style="--cc:${col};animation-delay:${Math.min(k,12)*40}ms">
+    return `<div class="cr fresh${c.live?' is-live':''}" tabindex="0" role="link" aria-label="${esc(c.n)}${c.live?' is live now':''}: open profile" data-i="${i}" data-id="${esc(c.id||'')}" style="--cc:${col};animation-delay:${Math.min(k,12)*40}ms">
       <div class="cr-ban${c.banner?'':' none'}"${c.banner||c.logo?` style="background-image:url('${esc(c.banner||c.logo)}')"`:''}>
+        ${c.live?`<a class="lvbadge" href="${esc(c.live.url)}" target="_blank" rel="noopener" title="${esc(c.live.title)}"><i aria-hidden="true"></i>LIVE</a>`:''}
         ${yt?`<a class="cr-yt" href="${esc(yt)}" target="_blank" rel="noopener" aria-label="${esc(c.n)} on YouTube" title="YouTube channel">${VI.youtube}</a>`:''}</div>
       <div class="cr-body">
         <div class="cr-logo"><div class="av" style="background:${col}">${avatar(c)}</div><span class="cr-seal" title="Verified MTC creator">${VI.seal}</span></div>
@@ -767,7 +775,7 @@ const slug=c=>(c.u||c.n).toLowerCase();
 const pageOf=c=>'/creator.html?u='+encodeURIComponent(c.u||c.id||c.n);
 function initHash(){const hm=location.hash.match(/creator=(.+)/);if(hm){const k=creators.findIndex(c=>slug(c)===decodeURIComponent(hm[1]).toLowerCase());if(k>=0)location.replace(pageOf(creators[k]))}}
 fetch('/api/creators').then(r=>r.ok?r.json():Promise.reject(new Error('api '+r.status))).then(d=>{
-  creators=d.creators.map(c=>({n:c.name,u:c.username,id:c.id,mc:c.mc,mcEdition:c.mcEdition,banner:c.banner||'',badges:c.badges||[],logo:c.logo,socials:c.socials||{},featured:c.featured,skin:c.skin}))
+  creators=d.creators.map(c=>({live:c.live||null,n:c.name,u:c.username,id:c.id,mc:c.mc,mcEdition:c.mcEdition,banner:c.banner||'',badges:c.badges||[],logo:c.logo,socials:c.socials||{},featured:c.featured,skin:c.skin}))
     .sort((a,b)=>(!!b.socials.youtube-!!a.socials.youtube)||a.n.localeCompare(b.n));
   $('#crNote').textContent=creators.length+' of '+d.total+' creators verified so far'+(d.source==='cache'?' (Discord unreachable, using a saved list)':'')+'. Creators appear here with their YouTube channel logo after an admin verifies the channel. Send your channel link to an admin to get listed.';
 }).catch(()=>{$('#crNote').textContent='Showing sample creators. Start the MTC server (node server.js) to sync from Discord.'})
