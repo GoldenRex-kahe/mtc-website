@@ -34,7 +34,7 @@ main{max-width:1180px}
 .c-sub img{width:22px;height:22px;border-radius:50%}
 .badges{display:flex;gap:6px;flex-wrap:wrap}
 .lvbadge{display:inline-flex;align-items:center;white-space:nowrap;flex:none;gap:8px;font:8px 'Press Start 2P',monospace;letter-spacing:.1em;color:#fff;background:linear-gradient(180deg,#e0382f,#a8201b);padding:7px 10px 7px 9px;border:3px solid #000;box-shadow:0 0 0 0 #ff3b30aa,inset 0 -3px 0 #7a1511;text-decoration:none;animation:onairGlow 1.4s ease-in-out infinite}
-.lvbadge i{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px #fff;animation:onairDot 1s steps(1) infinite}
+.lvbadge i{display:block;flex:none;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px #fff;animation:onairDot 1s steps(1) infinite}
 @keyframes onairDot{0%,55%{opacity:1}56%,100%{opacity:.15;box-shadow:none}}
 @keyframes onairGlow{0%,100%{box-shadow:0 0 0 0 #ff3b3000,inset 0 -3px 0 #7a1511}50%{box-shadow:0 0 10px 1px #ff3b3099,inset 0 -3px 0 #7a1511}}
 @media(prefers-reduced-motion:reduce){.lvbadge,.lvbadge i{animation:none}}
