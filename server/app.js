@@ -735,46 +735,63 @@ async function ytFromFeed(id) {
 }
 // 2) the channel's videos page: used when the feed fails. It only says "2w ago", so the date is approximate.
 const agoToIso = t => {
-  const m = /(\d+)\s*(mo|y|w|d|h|m|s)\b/i.exec(String(t || '')); if (!m) return '';
-  const unit = { s: 1e3, m: 60e3, h: 36e5, d: 864e5, w: 6048e5, mo: 2592e6, y: 31536e6 }[m[2].toLowerCase()];
+  const m = /(\d+)\s*(months?|mo|years?|y|weeks?|w|days?|d|hours?|h|minutes?|m|seconds?|s)\b/i.exec(String(t || '')); if (!m) return '';
+  const k = m[2].toLowerCase(), key = k.startsWith('mo') ? 'mo' : k[0];
+  const unit = { s: 1e3, m: 60e3, h: 36e5, d: 864e5, w: 6048e5, mo: 2592e6, y: 31536e6 }[key];
   return new Date(Date.now() - m[1] * unit).toISOString();
 };
 const countOf = t => { const m = /([\d.,]+)\s*([KMB])?/i.exec(String(t || '').replace(/,/g, '')); if (!m) return 0; return Math.round(parseFloat(m[1]) * ({ K: 1e3, M: 1e6, B: 1e9 }[(m[2] || '').toUpperCase()] || 1)) || 0; };
-async function ytFromPage(id) {
-  const r = await fetch('https://www.youtube.com/channel/' + id + '/videos', { headers: YT_PAGE_HEADERS, signal: AbortSignal.timeout(15000) });
-  if (!r.ok) throw new Error('page ' + r.status);
+// one tab of a channel: videos, streams (past, live and upcoming) or shorts
+async function ytFromPage(id, tab = 'videos', retry = true) {
+  if (retry) try { return await ytFromPage(id, tab, false); } catch (e) { await new Promise(r => setTimeout(r, 1200)); }
+  const r = await fetch('https://www.youtube.com/channel/' + id + '/' + tab, { headers: YT_PAGE_HEADERS, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(tab + ' page ' + r.status);
   const html = await r.text(), m = html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
-  if (!m) throw new Error('page has no video data');
+  if (!m) throw new Error(tab + ' page has no video data');
   const found = [];
   (function walk(o) {
     if (!o || typeof o !== 'object') return;
-    if (o.lockupViewModel && o.lockupViewModel.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO') found.push(o.lockupViewModel);
-    if (o.videoRenderer && o.videoRenderer.videoId) found.push({ old: o.videoRenderer });
+    if (o.shortsLockupViewModel) { found.push({ sh: o.shortsLockupViewModel }); return; }
+    if (o.lockupViewModel && o.lockupViewModel.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO') { found.push({ lv: o.lockupViewModel }); return; }
+    if (o.videoRenderer && o.videoRenderer.videoId) { found.push({ old: o.videoRenderer }); return; }
     for (const k in o) walk(o[k]);
   })(JSON.parse(m[1]));
-  return found.map(v => {
+  const out = [];
+  for (const v of found) {
+    if (tab === 'shorts') {   // a channel without Shorts sends its home page instead: only real Shorts count
+      if (!v.sh) continue;
+      const sh = v.sh, vid = ((sh.onTap && sh.onTap.innertubeCommand && sh.onTap.innertubeCommand.reelWatchEndpoint) || {}).videoId || String(sh.entityId || '').replace(/^shorts-shelf-item-/, '');
+      const title = ytDec(((sh.overlayMetadata || {}).primaryText || {}).content);
+      out.push({ id: vid, title, published: '', views: countOf(((sh.overlayMetadata || {}).secondaryText || {}).content), short: true, thumb: `https://i.ytimg.com/vi/${vid}/oar2.jpg`, mc: isMcText(title) });
+      continue;
+    }
+    if (v.sh) continue;
     if (v.old) { const o = v.old, t = (o.title.runs || []).map(x => x.text).join('') || (o.title.simpleText || '');
-      return { id: o.videoId, title: t, published: agoToIso((o.publishedTimeText || {}).simpleText), views: countOf((o.viewCountText || {}).simpleText), short: false, thumb: `https://i.ytimg.com/vi/${o.videoId}/mqdefault.jpg`, mc: isMcText(t) }; }
-    const md = v.metadata.lockupMetadataViewModel, parts = (((md.metadata || {}).contentMetadataViewModel || {}).metadataRows || []).flatMap(r => (r.metadataParts || []).map(p => (p.text || {}).content || ''));
-    const title = ytDec(md.title.content);
-    return { id: v.contentId, title, published: agoToIso(parts.find(p => /\bago\b/i.test(p))), views: countOf(parts.find(p => !/\bago\b/i.test(p))), short: false,
-      thumb: `https://i.ytimg.com/vi/${v.contentId}/mqdefault.jpg`, mc: isMcText(title) };
-  }).filter(v => /^[\w-]{11}$/.test(v.id || ''));
+      out.push({ id: o.videoId, title: t, published: agoToIso((o.publishedTimeText || {}).simpleText), views: countOf((o.viewCountText || {}).simpleText), short: false, thumb: `https://i.ytimg.com/vi/${o.videoId}/mqdefault.jpg`, mc: isMcText(t) }); continue; }
+    const lv = v.lv, md = lv.metadata.lockupMetadataViewModel, parts = (((md.metadata || {}).contentMetadataViewModel || {}).metadataRows || []).flatMap(r => (r.metadataParts || []).map(p => (p.text || {}).content || ''));
+    const title = ytDec(md.title.content), raw = JSON.stringify(lv.contentImage || {});
+    const live = /"text":"LIVE"|BADGE_STYLE_TYPE_LIVE|THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE/.test(raw) || parts.some(p => /watching/i.test(p));
+    const upcoming = parts.some(p => /^(Scheduled|Premieres|Upcoming)/i.test(p)) || /UPCOMING/.test(raw);
+    out.push({ id: lv.contentId, title, published: live ? new Date().toISOString() : agoToIso(parts.find(p => /\bago\b/i.test(p))),
+      views: countOf(parts.find(p => /views?|watching/i.test(p)) || parts.find(p => !/\bago\b/i.test(p))), short: false, live, upcoming,
+      when: upcoming ? parts.find(p => /^(Scheduled|Premieres|Upcoming)/i.test(p)) || '' : '', thumb: `https://i.ytimg.com/vi/${lv.contentId}/mqdefault.jpg`, mc: isMcText(title) });
+  }
+  return out.filter(v => /^[\w-]{11}$/.test(v.id || ''));
 }
 async function ytLatest(channelUrl) {
   const id = (String(channelUrl || '').match(/\/channel\/(UC[\w-]{22})/) || [])[1]; if (!id) return null;
-  const hit = ytFeeds.get(id); if (hit && Date.now() - hit.at < 30 * 60e3) return hit.data;
-  try {
-    let all, via = 'feed';
-    try { all = await ytFromFeed(id); } catch (e1) { all = await ytFromPage(id); via = 'page'; }
-    // only Minecraft videos (title or description mentions Minecraft or a well-known Minecraft term)
-    const videos = all.filter(v => v.mc).slice(0, 12).map(({ mc, ...v }) => v);
-    const data = { channelId: id, videos, hidden: all.length - all.filter(v => v.mc).length, via };
-    ytFeeds.set(id, { at: Date.now(), data }); return data;
-  } catch (e) {
-    logErr('YouTube videos ' + id, e);
-    return hit ? hit.data : { channelId: id, videos: [], error: 'YouTube could not be reached right now.' };
-  }
+  const hit = ytFeeds.get(id); if (hit && Date.now() - hit.at < 20 * 60e3) return hit.data;
+  // the three tabs of the channel, at the same time; Videos falls back to the RSS feed
+  const [vids, streams, shorts] = await Promise.all([
+    ytFromPage(id, 'videos').catch(() => ytFromFeed(id).then(all => all.filter(v => !v.short))).catch(e => { logErr('YouTube videos ' + id, e); return null; }),
+    ytFromPage(id, 'streams').catch(e => { logErr('YouTube streams ' + id, e); return null; }),
+    ytFromPage(id, 'shorts').catch(e => { logErr('YouTube shorts ' + id, e); return null; })]);
+  if (!vids && !streams && !shorts) return hit ? hit.data : { channelId: id, videos: [], streams: [], shorts: [], error: 'YouTube could not be reached right now.' };
+  // only Minecraft (title mentions Minecraft or a well-known Minecraft term, in English or Tamil); live streams first
+  const keep = (list, n) => (list || []).filter(v => v.mc).sort((a, b) => !!b.live - !!a.live).slice(0, n).map(({ mc, ...v }) => v);
+  const data = { channelId: id, videos: keep(vids, 12), streams: keep(streams, 12), shorts: keep(shorts, 12),
+    hidden: [vids, streams, shorts].reduce((n, l) => n + (l || []).filter(v => !v.mc).length, 0) };
+  ytFeeds.set(id, { at: Date.now(), data }); return data;
 }
 on('GET', '/api/creators/:key', async (req, res, p) => {
   const key = String(p.key || '').toLowerCase();
