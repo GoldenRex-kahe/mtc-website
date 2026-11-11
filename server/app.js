@@ -1709,7 +1709,7 @@ const MAINT_OPEN = /^\/(auth\/|api\/me$|api\/plugin\/|api\/admin\/|assets\/|uplo
 function maintPage(msg) {
   const m = esc(msg || 'We are updating the website. Please come back soon!');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Back soon | MTC</title>
-<link rel="icon" href="/assets/logo.png"><link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png"><link rel="icon" type="image/png" sizes="128x128" href="/assets/favicon-128.png"><link rel="apple-touch-icon" href="/assets/favicon-128.png"><link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600&display=swap" rel="stylesheet">
 <style>body{margin:0;min-height:100svh;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 100%,#5a2f0a,#150E08 70%);color:#f6ead7;font:17px/1.6 Archivo,system-ui,sans-serif;text-align:center;padding:24px}
 img{width:140px;image-rendering:pixelated;animation:b 2.4s ease-in-out infinite}@keyframes b{50%{transform:translateY(-8px)}}
 h1{font:clamp(18px,4vw,30px) 'Press Start 2P',monospace;margin:24px 0 12px;color:#F7931E}p{max-width:520px;margin:0 auto 22px;color:#d8c8b0}
@@ -1750,6 +1750,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   const url = new URL(req.url, 'http://localhost');
   const pathname = decodeURIComponent(url.pathname);
+  if (pathname === '/favicon.ico') { res.writeHead(302, { Location: '/assets/favicon-32.png', 'Cache-Control': 'public, max-age=86400' }); return res.end(); }
   if (pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }); return res.end('ok'); }   // for the hosting panel
   try {
     // admin-only mode: everyone except admins sees the "back soon" page (login and admin pages stay open so admins can get in)
