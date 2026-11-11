@@ -403,13 +403,15 @@ html,body{max-width:100%;overflow-x:clip}
 .ev.next{margin:0}
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.marq span{transform:none!important}*{animation:none!important}.hero h1 .w>span,.hero p,.hero .cta,.hero .logo{opacity:1;transform:none}}
 .livenow{display:flex;align-items:center;gap:14px;padding:12px 4vw;background:linear-gradient(90deg,#3a0d0d,#1a0d06);border-top:3px solid #000;border-bottom:3px solid #000;overflow-x:auto;scrollbar-width:none}
-.lvbadge{display:inline-flex;align-items:center;gap:7px;font:8px 'Press Start 2P',monospace;letter-spacing:.06em;color:#fff;background:#c4302b;padding:6px 9px;border:3px solid #000;box-shadow:0 0 14px #c4302b88;text-decoration:none}
-.lvbadge i{width:8px;height:8px;border-radius:50%;background:#fff;animation:lnp 1.2s ease-in-out infinite}
+.lvbadge{display:inline-flex;align-items:center;gap:8px;font:8px 'Press Start 2P',monospace;letter-spacing:.1em;color:#fff;background:linear-gradient(180deg,#e0382f,#a8201b);padding:7px 10px 7px 9px;border:3px solid #000;box-shadow:0 0 0 0 #ff3b30aa,inset 0 -3px 0 #7a1511;text-decoration:none;animation:onairGlow 1.4s ease-in-out infinite}
+.lvbadge i{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px #fff;animation:onairDot 1s steps(1) infinite}
+@keyframes onairDot{0%,55%{opacity:1}56%,100%{opacity:.15;box-shadow:none}}
+@keyframes onairGlow{0%,100%{box-shadow:0 0 6px 0 #ff3b3066,inset 0 -3px 0 #7a1511}50%{box-shadow:0 0 20px 5px #ff3b30aa,inset 0 -3px 0 #7a1511}}
+@media(prefers-reduced-motion:reduce){.lvbadge,.lvbadge i{animation:none}}
 .cr .lvbadge{position:absolute;left:10px;top:10px;z-index:3}
 .cr.is-live{outline:3px solid #c4302b;outline-offset:-3px;box-shadow:0 0 22px #c4302b66}
-@media(prefers-reduced-motion:reduce){.lvbadge i{animation:none}}
 .ln-tag{display:flex;align-items:center;gap:8px;font:11px 'Press Start 2P',monospace;color:#fff;background:#c4302b;padding:9px 12px;border:3px solid #000;flex:none}
-.ln-tag i{width:10px;height:10px;border-radius:50%;background:#fff;animation:lnp 1.2s ease-in-out infinite}@keyframes lnp{50%{opacity:.25}}
+.ln-tag i{width:10px;height:10px;border-radius:50%;background:#fff;animation:lnp 1.2s ease-in-out infinite}@keyframes lnp{0%,55%{opacity:1}56%,100%{opacity:.15}}
 .ln-list{display:flex;gap:10px}.ln{display:flex;align-items:center;gap:10px;background:#150E08;border:3px solid #000;padding:6px 10px 6px 6px;color:#F7EBD8;text-decoration:none;flex:none;max-width:420px}
 .ln:hover{border-color:#c4302b}.ln img{width:96px;aspect-ratio:16/9;object-fit:cover;border:2px solid #000}.ln span{display:grid;min-width:0}.ln small{color:#cdbb9f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
 .ln em{font:9px 'Press Start 2P',monospace;font-style:normal;color:#fff;background:#c4302b;padding:7px 8px;border:2px solid #000}
@@ -697,7 +699,7 @@ function nextCard(e){
 const liveNow=()=>fetch('/api/live').then(r=>r.ok?r.json():null).then(d=>{const box=$('#liveNow');
   if(d&&typeof creators!=='undefined'&&creators.length){const on=new Map(d.live.map(l=>[l.creator.id,l]));let ch=false;for(const c of creators){const l=on.get(c.id)||null;if((!!l)!==(!!c.live)||(l&&c.live&&l.videoId!==c.live.videoId)){c.live=l?{url:l.url,title:l.title,videoId:l.videoId}:null;ch=true}}if(ch)renderCreators()}
   if(!d||!d.live.length){box.hidden=true;return}box.hidden=false;
-  box.innerHTML=`<span class="ln-tag"><i aria-hidden="true"></i>LIVE NOW</span><div class="ln-list">${d.live.map(l=>`<a class="ln" href="${escH(l.url)}" target="_blank" rel="noopener"><img src="${escH(l.thumb)}" alt="" loading="lazy"><span><b>${escH(l.creator.name)}</b><small>${escH(l.title)}</small></span><em>WATCH</em></a>`).join('')}</div>`}).catch(()=>{});
+  box.innerHTML=`<span class="ln-tag"><i aria-hidden="true"></i>ON AIR</span><div class="ln-list">${d.live.map(l=>`<a class="ln" href="${escH(l.url)}" target="_blank" rel="noopener"><img src="${escH(l.thumb)}" alt="" loading="lazy"><span><b>${escH(l.creator.name)}</b><small>${escH(l.title)}</small></span><em>WATCH</em></a>`).join('')}</div>`}).catch(()=>{});
 liveNow();setInterval(liveNow,60e3);
 fetch('/api/polls').then(r=>r.ok?r.json():null).then(d=>{const q=d&&d.polls.find(p=>p.open);if(!q)return;const a=$('#pollCta');a.hidden=false;a.href='/community.html#poll-'+q.id;
   a.innerHTML=`<span class="pc-ico" aria-hidden="true">🗳️</span><span><small>VOTE NOW</small><b>${escH(q.question)}</b></span><em>${q.voters} voted →</em>`}).catch(()=>{});
@@ -752,7 +754,7 @@ function renderCreators(){
     const bd=(c.badges||[]).filter(b=>b.image).slice(0,6);
     return `<div class="cr fresh${c.live?' is-live':''}" tabindex="0" role="link" aria-label="${esc(c.n)}${c.live?' is live now':''}: open profile" data-i="${i}" data-id="${esc(c.id||'')}" style="--cc:${col};animation-delay:${Math.min(k,12)*40}ms">
       <div class="cr-ban${c.banner?'':' none'}"${c.banner||c.logo?` style="background-image:url('${esc(c.banner||c.logo)}')"`:''}>
-        ${c.live?`<a class="lvbadge" href="${esc(c.live.url)}" target="_blank" rel="noopener" title="${esc(c.live.title)}"><i aria-hidden="true"></i>LIVE</a>`:''}
+        ${c.live?`<a class="lvbadge" href="${esc(c.live.url)}" target="_blank" rel="noopener" title="${esc(c.live.title)}"><i aria-hidden="true"></i>ON AIR</a>`:''}
         ${yt?`<a class="cr-yt" href="${esc(yt)}" target="_blank" rel="noopener" aria-label="${esc(c.n)} on YouTube" title="YouTube channel">${VI.youtube}</a>`:''}</div>
       <div class="cr-body">
         <div class="cr-logo"><div class="av" style="background:${col}">${avatar(c)}</div><span class="cr-seal" title="Verified MTC creator">${VI.seal}</span></div>
