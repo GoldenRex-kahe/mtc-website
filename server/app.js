@@ -22,7 +22,7 @@ const str = (v, max, def = '') => (v == null ? def : String(v)).trim().slice(0, 
 const int = (v, lo, hi, def = 0) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def; };
 const isoOrNull = v => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString(); };
 const httpsUrl = v => { const s = str(v, 300); if (!s) return ''; try { const u = new URL(s); return u.protocol === 'https:' ? u.href : ''; } catch { return ''; } };
-const slugify = t => str(t, 80).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event';
+const slugify = t => str(t, 80).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event';
 const EVENT_STATUS = ['draft', 'soon', 'open', 'live', 'completed', 'unsuccessful', 'cancelled'];
 const EVENT_TYPES = ['survival', 'minigame', 'build', 'pvp', 'other'];
 
@@ -77,8 +77,18 @@ function limited(ip) { const t = Date.now(), list = (tries.get(ip) || []).filter
 
 // ---------------------------------------------------------------- public shapes
 const D = () => store.db;
-const evBy = slug => D().events.find(e => e.slug === slug);
+const evBy = slug => D().events.find(e => e.slug === slug) || D().events.find(e => (e.oldSlugs || []).includes(slug));
 const evById = id => D().events.find(e => e.id === id);
+function syncSlugs() {
+  let changed = false;
+  for (const e of D().events) {
+    const base = slugify(e.title); if (e.slug === base) continue;
+    let slug = base, n = 2;
+    while (D().events.some(x => x.id !== e.id && (x.slug === slug || (x.oldSlugs || []).includes(slug)))) slug = base + '-' + n++;
+    e.oldSlugs = [...new Set([...(e.oldSlugs || []), e.slug])].filter(x => x !== slug); e.slug = slug; changed = true;
+  }
+  if (changed) store.save();
+}
 // a player's face for lists: uploaded skin or Minecraft-name skin (face is cut from the skin in the page), else Discord picture
 // Java names use Mojang skins; Bedrock (Xbox gamertags, can have spaces) use the GeyserMC skin lookup
 // java = premium (Mojang) account, offline = cracked / non-premium Java account (no Mojang check, default skin), bedrock = Xbox gamertag
@@ -1042,7 +1052,7 @@ on('GET', '/api/admin/data', async req => {
 on('POST', '/api/admin/events', async req => {
   needAdmin(req); const b = await readBody(req);
   const f = eventFields(b);
-  let slug = slugify(f.title), n = 2; while (evBy(slug)) slug = slugify(f.title) + '-' + n++;
+  let slug = slugify(f.title), n = 2; while (evBy(slug)) slug = slugify(f.title) + '-' + n++;   // evBy also sees old slugs
   const ordered = D().events.filter(x => typeof x.order === 'number');
   const e = { id: store.id(), slug, ...f, results: [], ...(ordered.length ? { order: Math.min(...ordered.map(x => x.order)) - 1 } : {}), createdAt: store.now(), updatedAt: store.now() };
   D().events.push(e); store.save();
@@ -1052,7 +1062,13 @@ on('POST', '/api/admin/events', async req => {
 on('PUT', '/api/admin/events/:id', async (req, res, p) => {
   needAdmin(req); const e = evById(p.id); if (!e) throw err(404, 'Event not found.');
   const b = await readBody(req);
+  const oldTitle = e.title;
   Object.assign(e, eventFields(b, e), { updatedAt: store.now() });
+  if (e.title !== oldTitle) {   // renamed: new slug from the new title; the old one still opens the event
+    const base = slugify(e.title); let slug = base, n = 2;
+    while (D().events.some(x => x.id !== e.id && (x.slug === slug || (x.oldSlugs || []).includes(slug)))) slug = base + '-' + n++;
+    if (slug !== e.slug) { e.oldSlugs = [...new Set([...(e.oldSlugs || []), e.slug])].filter(x => x !== slug); e.slug = slug; }
+  }
   if (Array.isArray(b.results)) e.results = b.results.slice(0, 50).map((r, i) => ({ place: int(r.place, 1, 999, i + 1), name: str(r.name, 60), points: str(r.points, 20), note: str(r.note, 80) })).filter(r => r.name);
   store.save();
   let discordError; if (b.postDiscord) await eventPostOpts(b).then(o => postEvent(e, o)).catch(x => { discordError = x.message; });
@@ -1949,6 +1965,7 @@ if (discord.ready() && !process.env.MTC_NO_BOT) {
   setInterval(rotatePresence, 60e3).unref();
 }
 
+syncSlugs();   // event addresses follow the event names
 server.listen(cfg.port, cfg.host, () => {
   console.log(`MTC site: ${cfg.publicUrl}/  (listening on ${cfg.host}:${cfg.port})`);
   console.log(`  Discord sync: ${discord.ready() ? 'on' : 'off'} | Discord login: ${discord.loginReady() ? 'on' : 'off (add DISCORD_CLIENT_SECRET to .env)'} | Announcements: ${cfg.announceChannel ? 'on' : 'off'}`);

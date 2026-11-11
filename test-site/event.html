@@ -159,6 +159,7 @@ async function load() {
   catch (e) { $('#main').innerHTML = `<h1>Event not found</h1><p class="soft">${esc(e.message)}</p><a class="btn" href="/#events">ALL EVENTS</a>`; return; }
   const e = d.event, u = who.user;
   document.title = e.title + ' | MTC';
+  if (e.slug && e.slug !== slug) { try { history.replaceState(null, '', '/event.html?slug=' + encodeURIComponent(e.slug) + location.hash); } catch {} }   // opened by an old address: show the current one
   const days = e.days ? `<div class="days" aria-label="${e.daysPlayed || e.days} of ${e.days} days played">${Array.from({length: e.days}, (_, i) =>
       `<i class="${(e.status === 'cancelled' || e.status === 'unsuccessful') && i >= e.daysPlayed ? 'x' : (e.status === 'completed' || i < e.daysPlayed ? 'on' : '')}"></i>`).join('')}</div>` : '';
   const slots = e.slots ? `${e.taken} / ${e.slots} slots taken` : (e.taken ? e.taken + ' registered' : '');
