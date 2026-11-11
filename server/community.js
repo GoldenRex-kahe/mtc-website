@@ -489,7 +489,12 @@ module.exports = function install(x) {
       const html = await r.text();
       if (/consent\.youtube\.com/.test(r.url) || (!/ytInitialData|ytInitialPlayerResponse/.test(html) && /consent/i.test(html.slice(0, 5000)))) return note('YouTube showed its consent page, so this check could not see the channel');
       const vid = (html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/) || [])[1];
-      const isLive = !!vid && /"isLiveNow":true/.test(html);
+      // YouTube marks a running stream as "isLive":true on /live (older pages: "isLiveNow":true); when unsure, ask the stream's own page
+      let isLive = !!vid && !/"isUpcoming":true/.test(html) && (/"isLiveNow":true/.test(html) || /"isLive":true/.test(html));
+      if (vid && !isLive && /"isLiveContent":true/.test(html) && !/"isUpcoming":true/.test(html)) {
+        const w = await fetch('https://www.youtube.com/watch?v=' + vid, { headers: YT_HEADERS, signal: AbortSignal.timeout(15000) }).then(x => x.text()).catch(() => '');
+        isLive = /"liveBroadcastDetails":\{[^}]*"isLiveNow":true/.test(w);
+      }
       const title = decode((html.match(/<meta name="title" content="([^"]*)"/) || [])[1]);
       const desc = decode((html.match(/<meta name="description" content="([^"]*)"/) || [])[1]);
       const gaming = /"category":"Gaming"/.test(html);
