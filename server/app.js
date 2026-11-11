@@ -2001,13 +2001,41 @@ async function onAutocomplete(it) {
   const choices = list.filter(e => !q || e.title.toLowerCase().includes(q)).slice(0, 25).map(e => ({ name: `${e.title} · ${ST_LABEL[e.status] || e.status}`.slice(0, 100), value: e.slug }));
   await fetch(`https://discord.com/api/v10/interactions/${it.id}/${it.token}/callback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 8, data: { choices } }) }).catch(() => {});
 }
-// rotating status line under the bot's name
+// rotating status line under the bot's name ("rich presence" for the bot): what is happening in MTC right now
 let presenceStep = 0;
-function rotatePresence() {
-  const next = visibleEvents().find(e => ['live', 'open', 'soon'].includes(e.status));
+const leftTxt = iso => { const ms = new Date(iso) - Date.now(); if (!(ms > 0)) return ''; const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; };
+const istTime = iso => new Date(iso).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' }).toUpperCase();
+async function presenceOptions() {
+  const out = [], evs = visibleEvents(), cut = t => String(t).slice(0, 120);
+  // 1) creators streaming Minecraft now: the purple "LIVE" status, with a link to the stream
+  for (const l of (community.liveList ? community.liveList() : []).slice(0, 3)) out.push({ type: 1, name: cut(`🔴 ${l.name} is live`), url: l.url });
+  // 2) the live event: the day, the server hours and how many are in game
+  const live = evs.find(e => e.status === 'live');
+  if (live) {
+    const ss = sessionOf(live);
+    if (ss && !ss.open && !ss.over) out.push({ type: 3, name: cut(`${live.title} · Day ${ss.day}${ss.days ? '/' + ss.days : ''} opens ${istTime(ss.opensAt)}`) });
+    else {
+      const st = (live.serverJava || live.serverBedrock) ? await Promise.race([serverStatusOf(live), new Promise(r => setTimeout(() => r({}), 4000))]).catch(() => ({})) : {};
+      const main = st.java || st.bedrock;
+      out.push({ type: 0, name: cut(`${live.title}${ss ? ` · Day ${ss.day}${ss.days ? '/' + ss.days : ''}` : ''}${main && main.online ? ` · ${main.players.online} online` : ' · LIVE'}`) });
+    }
+  }
+  // 3) registration open: spots left; coming soon: countdown
+  const open = evs.find(e => e.status === 'open');
+  if (open) { const n = D().registrations.filter(r => r.eventId === open.id && ['pending', 'approved'].includes(r.status)).length;
+    out.push({ type: 3, name: cut(`📝 ${open.title} · ${open.slots ? `${Math.max(0, open.slots - n)} spots left` : `${n} registered`}`) }); }
+  const soon = evs.filter(e => ['soon', 'open'].includes(e.status) && e.start && new Date(e.start) > Date.now()).sort((x, y) => new Date(x.start) - new Date(y.start))[0];
+  if (soon) out.push({ type: 3, name: cut(`⏳ ${soon.title} in ${leftTxt(soon.start)}`) });
+  // 4) always: the website, the creators, the help command
   const n = (yt.readExtras && Object.values(yt.readExtras()).filter(x => x && x.verified === true).length) || 0;
-  const opts = [{ type: 3, name: 'mtc.kovaihost.cloud' }, next && { type: 0, name: next.status === 'live' ? `${next.title} (LIVE)` : next.title }, { type: 2, name: '/help' }, n && { type: 3, name: `${n} Tamil creators` }].filter(Boolean);
-  gateway.setPresence(opts[presenceStep++ % opts.length]);
+  out.push({ type: 3, name: 'mtc.kovaihost.cloud' });
+  if (n) out.push({ type: 3, name: `${n} Tamil creators` });
+  out.push({ type: 2, name: '/help' });
+  return out;
+}
+async function rotatePresence() {
+  try { const opts = await presenceOptions(); gateway.setPresence(opts[presenceStep++ % opts.length]); }
+  catch (e) { logErr('presence', e); }
 }
 if (discord.ready() && !process.env.MTC_NO_BOT) {
   gateway.start({
@@ -2020,7 +2048,7 @@ if (discord.ready() && !process.env.MTC_NO_BOT) {
     // an approved applicant joined: delete their invite and give the Creator role straight away
     GUILD_MEMBER_ADD: m => { if (m.guild_id !== cfg.guild) return; const id = m.user && m.user.id; if (id && D().applications.some(a => a.userId === id && a.status === 'approved' && !a.joinedAt)) joinCheck(id).catch(() => {}); },
   });
-  setInterval(rotatePresence, 60e3).unref();
+  setInterval(rotatePresence, 30e3).unref();
 }
 
 syncSlugs();   // event addresses follow the event names

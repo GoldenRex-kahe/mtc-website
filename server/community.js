@@ -679,5 +679,6 @@ module.exports = function install(x) {
     S().promo = p; store.save(); return { ok: true, promo: p, active: !!promoPublic() };
   });
 
-  return { liveOf, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
+  const liveList = () => [...live.values()].map(l => ({ name: l.creator.name, title: l.title, url: 'https://www.youtube.com/watch?v=' + l.videoId, since: l.since }));
+  return { liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
 };
