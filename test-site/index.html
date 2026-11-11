@@ -403,12 +403,12 @@ html,body{max-width:100%;overflow-x:clip}
 .ev.next{margin:0}
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.marq span{transform:none!important}*{animation:none!important}.hero h1 .w>span,.hero p,.hero .cta,.hero .logo{opacity:1;transform:none}}
 .livenow{display:flex;align-items:center;gap:14px;padding:12px 4vw;background:linear-gradient(90deg,#3a0d0d,#1a0d06);border-top:3px solid #000;border-bottom:3px solid #000;overflow-x:auto;scrollbar-width:none}
-.lvbadge{display:inline-flex;align-items:center;gap:8px;font:8px 'Press Start 2P',monospace;letter-spacing:.1em;color:#fff;background:linear-gradient(180deg,#e0382f,#a8201b);padding:7px 10px 7px 9px;border:3px solid #000;box-shadow:0 0 0 0 #ff3b30aa,inset 0 -3px 0 #7a1511;text-decoration:none;animation:onairGlow 1.4s ease-in-out infinite}
+.lvbadge{display:inline-flex;align-items:center;white-space:nowrap;flex:none;gap:8px;font:8px 'Press Start 2P',monospace;letter-spacing:.1em;color:#fff;background:linear-gradient(180deg,#e0382f,#a8201b);padding:7px 10px 7px 9px;border:3px solid #000;box-shadow:0 0 0 0 #ff3b30aa,inset 0 -3px 0 #7a1511;text-decoration:none;animation:onairGlow 1.4s ease-in-out infinite}
 .lvbadge i{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px #fff;animation:onairDot 1s steps(1) infinite}
 @keyframes onairDot{0%,55%{opacity:1}56%,100%{opacity:.15;box-shadow:none}}
-@keyframes onairGlow{0%,100%{box-shadow:0 0 6px 0 #ff3b3066,inset 0 -3px 0 #7a1511}50%{box-shadow:0 0 20px 5px #ff3b30aa,inset 0 -3px 0 #7a1511}}
+@keyframes onairGlow{0%,100%{box-shadow:0 0 0 0 #ff3b3000,inset 0 -3px 0 #7a1511}50%{box-shadow:0 0 10px 1px #ff3b3099,inset 0 -3px 0 #7a1511}}
 @media(prefers-reduced-motion:reduce){.lvbadge,.lvbadge i{animation:none}}
-.cr .lvbadge{position:absolute;left:10px;top:10px;z-index:3}
+.cr a.lvbadge{position:absolute;left:10px;top:10px;z-index:3;margin:0;font:8px/1 'Press Start 2P',monospace;letter-spacing:.1em;color:#fff;padding:7px 10px 7px 9px}
 .cr.is-live{outline:3px solid #c4302b;outline-offset:-3px;box-shadow:0 0 22px #c4302b66}
 .ln-tag{display:flex;align-items:center;gap:8px;font:11px 'Press Start 2P',monospace;color:#fff;background:#c4302b;padding:9px 12px;border:3px solid #000;flex:none}
 .ln-tag i{width:10px;height:10px;border-radius:50%;background:#fff;animation:lnp 1.2s ease-in-out infinite}@keyframes lnp{0%,55%{opacity:1}56%,100%{opacity:.15}}

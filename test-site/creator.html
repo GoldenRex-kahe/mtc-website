@@ -33,10 +33,10 @@ main{max-width:1180px}
 .c-sub{color:var(--soft);font-size:15px;margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .c-sub img{width:22px;height:22px;border-radius:50%}
 .badges{display:flex;gap:6px;flex-wrap:wrap}
-.lvbadge{display:inline-flex;align-items:center;gap:8px;font:8px 'Press Start 2P',monospace;letter-spacing:.1em;color:#fff;background:linear-gradient(180deg,#e0382f,#a8201b);padding:7px 10px 7px 9px;border:3px solid #000;box-shadow:0 0 0 0 #ff3b30aa,inset 0 -3px 0 #7a1511;text-decoration:none;animation:onairGlow 1.4s ease-in-out infinite}
+.lvbadge{display:inline-flex;align-items:center;white-space:nowrap;flex:none;gap:8px;font:8px 'Press Start 2P',monospace;letter-spacing:.1em;color:#fff;background:linear-gradient(180deg,#e0382f,#a8201b);padding:7px 10px 7px 9px;border:3px solid #000;box-shadow:0 0 0 0 #ff3b30aa,inset 0 -3px 0 #7a1511;text-decoration:none;animation:onairGlow 1.4s ease-in-out infinite}
 .lvbadge i{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px #fff;animation:onairDot 1s steps(1) infinite}
 @keyframes onairDot{0%,55%{opacity:1}56%,100%{opacity:.15;box-shadow:none}}
-@keyframes onairGlow{0%,100%{box-shadow:0 0 6px 0 #ff3b3066,inset 0 -3px 0 #7a1511}50%{box-shadow:0 0 20px 5px #ff3b30aa,inset 0 -3px 0 #7a1511}}
+@keyframes onairGlow{0%,100%{box-shadow:0 0 0 0 #ff3b3000,inset 0 -3px 0 #7a1511}50%{box-shadow:0 0 10px 1px #ff3b3099,inset 0 -3px 0 #7a1511}}
 @media(prefers-reduced-motion:reduce){.lvbadge,.lvbadge i{animation:none}}
 .stchips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
 .stchip{display:inline-flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;background:linear-gradient(180deg,#24180e,#120b06);border:3px solid #000;box-shadow:inset 0 -3px 0 var(--sc),inset 0 1px 0 #ffffff14}
@@ -67,7 +67,7 @@ main{max-width:1180px}
 .vids{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .vid{border:3px solid #000;background:#0d0804;cursor:pointer;text-align:left;padding:0;color:var(--ink);font:inherit}
 .vid .th{aspect-ratio:16/9;background:#2a1d12 center/cover;position:relative}
-.vid .th i{position:absolute;inset:auto 8px 8px auto;background:#000c;color:#fff;font-size:11px;padding:2px 6px;font-style:normal}
+.vid .th>i{position:absolute;inset:auto 8px 8px auto;background:#000c;color:#fff;font-size:11px;padding:2px 6px;font-style:normal}
 .vid .t{padding:8px 10px 10px;font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .vid .m{padding:0 10px 10px;font-size:12px;color:var(--soft)}
 .vid:hover{outline:3px solid var(--accent)}
