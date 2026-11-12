@@ -497,15 +497,17 @@ module.exports = function install(x) {
       }
       const title = decode((html.match(/<meta name="title" content="([^"]*)"/) || [])[1]);
       const desc = decode((html.match(/<meta name="description" content="([^"]*)"/) || [])[1]);
-      const gaming = /"category":"Gaming"/.test(html);
+      const tags = ((html.match(/"keywords":\[([^\]]*)\]/) || [])[1] || '').replace(/"/g, ' ');   // the stream's tags
       if (!isLive) { if (live.has(c.id)) console.log(`[live] ${c.name} is no longer live`); live.delete(c.id); return note('Not live'); }
-      // a verified MTC creator streaming a game, or anything that mentions Minecraft in English or Tamil
-      if (gaming || MC_WORDS.test(title + ' ' + desc) || TAMIL_MC.test(title + ' ' + desc)) {
+      // only Minecraft streams: the title, description or tags mention Minecraft (English or Tamil); other games (PUBG, BGMI, Roblox...) do not count
+      const text = title + ' ' + desc + ' ' + tags;
+      if (MC_WORDS.test(text) || TAMIL_MC.test(text)) {
         const was = live.get(c.id); if (!was) console.log(`[live] ${c.name} is live: ${title}`);
         live.set(c.id, { videoId: vid, title, since: was && was.videoId === vid ? was.since : now(), creator: { id: c.id, username: c.username, name: c.name, logo: c.logo } });
-        return note('LIVE', { title, gaming });
+        return note('LIVE', { title });
       }
-      live.delete(c.id); note('Live, but not a game or Minecraft stream (category is not Gaming and the title has no Minecraft words)', { title });
+      if (live.has(c.id)) console.log(`[live] ${c.name} is live, but not with Minecraft: ${title}`);
+      live.delete(c.id); note('Live, but not a Minecraft stream (no Minecraft in the title, description or tags)', { title });
     } catch (e) { note('Check failed: ' + (e.message || e)); /* keep the last known state on a network error */ }
   }
   async function liveLoop() {
