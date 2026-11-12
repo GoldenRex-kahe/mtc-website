@@ -118,7 +118,7 @@ function pubEvent(e) {
 }
 function pubMedia(m) {
   const e = evById(m.eventId) || {};
-  return { id: m.id, type: m.type, url: m.url, thumb: m.thumb, caption: m.caption, creator: m.creator, published: m.published || '', eventSlug: e.slug, eventTitle: e.title, createdAt: m.createdAt };
+  return { id: m.id, type: m.type, url: m.url, thumb: m.thumb, caption: m.caption, creator: m.creator, creatorLogo: m.creatorLogo || '', published: m.published || '', eventSlug: e.slug, eventTitle: e.title, createdAt: m.createdAt };
 }
 // a YouTube video's real upload date (looked up once from YouTube, then kept on the showcase item) so videos can be sorted by it
 async function videoDate(m) {
@@ -840,7 +840,31 @@ on('GET', '/api/events/:slug', async (req, res, p) => {
   return { event: pubEvent(e), media: evMedia.map(pubMedia),
     mine: mine ? { status: mine.status, team: mine.team } : null };
 });
-on('GET', '/api/showcase', async () => ({ media: D().media.filter(m => m.status === 'approved').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(pubMedia) }));
+// the creator's channel logo for a showcase item: a verified MTC creator with that channel name, else the YouTube channel's picture (looked up once, then kept)
+const logoBusy = new Set();
+async function creatorLogoOf(m) {
+  if (m.creatorLogo || m.logoTried || logoBusy.has(m.id)) return;
+  const name = String(m.creator || '').trim().toLowerCase(), ex = yt.readExtras();
+  const own = name && Object.values(ex).find(x => x && x.verified === true && x.logo && String(x.channelName || '').trim().toLowerCase() === name);
+  if (own) { m.creatorLogo = own.logo; store.save(); return; }
+  if (m.type !== 'youtube') return;
+  logoBusy.add(m.id);
+  try {
+    const o = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(m.url), { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null);
+    if (o && /^https:\/\/www\.youtube\.com\//.test(o.author_url || '')) {
+      const h = await fetch(o.author_url, { headers: YT_PAGE_HEADERS, signal: AbortSignal.timeout(10000) }).then(r => r.text());
+      const img = (h.match(/<meta property="og:image" content="([^"]+)"/) || [])[1] || '';
+      if (/^https:\/\/yt3\.(googleusercontent|ggpht)\.com\//.test(img)) m.creatorLogo = img.replace(/=s\d+[^"]*$/, '=s160-c-k-c0x00ffffff-no-rj');
+    }
+  } catch (e) { /* try again another time */ return; } finally { logoBusy.delete(m.id); }
+  m.logoTried = true; store.save();
+}
+on('GET', '/api/showcase', async () => {
+  const list = D().media.filter(m => m.status === 'approved').sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // wait a moment for missing logos; the rest arrive on the next visit
+  await Promise.race([Promise.all(list.slice(0, 60).map(creatorLogoOf)), new Promise(r => setTimeout(r, 2500))]);
+  return { media: list.map(pubMedia) };
+});
 on('GET', '/api/announcements', async () => ({ announcements: D().announcements.slice(-5).reverse().map(a => ({ id: a.id, title: a.title, body: a.body, image: a.image || '', createdAt: a.createdAt })) }));
 
 // --- members

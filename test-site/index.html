@@ -254,7 +254,7 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
 .sc-card.on:hover .play{transform:scale(1.1)}
 .sc-card.far{pointer-events:none}
 .sc-bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:16px;margin:8px auto 0;width:min(860px,88vw);padding:14px 18px;background:#0d0804e6;border:3px solid #2e2118;box-shadow:inset 0 -3px 0 var(--accent),0 18px 40px #000a}
-.sc-bar .th{width:62px;height:62px;border:3px solid var(--accent);background:#000 center/cover;box-shadow:0 0 14px #f7931e55}
+.sc-bar .th{width:62px;height:62px;border:3px solid var(--accent);background:#000 center/cover;box-shadow:0 0 14px #f7931e55}.sc-bar .th.logo{border-radius:50%;box-shadow:0 0 0 3px #000,0 0 18px #f7931e88}
 .sc-bar .tx{min-width:0}
 .sc-bar .tx h3{display:flex;align-items:center;gap:10px;margin:0 0 6px;font:13px/1.4 var(--display);color:var(--ink);min-width:0}
 .sc-bar .tx h3 span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -901,7 +901,8 @@ function scLayout(){
     el.style.opacity=show?String(1-a*.22):'0';el.style.filter=a?`brightness(${1-a*.2}) blur(${a*.9}px)`:'none';el.style.zIndex=String(100-a);
     const art=el.querySelector('.art'),m=SC[i];if(show&&m&&!m.empty&&!art.dataset.done){art.style.backgroundImage=`url('${String(m.thumb||'').replace(/'/g,'%27')}')`;art.dataset.done=1}});
   const m=SC[scAt]||{},vid=m.type==='youtube';
-  $('#scBar').innerHTML=`<div class="th"${m.thumb?` style="background-image:url('${escH(m.thumb)}')"`:''}></div>
+  const face=m.creatorLogo||m.thumb||'';
+  $('#scBar').innerHTML=`<div class="th${m.creatorLogo?' logo':''}"${face?` style="background-image:url('${escH(face)}')"`:''} title="${escH(m.creator||'')}"></div>
     <div class="tx"><h3><span>${escH(m.caption||m.eventTitle||'Event showcase')}</span>${m.eventTitle&&!m.empty?`<em>${escH(m.eventTitle.toUpperCase())}</em>`:''}</h3>
       <p>${m.empty?'Join an event and add your screenshots or video after it.':[m.creator?'by '+escH(m.creator):'',escH(scDate(m.published||m.createdAt))].filter(Boolean).join(' · ')}</p></div>
     <div class="sc-ctl"><div class="sc-nav"><button type="button" data-sc="-1" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3"/></svg></button>
@@ -926,16 +927,17 @@ function scPause(ms){scHold=Date.now()+ms;scArm();clearTimeout(scPause.t);scPaus
 $('#scTimer').style.setProperty('--auto',SC_AUTO+'ms');
 const show=$('#showcase'),scStage=$('#scStage');
 scStage.addEventListener('click',e=>{const c=e.target.closest('.sc-card');if(!c)return;e.preventDefault();if(scDragged)return;const i=+c.dataset.i;
-  if(i===scAt)scOpen(i);else{scTo(i);scPause(8000)}});
-$('#scBar').addEventListener('click',e=>{const b=e.target.closest('[data-sc]');if(b){scGo(+b.dataset.sc);scPause(8000)}const o=e.target.closest('[data-open]');if(o)scOpen(+o.dataset.open)});
-scStage.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();scGo(1);scPause(8000)}if(e.key==='ArrowLeft'){e.preventDefault();scGo(-1);scPause(8000)}if(e.key==='Enter'){e.preventDefault();scOpen(scAt)}});
+  if(i===scAt)scOpen(i);else{scTo(i);scArm()}});
+$('#scBar').addEventListener('click',e=>{const b=e.target.closest('[data-sc]');if(b){scGo(+b.dataset.sc);scArm()}const o=e.target.closest('[data-open]');if(o)scOpen(+o.dataset.open)});
+scStage.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();scGo(1);scArm()}if(e.key==='ArrowLeft'){e.preventDefault();scGo(-1);scArm()}if(e.key==='Enter'){e.preventDefault();scOpen(scAt)}});
 /* swipe / drag */
 let scDown=null,scDragged=false;
 scStage.addEventListener('pointerdown',e=>{scDown=e.clientX;scDragged=false});
-addEventListener('pointerup',e=>{if(scDown==null)return;const dx=e.clientX-scDown;scDown=null;if(Math.abs(dx)>40){scDragged=true;scGo(dx<0?1:-1);scPause(8000);setTimeout(()=>{scDragged=false},50)}});
-scStage.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY)&&Math.abs(e.deltaX)>25){e.preventDefault();if(!scGo.w){scGo(e.deltaX>0?1:-1);scPause(8000);scGo.w=setTimeout(()=>{scGo.w=0},450)}}},{passive:false});
-[show].forEach(el=>{el.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){scHover=true;scArm()}});el.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'){scHover=false;scArm()}})});
-show.addEventListener('focusin',()=>{scHover=true;scArm()});show.addEventListener('focusout',()=>{scHover=false;scArm()});
+addEventListener('pointerup',e=>{if(scDown==null)return;const dx=e.clientX-scDown;scDown=null;if(Math.abs(dx)>40){scDragged=true;scGo(dx<0?1:-1);scArm();setTimeout(()=>{scDragged=false},50)}});
+scStage.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY)&&Math.abs(e.deltaX)>25){e.preventDefault();if(!scGo.w){scGo(e.deltaX>0?1:-1);scArm();scGo.w=setTimeout(()=>{scGo.w=0},450)}}},{passive:false});
+// the timer stops only while the mouse is on a video / screenshot card
+scStage.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const on=!!e.target.closest('.sc-card');if(on!==scHover){scHover=on;scArm()}});
+scStage.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&scHover){scHover=false;scArm()}});
 document.addEventListener('visibilitychange',scArm);
 new IntersectionObserver(es=>{scOn=es[0].isIntersecting;scArm()},{threshold:.3}).observe(show);
 addEventListener('resize',scLayout);
@@ -971,8 +973,8 @@ function setStaff(i){focus=(i+NS)%NS;const m=staff[focus];
   const so=$('#solo');so.classList.remove('swap');void so.offsetWidth;so.classList.add('swap');
   if(sv){sv.loadSkin(m.skin);clearTimeout(typeof moveBack==='undefined'?0:moveBack);if(typeof resetPose==='function')resetPose();sv.animation=new skinview3d.IdleAnimation();const h=$('#soloHint');if(h&&typeof HINT!=='undefined')h.textContent=HINT}
   if(typeof restartDot==='function'){autoLeft=AUTO;restartDot()}}
-$('#stPrev').addEventListener('click',()=>{setStaff(focus-1);holdAuto(12e3)});
-$('#stNext').addEventListener('click',()=>{setStaff(focus+1);holdAuto(12e3)});
+$('#stPrev').addEventListener('click',()=>{setStaff(focus-1);restartAuto()});
+$('#stNext').addEventListener('click',()=>{setStaff(focus+1);restartAuto()});
 /* drag to spin, tap to make them move */
 /* moves made with skinview3d's FunctionAnimation (this version has no wave / jump built in); t is in seconds */
 const FA=f=>()=>new skinview3d.FunctionAnimation((p,t)=>f(p.skin,p,t));
@@ -987,8 +989,8 @@ function resetPose(){try{const p=sv.playerObject,k=p.skin;p.position.y=0;['head'
 let spinBack=0,moveBack=0,downAt=null,lastMove='';
 const solo=$('#soloC');
 if(sv&&solo){
-  solo.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY];sv.autoRotate=false;clearTimeout(spinBack);holdAuto(15e3)});
-  addEventListener('pointerup',e=>{if(!downAt)return;const moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);downAt=null;
+  solo.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY];sv.autoRotate=false;clearTimeout(spinBack);pauseAuto()});
+  addEventListener('pointerup',e=>{if(!downAt)return;const moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);downAt=null;if(!hover){autoLeft=AUTO;restartDot();armAuto()}
     spinBack=setTimeout(()=>{if(!reduce)sv.autoRotate=true},3500);
     if(moved<6&&MOVES.length){let pick;do{pick=MOVES[Math.floor(Math.random()*MOVES.length)]}while(MOVES.length>1&&pick[0]===lastMove);lastMove=pick[0];clearTimeout(moveBack);
       try{resetPose();sv.animation=pick[1]();$('#soloHint').textContent=pick[0].toUpperCase()+'!'}catch(x){}
@@ -1006,11 +1008,12 @@ function pauseAuto(){if(autoT&&autoStart){autoLeft=Math.max(400,autoLeft-(Date.n
 function holdAuto(ms){autoHold=Date.now()+ms;pauseAuto();autoLeft=AUTO;restartDot();clearTimeout(holdAuto.t);holdAuto.t=setTimeout(armAuto,ms+50)}
 function restartDot(){const d=dotsEl.querySelector('i.on');if(!d)return;d.classList.remove('timing');void d.offsetWidth;if(!reduce)d.classList.add('timing')}
 dotsEl.style.setProperty('--auto',AUTO+'ms');
-$('#dots').addEventListener('click',()=>holdAuto(12e3));
+$('#dots').addEventListener('click',()=>restartAuto());
+function restartAuto(){autoHold=0;pauseAuto();autoLeft=AUTO;restartDot();armAuto()}
 const team=$('#team');
-team.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){hover=true;pauseAuto()}});
-team.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'){hover=false;armAuto()}});
-team.addEventListener('focusin',()=>{hover=true;pauseAuto()});team.addEventListener('focusout',()=>{hover=false;armAuto()});
+// the timer stops only while the mouse is on the character
+$('#soloC').addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){hover=true;pauseAuto()}});
+$('#soloC').addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'){hover=false;armAuto()}});
 document.addEventListener('visibilitychange',()=>document.hidden?pauseAuto():armAuto());
 new IntersectionObserver(es=>{teamOn=es[0].isIntersecting;teamOn?armAuto():pauseAuto()},{threshold:.35}).observe(team);
 setStaff(0);
