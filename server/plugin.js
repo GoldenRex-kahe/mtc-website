@@ -75,7 +75,8 @@ module.exports = function install(x) {
     const got = Buffer.from(String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')), want = Buffer.from(P().key);
     if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) throw err(401, 'Wrong plugin key. Copy it from Admin > Events > Server control.');
     const q = k => url.searchParams.get(k) || '';
-    P().seen = { at: new Date().toISOString(), players: +q('players') || 0, max: +q('max') || 0, mc: q('mc').slice(0, 60), v: q('v').slice(0, 20), slug: q('event').slice(0, 80), staffOnline: +q('staff') || 0 };
+    P().seen = { at: new Date().toISOString(), players: +q('players') || 0, max: +q('max') || 0, mc: q('mc').slice(0, 60), v: q('v').slice(0, 20), slug: q('event').slice(0, 80), staffOnline: +q('staff') || 0,
+      backup: { mode: q('bk').slice(0, 10), okAt: +q('bkok') || 0, size: +q('bksize') || 0, error: q('bkerr').slice(0, 200), busy: q('bkbusy') === '1' } };
     return stateOf(pickEvent(q('event')));
   });
 

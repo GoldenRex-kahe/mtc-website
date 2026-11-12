@@ -5,6 +5,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Sound;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
@@ -39,12 +43,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class MTCServerControl extends JavaPlugin implements Listener, TabCompleter {
 
-    private static final String P = ChatColor.GOLD + "" + ChatColor.BOLD + "MTC " + ChatColor.DARK_GRAY + "» " + ChatColor.RESET;
+    static final String P = ChatColor.GOLD + "" + ChatColor.BOLD + "MTC " + ChatColor.DARK_GRAY + "» " + ChatColor.RESET;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.of("Asia/Kolkata"));
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private final AtomicBoolean polling = new AtomicBoolean();
-    private BukkitTask pollTask, tickTask;
+    private BukkitTask pollTask, tickTask, backupTask;
+    DriveBackup backup;
+    private BossBar bar;
 
     // the last answer from the website
     private volatile boolean known, managed, open = true;
@@ -57,10 +63,13 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
     // closing warnings already sent for the current closing time
     private final Set<Integer> warned = new HashSet<>();
     private long warnedFor, refreshedFor;
+    private final Set<Integer> secWarned = new HashSet<>();
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        getConfig().options().copyDefaults(true); saveConfig();   // new settings (backup, boss bar) appear in an older config.yml
+        backup = new DriveBackup(this);
         getServer().getPluginManager().registerEvents(this, this);
         Objects.requireNonNull(getCommand("mtcserver")).setTabCompleter(this);
         start();
@@ -71,6 +80,8 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
     public void onDisable() {
         if (pollTask != null) pollTask.cancel();
         if (tickTask != null) tickTask.cancel();
+        if (backupTask != null) backupTask.cancel();
+        if (bar != null) bar.removeAll();
     }
 
     private String site() { return getConfig().getString("site", "https://mtc.kovaihost.cloud").replaceAll("/+$", ""); }
@@ -82,6 +93,8 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
         warnedNoKey = false;
         pollTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::poll, 20L, pollSeconds() * 20L);
         tickTask = Bukkit.getScheduler().runTaskTimer(this, this::tick, 20L, 20L);
+        if (backupTask != null) backupTask.cancel();
+        backupTask = Bukkit.getScheduler().runTaskTimer(this, () -> backup.maybeRun(), 20L * 90, 20L * 60);   // timed backups, checked every minute
     }
 
     // ------------------------------------------------------------------ talking to the website
@@ -98,7 +111,7 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
             int staff = 0; for (Player p : online) if (bypass(p)) staff++;
             String url = site() + "/api/plugin/state?event=" + enc(getConfig().getString("event", "").trim())
                     + "&players=" + online.size() + "&max=" + Bukkit.getMaxPlayers() + "&staff=" + staff
-                    + "&mc=" + enc(Bukkit.getName() + " " + Bukkit.getBukkitVersion()) + "&v=" + enc(getDescription().getVersion());
+                    + "&mc=" + enc(Bukkit.getName() + " " + Bukkit.getBukkitVersion()) + "&v=" + enc(getDescription().getVersion()) + backup.statusQuery();
             HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(10))
                     .header("Authorization", "Bearer " + key).header("User-Agent", "MTCServerControl/" + getDescription().getVersion()).GET().build();
             HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
@@ -132,37 +145,68 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
         known = true; lastOk = System.currentTimeMillis(); lastError = null;
 
         if (managed && !open) {
-            if (wasOpen) getLogger().info("The server is now CLOSED (" + why + "). Kicking everyone except staff.");
+            if (wasOpen) {
+                getLogger().info("The server is now CLOSED (" + why + "). Kicking everyone except staff.");
+                hideBar();
+                // a backup right after closing, when nobody is playing
+                if (backup.enabled() && backup.linked() && getConfig().getBoolean("backup.after-close", true))
+                    Bukkit.getScheduler().runTaskLater(this, () -> backup.run(Bukkit.getConsoleSender(), "after closing"), 20L * 60);
+            }
             for (Player p : new ArrayList<>(Bukkit.getOnlinePlayers())) {
                 if (bypass(p)) { if (wasOpen) p.sendMessage(P + forStaff); }
                 else p.kickPlayer(kick.isEmpty() ? "The server is closed." : kick);
             }
         } else if (!wasOpen) {
             getLogger().info("The server is now OPEN (" + why + ").");
-            Bukkit.broadcastMessage(P + ChatColor.GREEN + "The server is open for players now!");
+            Bukkit.broadcastMessage(P + ChatColor.GREEN + "The server is open for players now!" + (closesAt > 0 ? ChatColor.GRAY + " (until " + CLOCK.format(Instant.ofEpochMilli(closesAt)) + ")" : ""));
+            for (Player p : Bukkit.getOnlinePlayers()) p.sendTitle(ChatColor.GREEN + "" + ChatColor.BOLD + "SERVER OPEN", ChatColor.YELLOW + eventTitle, 10, 60, 20);
         }
     }
 
     // ------------------------------------------------------------------ every second: warnings before closing
     private void tick() {
-        if (!known || !managed || !open || closesAt <= 0) return;
+        if (!known || !managed || !open || closesAt <= 0) { hideBar(); return; }
         long left = closesAt - System.currentTimeMillis();
-        if (warnedFor != closesAt) { warned.clear(); warnedFor = closesAt; }
+        if (warnedFor != closesAt) { warned.clear(); secWarned.clear(); warnedFor = closesAt; }
+        String at = CLOCK.format(Instant.ofEpochMilli(closesAt));
+        // chat (+ a sound) at the set minutes; a big title in the last 5 minutes
         for (int m : getConfig().getIntegerList("warn-minutes")) {
-            long at = m * 60_000L;
-            if (left <= at && left > at - 60_000L && warned.add(m)) {
-                Bukkit.broadcastMessage(P + ChatColor.YELLOW + "The server closes in " + ChatColor.WHITE + m + " minute" + (m == 1 ? "" : "s")
-                        + ChatColor.YELLOW + " (" + CLOCK.format(Instant.ofEpochMilli(closesAt)) + "). Get to a safe spot!");
-                if (m <= 1) for (Player p : Bukkit.getOnlinePlayers())
-                    p.sendTitle(ChatColor.RED + "" + ChatColor.BOLD + "CLOSING SOON", ChatColor.YELLOW + "The server closes in 1 minute", 10, 70, 20);
+            long ms = m * 60_000L;
+            if (left <= ms && left > ms - 60_000L && warned.add(m)) {
+                Bukkit.broadcastMessage(P + ChatColor.YELLOW + "The server closes in " + ChatColor.WHITE + ChatColor.BOLD + m + " minute" + (m == 1 ? "" : "s")
+                        + ChatColor.YELLOW + " (at " + at + "). " + (m <= 5 ? ChatColor.RED + "Get to a safe spot!" : ChatColor.GRAY + "Plan your last moves."));
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    ding(p, m <= 1 ? 0.6f : 1.2f);
+                    if (m <= 5) p.sendTitle(ChatColor.RED + "" + ChatColor.BOLD + "CLOSING IN " + m + " MIN", ChatColor.YELLOW + "Get to a safe spot", 10, 60, 20);
+                }
             }
         }
+        // the last 10 seconds, one by one
+        int sec = (int) Math.ceil(left / 1000.0);
+        if (sec >= 1 && sec <= 10 && secWarned.add(sec)) for (Player p : Bukkit.getOnlinePlayers()) {
+            p.sendTitle(ChatColor.RED + "" + ChatColor.BOLD + sec, ChatColor.GRAY + "Server closing", 0, 22, 4); ding(p, 0.5f + (10 - sec) * 0.1f);
+        }
+        // boss bar countdown
+        long barMs = getConfig().getLong("bossbar-minutes", 10) * 60_000L;
+        if (barMs > 0 && left > 0 && left <= barMs) {
+            if (bar == null) bar = Bukkit.createBossBar("", BarColor.RED, BarStyle.SEGMENTED_10);
+            long s2 = left / 1000;
+            bar.setTitle(ChatColor.RED + "" + ChatColor.BOLD + "SERVER CLOSES IN " + ChatColor.WHITE + String.format("%d:%02d", s2 / 60, s2 % 60) + ChatColor.GRAY + "  (" + at + ")");
+            bar.setProgress(Math.max(0, Math.min(1, left / (double) barMs)));
+            bar.setColor(left <= 60_000 ? BarColor.RED : BarColor.YELLOW);
+            for (Player p : Bukkit.getOnlinePlayers()) if (!bar.getPlayers().contains(p)) bar.addPlayer(p);
+            bar.setVisible(true);
+        } else hideBar();
         // closing time: ask the website straight away instead of waiting for the next check
         if (left <= 0 && refreshedFor != closesAt) {
             refreshedFor = closesAt;
             Bukkit.getScheduler().runTaskLaterAsynchronously(this, this::poll, 30L);
         }
     }
+    private void hideBar() { if (bar != null) { bar.setVisible(false); bar.removeAll(); } }
+    private static Sound PLING;
+    static { try { PLING = Sound.valueOf("BLOCK_NOTE_BLOCK_PLING"); } catch (Exception e) { PLING = null; } }
+    private void ding(Player p, float pitch) { if (PLING != null && getConfig().getBoolean("warn-sound", true)) try { p.playSound(p.getLocation(), PLING, 1f, pitch); } catch (Exception ignored) {} }
 
     // ------------------------------------------------------------------ players
     private boolean bypass(Player p) {
@@ -197,6 +241,20 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
                 Bukkit.getScheduler().runTaskAsynchronously(this, this::poll);
                 s.sendMessage(P + ChatColor.GREEN + "Checking the website now...");
                 return true;
+            case "backup": {
+                String b = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
+                if (b.equals("now")) backup.run(s, "by " + s.getName());
+                else if (b.equals("link")) backup.link(s);
+                else if (b.equals("unlink")) backup.unlink(s);
+                else {
+                    s.sendMessage(P + ChatColor.WHITE + "Google Drive backups: " + (backup.enabled() ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF (backup.enabled in config.yml)")
+                            + ChatColor.GRAY + " · " + (backup.linked() ? ChatColor.GREEN + "linked" : ChatColor.RED + "not linked (/" + label + " backup link)"));
+                    s.sendMessage(ChatColor.GRAY + " Every " + getConfig().getDouble("backup.every-hours", 6) + " h, keeps " + getConfig().getInt("backup.keep", 10)
+                            + (getConfig().getBoolean("backup.after-close", true) ? ", and after the server closes" : "") + ". Last: " + ChatColor.WHITE + backup.lastInfo());
+                    if (backup.busy()) s.sendMessage(ChatColor.YELLOW + " Running now: " + backup.progress);
+                }
+                return true;
+            }
             case "status":
                 s.sendMessage(P + ChatColor.WHITE + "MTC Server Control " + getDescription().getVersion());
                 s.sendMessage(ChatColor.GRAY + " Website: " + ChatColor.WHITE + site()
@@ -210,16 +268,16 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
                 if (!open && opensAt > 0) s.sendMessage(ChatColor.GRAY + " Opens at " + ChatColor.WHITE + CLOCK.format(Instant.ofEpochMilli(opensAt)));
                 return true;
             default:
-                s.sendMessage(P + ChatColor.GRAY + "/" + label + " <status|refresh|reload>");
+                s.sendMessage(P + ChatColor.GRAY + "/" + label + " <status|refresh|reload|backup [now|link|unlink]>");
                 return true;
         }
     }
 
     @Override
     public List<String> onTabComplete(CommandSender s, Command cmd, String alias, String[] args) {
-        if (args.length != 1) return Collections.emptyList();
         List<String> out = new ArrayList<>();
-        for (String o : new String[]{"status", "refresh", "reload"}) if (o.startsWith(args[0].toLowerCase(Locale.ROOT))) out.add(o);
+        String[] opts = args.length == 1 ? new String[]{"status", "refresh", "reload", "backup"} : args.length == 2 && args[0].equalsIgnoreCase("backup") ? new String[]{"now", "link", "unlink", "status"} : new String[0];
+        for (String o : opts) if (o.startsWith(args[args.length - 1].toLowerCase(Locale.ROOT))) out.add(o);
         return out;
     }
 

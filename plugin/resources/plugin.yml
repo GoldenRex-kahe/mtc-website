@@ -1,5 +1,5 @@
 name: MTCServerControl
-version: 1.0.0
+version: 1.1.0
 main: cloud.kovaihost.mtc.MTCServerControl
 api-version: '1.18'
 author: MC Thamizh Creators
@@ -8,7 +8,7 @@ description: Opens and closes the MTC event server on the website's schedule, wi
 commands:
   mtcserver:
     description: MTC Server Control status, refresh and reload
-    usage: /mtcserver <status|refresh|reload>
+    usage: /mtcserver <status|refresh|reload|backup [now|link|unlink]>
     aliases: [mtcs]
     permission: mtc.admin
 permissions:
