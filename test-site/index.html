@@ -231,8 +231,6 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
 .show{position:relative;padding:96px 0 80px;overflow:hidden}
 .sc-head{display:flex;align-items:baseline;gap:18px;padding:0 6vw;margin-bottom:6px}.show h2{margin:0}
 .sc-stage{position:relative;height:min(400px,60vw);min-height:300px;perspective:1300px;perspective-origin:50% 40%;outline:none;touch-action:pan-y;user-select:none}
-.sc-stage::before{content:"";position:absolute;left:50%;top:58%;width:min(980px,92vw);height:min(240px,26vw);transform:translate(-50%,-50%);border:2px dashed #f7931e40;border-radius:50%;pointer-events:none}
-.sc-floor{position:absolute;left:-10%;right:-10%;bottom:-40px;height:46%;pointer-events:none;background:linear-gradient(#f7931e18 1px,transparent 1px) 0 0/100% 34px,linear-gradient(90deg,#f7931e14 1px,transparent 1px) 50% 0/60px 100%;transform:perspective(500px) rotateX(62deg);transform-origin:50% 100%;mask:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
 .sc-embers{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .sc-embers i{position:absolute;bottom:-10px;width:3px;height:3px;background:#ffb347;box-shadow:0 0 6px #ff9a2a;opacity:0;animation:ember linear infinite}
 @keyframes ember{10%{opacity:.9}80%{opacity:.6}100%{opacity:0;transform:translate(var(--dx),-480px)}}
@@ -253,6 +251,15 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
 .sc-card.on .play{opacity:1;transform:scale(1)}
 .sc-card.on:hover .play{transform:scale(1.1)}
 .sc-card.far{pointer-events:none}
+.sc-card .pv{position:absolute;inset:0;z-index:1;background:#000;opacity:0;transition:opacity .5s}.sc-card .pv.ready{opacity:1}
+.sc-card .pv iframe{position:absolute;left:50%;top:50%;width:178%;height:178%;translate:-50% -50%;border:0;pointer-events:none}
+.sc-card.previewing .play{opacity:0}
+.sc-card .livetag{position:absolute;left:8px;top:8px;z-index:2;display:none;align-items:center;gap:6px;font:7px var(--display);letter-spacing:.06em;color:#fff;background:#c4302b;padding:5px 7px;border:2px solid #000}
+.sc-card .livetag i{width:6px;height:6px;border-radius:50%;background:#fff;animation:onairDot 1s steps(1) infinite}
+.sc-card.previewing .livetag{display:inline-flex}
+.sc-edge{position:absolute;top:50%;translate:0 -50%;z-index:150;width:44px;height:64px;display:grid;place-items:center;background:none;border:0;color:var(--ink);opacity:.7;cursor:pointer;transition:opacity .2s,transform .2s}
+.sc-edge:hover,.sc-edge:focus-visible{opacity:1;transform:scale(1.15);color:var(--accent)}
+.sc-edge.l{left:max(8px,2vw)}.sc-edge.r{right:max(8px,2vw)}.sc-edge svg{width:30px;height:30px}
 .sc-bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:16px;margin:8px auto 0;width:min(860px,88vw);padding:14px 18px;background:#0d0804e6;border:3px solid #2e2118;box-shadow:inset 0 -3px 0 var(--accent),0 18px 40px #000a}
 .sc-bar .th{width:62px;height:62px;border:3px solid var(--accent);background:#000 center/cover;box-shadow:0 0 14px #f7931e55}.sc-bar .th.logo{border-radius:50%;box-shadow:0 0 0 3px #000,0 0 18px #f7931e88}
 .sc-bar .tx{min-width:0}
@@ -581,7 +588,9 @@ html,body{max-width:100%;overflow-x:clip}
 <section class="show" id="showcase">
   <div class="sc-head"><h2 class="px reveal in">EVENT SHOWCASE</h2></div>
   <div class="sc-stage" id="scStage" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Event showcase. Use the left and right arrow keys.">
-    <div class="sc-floor" aria-hidden="true"></div><div class="sc-embers" id="scEmbers" aria-hidden="true"></div>
+    <div class="sc-embers" id="scEmbers" aria-hidden="true"></div>
+    <button class="sc-edge l" type="button" data-sc="-1" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3"/></svg></button>
+    <button class="sc-edge r" type="button" data-sc="1" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3"/></svg></button>
   </div>
   <div class="sc-bar" id="scBar" aria-live="polite"></div>
   <div class="sc-timer" id="scTimer"><i></i></div>
@@ -886,7 +895,7 @@ function renderShots(items){
     const vid=m.type==='youtube',title=m.caption||m.eventTitle||'Showcase';
     el.setAttribute('aria-label',title+(m.creator?' by '+m.creator:''));
     el.innerHTML=`<div class="sc-top"><span>${escH((m.eventTitle||'MTC').toUpperCase())}</span>${m.empty?'':`<b class="${vid?'vid':''}">${vid?'VIDEO':'SCREENSHOT'}</b>`}</div>
-      <div class="art"${m.empty?' style="background:repeating-linear-gradient(45deg,#8a4a10 0 22px,#2a1606 22px 44px)"':''}>${vid?'<span class="play" aria-hidden="true"></span>':''}
+      <div class="art"${m.empty?' style="background:repeating-linear-gradient(45deg,#8a4a10 0 22px,#2a1606 22px 44px)"':''}>${vid?'<span class="play" aria-hidden="true"></span><span class="livetag"><i></i>PLAYING</span>':''}
       <div class="cap"><b>${escH(title)}</b>${m.creator?`<small>by ${escH(m.creator)}</small>`:''}</div></div>`;
     st.appendChild(el);return el});
   scAt=0;scLayout();scArm();
@@ -900,6 +909,7 @@ function scLayout(){
     el.style.transform=`translate(-50%,-50%) translateX(${d*sp*100}%) translateZ(${-a*170}px) rotateY(${-Math.sign(d)*Math.min(a,2)*24}deg) scale(${1-Math.min(a,3)*.1})`;
     el.style.opacity=show?String(1-a*.22):'0';el.style.filter=a?`brightness(${1-a*.2}) blur(${a*.9}px)`:'none';el.style.zIndex=String(100-a);
     const art=el.querySelector('.art'),m=SC[i];if(show&&m&&!m.empty&&!art.dataset.done){art.style.backgroundImage=`url('${String(m.thumb||'').replace(/'/g,'%27')}')`;art.dataset.done=1}});
+  scPreview();
   const m=SC[scAt]||{},vid=m.type==='youtube';
   const face=m.creatorLogo||m.thumb||'';
   $('#scBar').innerHTML=`<div class="th${m.creatorLogo?' logo':''}"${face?` style="background-image:url('${escH(face)}')"`:''} title="${escH(m.creator||'')}"></div>
@@ -909,24 +919,40 @@ function scLayout(){
       <span><b>${n?scAt+1:0}</b> / ${n}</span><button type="button" data-sc="1" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3"/></svg></button></div>
       ${m.empty?'':`<button type="button" class="sc-go" data-open="${scAt}">${vid?'▶ WATCH':'VIEW'}</button>`}</div>`;
 }
+/* the video in front plays by itself, muted (desktop only; not with reduced motion or data saver) */
+const scCanPreview=!reduce&&matchMedia('(min-width:760px) and (hover:hover)').matches&&!(navigator.connection&&navigator.connection.saveData);
+let scPv=null,scPvT=0;
+function scPreview(){
+  clearTimeout(scPvT);
+  if(scPv&&scPv.dataset.i!==String(scAt)){const old=scCards[+scPv.dataset.i];if(old)old.classList.remove('previewing');scPv.remove();scPv=null}
+  const m=SC[scAt],id=m&&m.type==='youtube'?ytId(m.url):'';
+  if(!scCanPreview||!scOn||!id||scPv)return;
+  scPvT=setTimeout(()=>{const card=scCards[scAt];if(!card||SC[scAt]!==m)return;
+    const pv=document.createElement('div');pv.className='pv';pv.dataset.i=scAt;
+    pv.innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${id}&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1" allow="autoplay; encrypted-media" tabindex="-1" title="Preview"></iframe>`;
+    pv.querySelector('iframe').addEventListener('load',()=>setTimeout(()=>{pv.classList.add('ready');card.classList.add('previewing')},700));
+    card.querySelector('.art').appendChild(pv);scPv=pv},450)}
 function scGo(d){if(SC.length<2)return;scAt=(scAt+d+SC.length)%SC.length;scLayout();scArm()}
 function scTo(i){scAt=i;scLayout();scArm()}
 /* a video plays in a pop-up; a screenshot opens big */
 function scOpen(i){const m=SC[i];if(!m||m.empty)return;const id=m.type==='youtube'?ytId(m.url):'';
   const box=document.createElement('div');box.className='sc-modal';box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');
   box.innerHTML=`<div>${id?`<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen title="${escH(m.caption||'Video')}"></iframe>`:`<img src="${escH(m.url||m.thumb)}" alt="${escH(m.caption||'Screenshot')}">`}<button type="button">CLOSE ✕</button></div>`;
-  const close=()=>{box.remove();document.removeEventListener('keydown',esc);scHold=0;scArm()};const esc=e=>{if(e.key==='Escape')close()};
+  const close=()=>{box.remove();document.removeEventListener('keydown',esc);scHold=0;scPreview();scArm()};const esc=e=>{if(e.key==='Escape')close()};
   box.addEventListener('click',e=>{if(e.target===box||e.target.closest('button'))close()});document.addEventListener('keydown',esc);
+  if(scPv){const o=scCards[+scPv.dataset.i];if(o)o.classList.remove('previewing');scPv.remove();scPv=null}
   document.body.appendChild(box);scHold=Date.now()+864e5;clearTimeout(scT);box.querySelector('button').focus()}
 /* auto switch */
 let scT=0,scHold=0,scHover=false,scOn=false;
 function scOk(){return !reduce&&scOn&&!scHover&&!document.hidden&&Date.now()>scHold&&SC.length>1}
 function scArm(){clearTimeout(scT);const tm=$('#scTimer');tm.classList.remove('run');void tm.offsetWidth;
-  if(!scOk()){tm.classList.add('paused');return}tm.classList.remove('paused');tm.classList.add('run');scT=setTimeout(()=>scGo(1),SC_AUTO)}
+  if(!scOk()){tm.classList.add('paused');return}
+  const ms=scCanPreview&&SC[scAt]&&SC[scAt].type==='youtube'?7000:SC_AUTO;tm.style.setProperty('--auto',ms+'ms');
+  tm.classList.remove('paused');tm.classList.add('run');scT=setTimeout(()=>scGo(1),ms)}
 function scPause(ms){scHold=Date.now()+ms;scArm();clearTimeout(scPause.t);scPause.t=setTimeout(scArm,ms+50)}
 $('#scTimer').style.setProperty('--auto',SC_AUTO+'ms');
 const show=$('#showcase'),scStage=$('#scStage');
-scStage.addEventListener('click',e=>{const c=e.target.closest('.sc-card');if(!c)return;e.preventDefault();if(scDragged)return;const i=+c.dataset.i;
+scStage.addEventListener('click',e=>{const ed=e.target.closest('.sc-edge');if(ed){scGo(+ed.dataset.sc);return}const c=e.target.closest('.sc-card');if(!c)return;e.preventDefault();if(scDragged)return;const i=+c.dataset.i;
   if(i===scAt)scOpen(i);else{scTo(i);scArm()}});
 $('#scBar').addEventListener('click',e=>{const b=e.target.closest('[data-sc]');if(b){scGo(+b.dataset.sc);scArm()}const o=e.target.closest('[data-open]');if(o)scOpen(+o.dataset.open)});
 scStage.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();scGo(1);scArm()}if(e.key==='ArrowLeft'){e.preventDefault();scGo(-1);scArm()}if(e.key==='Enter'){e.preventDefault();scOpen(scAt)}});
@@ -939,7 +965,7 @@ scStage.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY)&&M
 scStage.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const on=!!e.target.closest('.sc-card');if(on!==scHover){scHover=on;scArm()}});
 scStage.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&scHover){scHover=false;scArm()}});
 document.addEventListener('visibilitychange',scArm);
-new IntersectionObserver(es=>{scOn=es[0].isIntersecting;scArm()},{threshold:.3}).observe(show);
+new IntersectionObserver(es=>{scOn=es[0].isIntersecting;if(!scOn&&scPv){const o=scCards[+scPv.dataset.i];if(o)o.classList.remove('previewing');scPv.remove();scPv=null}else scPreview();scArm()},{threshold:.3}).observe(show);
 addEventListener('resize',scLayout);
 /* embers drifting up behind the cards */
 if(!reduce)$('#scEmbers').innerHTML=Array.from({length:18},()=>`<i style="left:${Math.random()*100}%;--dx:${(Math.random()*80-40).toFixed(0)}px;animation-duration:${(7+Math.random()*7).toFixed(1)}s;animation-delay:${(-Math.random()*12).toFixed(1)}s"></i>`).join('');
