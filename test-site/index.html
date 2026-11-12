@@ -907,7 +907,12 @@ fetch('/api/showcase').then(r=>r.ok?r.json():Promise.reject()).then(d=>renderSho
 function scOff(i){const n=SC.length;let d=i-scAt;if(n>2){if(d>n/2)d-=n;if(d<-n/2)d+=n}return d}
 function scLayout(){
   const n=SC.length,w=innerWidth,sp=w<760?.62:.58;
-  scCards.forEach((el,i)=>{const d=scOff(i),a=Math.abs(d),show=a<=SC_SIDE;
+  scCards.forEach((el,i)=>{const d0=scOff(i),show=Math.abs(d0)<=SC_SIDE;
+    // hidden cards wait just past the edge; a card that wraps round (or stays hidden) moves instantly, so it never slides across the stage
+    const d=Math.max(-SC_SIDE-1,Math.min(SC_SIDE+1,d0)),a=Math.abs(d),prev=el._d;el._d=d;
+    const jump=prev!==undefined&&(Math.abs(d-prev)>SC_SIDE||(!show&&Math.abs(prev)>SC_SIDE));
+    el.style.transition=jump?'none':'';el.style.visibility=show?'visible':(jump||prev===undefined?'hidden':el.style.visibility);
+    if(!show&&!jump)setTimeout(()=>{if(el._d===d&&Math.abs(scOff(i))>SC_SIDE)el.style.visibility='hidden'},500);
     el.classList.toggle('on',d===0);el.classList.toggle('far',!show);el.tabIndex=d===0?0:-1;el.setAttribute('aria-hidden',d===0?'false':'true');
     const pk=d!==0&&i===scPeek&&show;el.classList.toggle('peek',pk);
     el.style.transform=`translate(-50%,-50%) translateX(${d*sp*100}%) translateZ(${-a*170}px) rotateY(${-Math.sign(d)*Math.min(a,2)*24}deg) scale(${1-Math.min(a,3)*.1+(pk?.07:0)})`;
