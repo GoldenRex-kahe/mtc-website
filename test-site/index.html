@@ -95,10 +95,22 @@ a{color:inherit}
 .note{margin-top:28px;color:var(--soft);font-size:14px}
 
 /* showcase pan */
-.show{height:360vh;position:relative}
-.show .stick{position:sticky;top:0;height:100svh;overflow:hidden;display:flex;flex-direction:column;justify-content:center}
-.show h2{padding:0 6vw;margin-bottom:34px}
-.track{display:flex;gap:22px;padding:0 6vw;will-change:transform}
+.show{position:relative;padding:100px 0 90px}
+.show .stick{display:flex;flex-direction:column}
+.sc-head{display:flex;align-items:baseline;gap:18px;padding:0 6vw;margin-bottom:30px}.show h2{margin:0}
+.sc-count{margin-left:auto;font:10px var(--display);letter-spacing:.08em;color:var(--soft)}
+.sc-wrap{position:relative}
+.track{display:flex;gap:22px;padding:30px 6vw;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding:0 6vw;scrollbar-width:none;overscroll-behavior-x:contain;outline:none}
+.track::-webkit-scrollbar{display:none}
+.track .shot{scroll-snap-align:start;flex-shrink:0}
+/* the arrows sit on soft fades that blend the edges into the page */
+.sc-arrow{position:absolute;top:0;bottom:0;width:min(150px,16vw);display:flex;align-items:center;border:0;padding:0 18px;color:var(--ink);cursor:pointer;z-index:4;transition:opacity .35s}
+.sc-arrow.l{left:0;justify-content:flex-start;background:linear-gradient(90deg,var(--canvas) 8%,#150e08cc 45%,#150e0800)}
+.sc-arrow.r{right:0;justify-content:flex-end;background:linear-gradient(270deg,var(--canvas) 8%,#150e08cc 45%,#150e0800)}
+.sc-arrow svg{width:46px;height:46px;padding:11px;background:#0d0804cc;border:3px solid #000;box-shadow:inset 0 -3px 0 var(--accent),0 6px 18px #000a;transition:transform .2s,background .2s,color .2s}
+.sc-arrow:hover svg,.sc-arrow:focus-visible svg{background:var(--accent);color:#000;transform:scale(1.1)}
+.sc-arrow.off{opacity:0;pointer-events:none}
+@media(max-width:760px){.sc-arrow{width:64px;padding:0 6px}.sc-arrow svg{width:38px;height:38px;padding:8px}.show{padding:70px 0 60px}}
 .shot{flex:0 0 min(420px,72vw);aspect-ratio:16/10;position:relative;border:4px solid var(--stone);overflow:hidden;background:var(--surface)}
 .shot .art{position:absolute;inset:0}
 .shot figcaption{position:absolute;left:0;right:0;bottom:0;padding:34px 16px 14px;background:linear-gradient(#0000,#000d);font-size:14px}
@@ -164,7 +176,7 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
 .copy.swap h2{animation-delay:.06s}.copy.swap p{animation-delay:.12s}
 @keyframes slidein{from{opacity:0;transform:translateX(-34px)}to{opacity:1;transform:none}}
 .shot{will-change:transform;transition:border-color .3s}.shot:hover{border-color:var(--accent)}
-.bar{margin:34px 6vw 0;height:6px;background:var(--stone)}.bar i{display:block;height:100%;background:var(--accent);transform-origin:0 50%;transform:scaleX(0)}
+.bar{margin:10px 6vw 0;height:6px;background:var(--stone);position:relative;overflow:hidden}.bar i{position:absolute;top:0;bottom:0;left:0;background:var(--accent);transition:left .35s,width .35s}
 .close h2{will-change:transform,opacity}
 .close .btn{animation:pulse 1.8s ease-in-out infinite}
 @keyframes pulse{50%{transform:translateY(-6px)}}
@@ -551,8 +563,12 @@ html,body{max-width:100%;overflow-x:clip}
 
 <section class="show" id="showcase">
   <div class="stick">
-    <h2 class="px reveal in">EVENT SHOWCASE</h2>
-    <div class="track" id="track"></div>
+    <div class="sc-head"><h2 class="px reveal in">EVENT SHOWCASE</h2><span class="sc-count" id="scCount" aria-live="polite"></span></div>
+    <div class="sc-wrap" id="scWrap" role="region" aria-roledescription="carousel" aria-label="Event showcase">
+      <div class="track" id="track" tabindex="0"></div>
+      <button class="sc-arrow l" id="scPrev" type="button" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg></button>
+      <button class="sc-arrow r" id="scNext" type="button" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg></button>
+    </div>
     <div class="bar"><i id="bar"></i></div>
   </div>
 </section>
@@ -847,12 +863,45 @@ let shotEls=[];
 function renderShots(items){
   const track=$('#track');
   if(!items.length){track.innerHTML=['Screenshots from every event','Creator videos, side by side','Winners and best moments'].map((t,i)=>`<figure class="shot"><div class="art" style="background:repeating-linear-gradient(45deg,${['#3c6b25,#1a2e10','#8a4a10,#2a1606','#27506f,#0f1f2c'][i].split(',')[0]} 0 22px,${['#3c6b25,#1a2e10','#8a4a10,#2a1606','#27506f,#0f1f2c'][i].split(',')[1]} 22px 44px)"></div><figcaption><b>COMING SOON</b>${t}</figcaption></figure>`).join('');}
-  else track.innerHTML=items.slice(0,12).map(m=>`<a class="shot" href="/event.html?slug=${encodeURIComponent(m.eventSlug||'')}" aria-label="${escH((m.caption||m.eventTitle||'Showcase')+' from '+(m.eventTitle||''))}"><div class="art" style="background-image:url('${escH(m.thumb)}')"></div>${m.type==='youtube'?'<div class="play"><i></i></div>':''}<figcaption><b>${escH((m.eventTitle||'').toUpperCase())}</b>${escH(m.caption||'')}${m.creator?' · by '+escH(m.creator):''}</figcaption></a>`).join('');
-  const n=track.children.length;$('#showcase').style.height=Math.max(140,Math.min(360,60+n*45))+'vh';
+  else track.innerHTML=items.slice(0,60).map(m=>`<a class="shot" href="/event.html?slug=${encodeURIComponent(m.eventSlug||'')}" aria-label="${escH((m.caption||m.eventTitle||'Showcase')+' from '+(m.eventTitle||''))}"><div class="art" style="background-image:url('${escH(m.thumb)}')"></div>${m.type==='youtube'?'<div class="play"><i></i></div>':''}<figcaption><b>${escH((m.eventTitle||'').toUpperCase())}</b>${escH(m.caption||'')}${m.creator?' · by '+escH(m.creator):''}</figcaption></a>`).join('');
   shotEls=[...track.children];
+  // pictures load when they come near the screen (a long showcase stays fast)
+  shotEls.forEach(el=>{const a=el.querySelector('.art');if(a&&a.style.backgroundImage){a.dataset.bg=a.style.backgroundImage;a.style.backgroundImage=''}});
+  lazyArt();scUpdate();scArm();
 }
+const lazyIO='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const a=e.target;if(a.dataset.bg){a.style.backgroundImage=a.dataset.bg;delete a.dataset.bg}lazyIO.unobserve(a)}}),{root:$('#track'),rootMargin:'0px 900px'}):null;
+function lazyArt(){shotEls.forEach(el=>{const a=el.querySelector('.art');if(!a||!a.dataset.bg)return;if(lazyIO)lazyIO.observe(a);else{a.style.backgroundImage=a.dataset.bg}})}
+/* carousel: arrows, swipe, keys, and a slow auto-switch */
+const SC_AUTO=4500;let scT=0,scHold=0,scHover=false,scOn=false;
+function scStep(){const a=shotEls[0],b=shotEls[1];return a?(b?b.offsetLeft-a.offsetLeft:a.offsetWidth+22):400}
+function scIndex(){return shotEls.length?Math.round($('#track').scrollLeft/scStep()):0}
+function scGo(dir){const t=$('#track'),max=t.scrollWidth-t.clientWidth-2;
+  if(dir>0&&t.scrollLeft>=max)t.scrollTo({left:0,behavior:reduce?'auto':'smooth'});
+  else if(dir<0&&t.scrollLeft<=2)t.scrollTo({left:t.scrollWidth,behavior:reduce?'auto':'smooth'});
+  else t.scrollBy({left:dir*scStep(),behavior:reduce?'auto':'smooth'});
+  [120,450,900].forEach(ms=>setTimeout(scUpdate,ms))}
+function scUpdate(){const t=$('#track'),n=shotEls.length,max=t.scrollWidth-t.clientWidth;
+  const vis=Math.max(1,Math.round(t.clientWidth/scStep())),i=Math.min(n,scIndex()+1);
+  $('#scCount').textContent=n>1?`${i} / ${n}`:'';
+  $('#scPrev').classList.toggle('off',t.scrollLeft<=4);$('#scNext').classList.toggle('off',max<=4);
+  const w=n?Math.min(100,vis/n*100):100,l=max>0?t.scrollLeft/max*(100-w):0;const bi=$('#bar');bi.style.width=w+'%';bi.style.left=l+'%'}
+function scOk(){return !reduce&&scOn&&!scHover&&!document.hidden&&Date.now()>scHold&&shotEls.length>1}
+function scArm(){clearTimeout(scT);if(scOk())scT=setTimeout(()=>{scGo(1);scArm()},SC_AUTO)}
+function scPause(ms){scHold=Date.now()+ms;clearTimeout(scT);clearTimeout(scPause.t);scPause.t=setTimeout(scArm,ms+50)}
 fetch('/api/showcase').then(r=>r.ok?r.json():Promise.reject()).then(d=>renderShots(d.media)).catch(()=>renderShots([]));
 const show=$('#showcase'), track=$('#track');
+$('#scPrev').addEventListener('click',()=>{scGo(-1);scPause(9000)});
+$('#scNext').addEventListener('click',()=>{scGo(1);scPause(9000)});
+track.addEventListener('scroll',scUpdate,{passive:true});
+track.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();scGo(1);scPause(9000)}if(e.key==='ArrowLeft'){e.preventDefault();scGo(-1);scPause(9000)}});
+['pointerdown','wheel','touchstart'].forEach(k=>track.addEventListener(k,()=>scPause(9000),{passive:true}));
+const scWrap=$('#scWrap');
+scWrap.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){scHover=true;clearTimeout(scT)}});
+scWrap.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'){scHover=false;scArm()}});
+scWrap.addEventListener('focusin',()=>{scHover=true;clearTimeout(scT)});scWrap.addEventListener('focusout',()=>{scHover=false;scArm()});
+document.addEventListener('visibilitychange',()=>document.hidden?clearTimeout(scT):scArm());
+new IntersectionObserver(es=>{scOn=es[0].isIntersecting;scOn?scArm():clearTimeout(scT)},{threshold:.3}).observe(show);
+addEventListener('resize',scUpdate);
 
 /* reveal */
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
@@ -994,12 +1043,9 @@ function frame(){
     const cr=$('.close').getBoundingClientRect(),cp=clamp((vh-cr.top)/vh);
     $('#closeIn').style.transform=`scale(${.6+.4*cp}) translateY(${(1-cp)*60}px)`;$('#closeIn').style.opacity=clamp(cp*1.6);
   }
-  /* showcase pan */
-  const sr=show.getBoundingClientRect(), pp=clamp(-sr.top/(sr.height-vh));
-  const max=Math.max(0,track.scrollWidth-innerWidth+innerWidth*.12);
-  track.style.transform=`translate3d(${-pp*max}px,0,0)`;
-  $('#bar').style.transform=`scaleX(${pp})`;
-  if(!reduce)shotEls.forEach(s=>{const r=s.getBoundingClientRect(),d=((r.left+r.width/2)/innerWidth-.5)*2;
+  /* showcase: cards tilt away from the middle (only when the section is on screen) */
+  const sr=show.getBoundingClientRect();
+  if(!reduce&&sr.bottom>0&&sr.top<vh)shotEls.forEach(s=>{const r=s.getBoundingClientRect(),d=((r.left+r.width/2)/innerWidth-.5)*2;
     s.style.transform=`perspective(900px) rotateY(${d*-16}deg) scale(${1-Math.min(1,Math.abs(d))*.14}) translateY(${Math.abs(d)*18}px)`});
 }
 function loop(){try{frame()}catch(e){console.error(e)}requestAnimationFrame(loop)}
