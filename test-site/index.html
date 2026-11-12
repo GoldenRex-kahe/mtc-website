@@ -249,7 +249,14 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
 .staff .bgtext{transform:translate(-50%,-50%)}
 .stage{position:relative;height:auto;display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:24px;padding:0;overflow:visible}
 .copy p{min-height:4.5em}
-.dots i{cursor:pointer}
+.dots i{cursor:pointer;position:relative;overflow:hidden}
+.dots i.on.timing{background:#6b3f10}
+.dots i.on.timing::after{content:"";position:absolute;inset:0;background:var(--accent);transform-origin:left;transform:scaleX(0);animation:dotFill var(--auto,7s) linear forwards}
+.dots.paused i.on.timing::after{animation-play-state:paused}
+@keyframes dotFill{to{transform:scaleX(1)}}
+#soloC{cursor:grab;touch-action:pan-y}#soloC:active{cursor:grabbing}
+.solo-hint{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);z-index:3;font:8px var(--display);letter-spacing:.08em;color:var(--soft);opacity:.75;white-space:nowrap;pointer-events:none}
+@media(prefers-reduced-motion:reduce){.dots i.on.timing::after{animation:none;transform:scaleX(1)}}
 @media(max-width:760px){.staff{padding:80px 5vw 70px}.stage{grid-template-columns:1fr;gap:18px}.solo{order:-1;height:360px;min-height:0}.copy{text-align:left}.copy p{min-height:5em}}
 /* ===== MOBILE ===== */
 .sec,.staff,.close,.show{overflow-x:clip}
@@ -529,7 +536,7 @@ html,body{max-width:100%;overflow-x:clip}
       <div class="dots" id="dots"></div>
       <div class="rowbtns" style="margin-top:26px"><button class="btn ghost" id="stPrev" aria-label="Previous person">&lt; PREV</button><button class="btn" id="stNext" aria-label="Next person">NEXT PERSON &gt;</button></div>
     </div>
-    <div class="solo" id="solo"><div class="soloBox"><div class="pedestal" aria-hidden="true"></div><canvas id="soloC" aria-label="3D skin of the selected team member"></canvas></div></div>
+    <div class="solo" id="solo"><div class="soloBox"><div class="pedestal" aria-hidden="true"></div><canvas id="soloC" aria-label="3D skin of the selected team member. Drag to spin, tap to make them move."></canvas></div><div class="solo-hint" id="soloHint" aria-hidden="true"></div></div>
   </div>
 </section>
 
@@ -862,7 +869,8 @@ const staff=[
  {skin:'assets/skins/s6.png',role:'ADMIN',who:'QUANTUM_PLAYZ',bio:'Runs event days, approves registrations, and keeps the server fair.'}];
 const NS=staff.length;let focus=0,sv=null;
 try{sv=new skinview3d.SkinViewer({canvas:$('#soloC'),width:300,height:440,skin:staff[0].skin});
-  sv.fov=30;sv.zoom=.95;sv.background=null;sv.controls.enabled=false;sv.animation=new skinview3d.IdleAnimation();
+  sv.fov=30;sv.zoom=.95;sv.background=null;sv.animation=new skinview3d.IdleAnimation();
+  sv.controls.enabled=true;sv.controls.enableZoom=false;sv.controls.enablePan=false;sv.controls.minPolarAngle=Math.PI/2-.45;sv.controls.maxPolarAngle=Math.PI/2+.25;
   sv.autoRotate=!reduce;sv.autoRotateSpeed=.5;sv.renderPaused=true}catch(e){$('#soloC').style.display='none'}
 function fitSolo(){if(!sv)return;const b=$('#solo');sv.setSize(Math.round(Math.min(360,b.clientWidth)),Math.round(b.clientHeight*.94))}
 fitSolo();addEventListener('resize',fitSolo);
@@ -873,9 +881,50 @@ function setStaff(i){focus=(i+NS)%NS;const m=staff[focus];
   document.querySelectorAll('#dots i').forEach((x,k)=>x.classList.toggle('on',k===focus));
   const cp=$('#copy');cp.classList.remove('swap');void cp.offsetWidth;cp.classList.add('swap');
   const so=$('#solo');so.classList.remove('swap');void so.offsetWidth;so.classList.add('swap');
-  if(sv)sv.loadSkin(m.skin)}
-$('#stPrev').addEventListener('click',()=>setStaff(focus-1));
-$('#stNext').addEventListener('click',()=>setStaff(focus+1));
+  if(sv){sv.loadSkin(m.skin);clearTimeout(typeof moveBack==='undefined'?0:moveBack);if(typeof resetPose==='function')resetPose();sv.animation=new skinview3d.IdleAnimation();const h=$('#soloHint');if(h&&typeof HINT!=='undefined')h.textContent=HINT}
+  if(typeof restartDot==='function'){autoLeft=AUTO;restartDot()}}
+$('#stPrev').addEventListener('click',()=>{setStaff(focus-1);holdAuto(12e3)});
+$('#stNext').addEventListener('click',()=>{setStaff(focus+1);holdAuto(12e3)});
+/* drag to spin, tap to make them move */
+/* moves made with skinview3d's FunctionAnimation (this version has no wave / jump built in); t is in seconds */
+const FA=f=>()=>new skinview3d.FunctionAnimation((p,t)=>f(p.skin,p,t));
+const MOVES=typeof skinview3d==='undefined'?[]:[
+  ['wave',FA((k,p,t)=>{k.rightArm.rotation.x=0;k.rightArm.rotation.z=Math.PI*.82+Math.sin(t*12)*.28;k.head.rotation.z=Math.sin(t*6)*.08})],
+  ['jump',FA((k,p,t)=>{const j=Math.abs(Math.sin(t*5));p.position.y=j*5;k.leftArm.rotation.z=-j*.9;k.rightArm.rotation.z=j*.9;k.leftLeg.rotation.x=-j*.3;k.rightLeg.rotation.x=j*.3})],
+  ['cheer',FA((k,p,t)=>{const s=Math.sin(t*14)*.18;k.leftArm.rotation.z=-Math.PI*.85+s;k.rightArm.rotation.z=Math.PI*.85-s;p.position.y=Math.abs(Math.sin(t*7))*1.5})],
+  ['dance',FA((k,p,t)=>{const s=Math.sin(t*8);k.body.rotation.z=s*.12;k.head.rotation.z=-s*.15;k.leftArm.rotation.z=-.6-s*.5;k.rightArm.rotation.z=.6-s*.5;k.leftLeg.rotation.x=s*.35;k.rightLeg.rotation.x=-s*.35})],
+  ['run',()=>new skinview3d.RunningAnimation()],
+  ['walk',()=>{const a=new skinview3d.WalkingAnimation();a.speed=.8;return a}]];
+function resetPose(){try{const p=sv.playerObject,k=p.skin;p.position.y=0;['head','body','leftArm','rightArm','leftLeg','rightLeg'].forEach(n=>k[n]&&k[n].rotation.set(0,0,0))}catch(x){}}
+let spinBack=0,moveBack=0,downAt=null,lastMove='';
+const solo=$('#soloC');
+if(sv&&solo){
+  solo.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY];sv.autoRotate=false;clearTimeout(spinBack);holdAuto(15e3)});
+  addEventListener('pointerup',e=>{if(!downAt)return;const moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);downAt=null;
+    spinBack=setTimeout(()=>{if(!reduce)sv.autoRotate=true},3500);
+    if(moved<6&&MOVES.length){let pick;do{pick=MOVES[Math.floor(Math.random()*MOVES.length)]}while(MOVES.length>1&&pick[0]===lastMove);lastMove=pick[0];clearTimeout(moveBack);
+      try{resetPose();sv.animation=pick[1]();$('#soloHint').textContent=pick[0].toUpperCase()+'!'}catch(x){}
+      moveBack=setTimeout(()=>{resetPose();sv.animation=new skinview3d.IdleAnimation();$('#soloHint').textContent=HINT},2400)}});
+}
+const HINT='DRAG TO SPIN · TAP TO MOVE';
+$('#soloHint')&&($('#soloHint').textContent=HINT);
+/* auto switch to the next person; the active dot fills up as a timer */
+const AUTO=7000;let autoT=0,autoHold=0,autoStart=0,autoLeft=AUTO,teamOn=false,hover=false;
+const dotsEl=$('#dots');
+function autoOk(){return !reduce&&teamOn&&!hover&&!document.hidden&&Date.now()>autoHold&&!downAt}
+function armAuto(){clearTimeout(autoT);dotsEl.classList.toggle('paused',!autoOk());if(!autoOk())return;
+  autoStart=Date.now();autoT=setTimeout(()=>{autoLeft=AUTO;setStaff(focus+1);armAuto()},autoLeft)}
+function pauseAuto(){if(autoT&&autoStart){autoLeft=Math.max(400,autoLeft-(Date.now()-autoStart))}clearTimeout(autoT);autoT=0;autoStart=0;dotsEl.classList.add('paused')}
+function holdAuto(ms){autoHold=Date.now()+ms;pauseAuto();autoLeft=AUTO;restartDot();clearTimeout(holdAuto.t);holdAuto.t=setTimeout(armAuto,ms+50)}
+function restartDot(){const d=dotsEl.querySelector('i.on');if(!d)return;d.classList.remove('timing');void d.offsetWidth;if(!reduce)d.classList.add('timing')}
+dotsEl.style.setProperty('--auto',AUTO+'ms');
+$('#dots').addEventListener('click',()=>holdAuto(12e3));
+const team=$('#team');
+team.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){hover=true;pauseAuto()}});
+team.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'){hover=false;armAuto()}});
+team.addEventListener('focusin',()=>{hover=true;pauseAuto()});team.addEventListener('focusout',()=>{hover=false;armAuto()});
+document.addEventListener('visibilitychange',()=>document.hidden?pauseAuto():armAuto());
+new IntersectionObserver(es=>{teamOn=es[0].isIntersecting;teamOn?armAuto():pauseAuto()},{threshold:.35}).observe(team);
 setStaff(0);
 /* only render 3D players that are on screen */
 const visSet=(sel,list)=>new IntersectionObserver(es=>{const on=es[0].isIntersecting;list().forEach(v=>{if(v)v.renderPaused=!on})},{rootMargin:'120px'}).observe(document.querySelector(sel));
