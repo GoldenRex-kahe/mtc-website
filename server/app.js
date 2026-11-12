@@ -116,23 +116,39 @@ function pubEvent(e) {
     ...(e.status === 'live' ? {} : { serverJava: '', serverBedrock: '', serverBedrockPort: '', serverExtra: [] }), serverPost: undefined, reminded: undefined, remindedFor: undefined, taken: regs.filter(r => r.status === 'pending' || r.status === 'approved').length,
     participants: regs.filter(r => r.status === 'approved').map(r => playerCard(r)) };
 }
+// a screenshot has no YouTube channel: show who uploaded it (their MTC creator logo, else their Discord picture)
+function uploaderFace(m) {
+  if (m.type === 'youtube' || !m.userId) return '';
+  const ex = yt.readExtras(), u = D().users[m.userId] || {}, g = discord.cachedMember(m.userId) || {};
+  const x = ex[m.userId] || ex[String(u.username || g.username || '').toLowerCase()];
+  return (x && x.verified === true && x.logo) || g.avatar || u.avatar || '';
+}
 function pubMedia(m) {
   const e = evById(m.eventId) || {};
-  return { id: m.id, type: m.type, url: m.url, thumb: m.thumb, caption: m.caption, creator: m.creator, creatorLogo: m.creatorLogo || '', published: m.published || '', eventSlug: e.slug, eventTitle: e.title, createdAt: m.createdAt };
+  return { id: m.id, type: m.type, url: m.url, thumb: m.thumb, caption: m.caption, creator: m.creator, creatorLogo: m.type === 'youtube' ? m.creatorLogo || '' : uploaderFace(m) || m.creatorLogo || '', kind: m.type === 'youtube' ? (m.kind || 'video') : 'screenshot', published: m.published || '', eventSlug: e.slug, eventTitle: e.title, createdAt: m.createdAt };
 }
 // a YouTube video's real upload date (looked up once from YouTube, then kept on the showcase item) so videos can be sorted by it
+const needsKind = m => !m.kind || (m.kind === 'live' && Date.now() - new Date(m.kindAt || 0) > 10 * 60e3);   // a live stream is checked again until it ends
 async function videoDate(m) {
-  if (m.type !== 'youtube' || m.published || (m.publishedTried && Date.now() - new Date(m.publishedTried) < 864e5)) return;
+  if (m.type !== 'youtube') return;
+  const wantDate = !m.published && !(m.publishedTried && Date.now() - new Date(m.publishedTried) < 864e5);
+  if (!wantDate && !needsKind(m)) return;
   const vid = m.videoId || yt.videoId(m.url); if (!vid) return;
-  m.publishedTried = store.now();
+  if (wantDate) m.publishedTried = store.now();
   try {
     const r = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6000),
       body: JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: '2.20241101.00.00', hl: 'en' } }, videoId: vid }) });
     const j = await r.json(), mf = j.microformat && j.microformat.playerMicroformatRenderer, d = mf && (mf.publishDate || mf.uploadDate);
     if (d && !isNaN(new Date(d))) m.published = new Date(d).toISOString();
+    const vd = j.videoDetails || {}, lb = mf && mf.liveBroadcastDetails, em = (mf && mf.embed) || {};
+    if (vd.videoId) {
+      m.kind = lb && lb.isLiveNow ? 'live' : lb && vd.isLiveContent ? 'stream' : lb ? 'premiere'
+        : /\/shorts\//.test(m.url || '') || (+em.height > +em.width) ? 'short' : 'video';
+      m.kindAt = store.now();
+    }
   } catch {}
 }
-const fillVideoDates = async list => { const todo = list.filter(m => m.type === 'youtube' && !m.published); if (!todo.length) return;
+const fillVideoDates = async list => { const todo = list.filter(m => m.type === 'youtube' && (!m.published || needsKind(m))); if (!todo.length) return;
   await Promise.race([Promise.all(todo.slice(0, 40).map(videoDate)), new Promise(r => setTimeout(r, 5000))]); store.save(); };
 const evOrder = e => ({ live: 0, open: 1, soon: 2, draft: 3, completed: 4, unsuccessful: 4, cancelled: 4 }[e.status] ?? 5);
 // admins can set the order by hand (Admin > Events, arrows); events without a set order follow by status and date
@@ -843,7 +859,7 @@ on('GET', '/api/events/:slug', async (req, res, p) => {
 // the creator's channel logo for a showcase item: a verified MTC creator with that channel name, else the YouTube channel's picture (looked up once, then kept)
 const logoBusy = new Set();
 async function creatorLogoOf(m) {
-  if (m.creatorLogo || m.logoTried || logoBusy.has(m.id)) return;
+  if (m.type !== 'youtube' || m.creatorLogo || m.logoTried || logoBusy.has(m.id)) return;   // screenshots use the uploader's face
   const name = String(m.creator || '').trim().toLowerCase(), ex = yt.readExtras();
   const own = name && Object.values(ex).find(x => x && x.verified === true && x.logo && String(x.channelName || '').trim().toLowerCase() === name);
   if (own) { m.creatorLogo = own.logo; store.save(); return; }
@@ -862,7 +878,7 @@ async function creatorLogoOf(m) {
 on('GET', '/api/showcase', async () => {
   const list = D().media.filter(m => m.status === 'approved').sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   // wait a moment for missing logos; the rest arrive on the next visit
-  await Promise.race([Promise.all(list.slice(0, 60).map(creatorLogoOf)), new Promise(r => setTimeout(r, 2500))]);
+  await Promise.race([Promise.all([...list.slice(0, 60).map(creatorLogoOf), fillVideoDates(list.slice(0, 60))]), new Promise(r => setTimeout(r, 2500))]);
   return { media: list.map(pubMedia) };
 });
 on('GET', '/api/announcements', async () => ({ announcements: D().announcements.slice(-5).reverse().map(a => ({ id: a.id, title: a.title, body: a.body, image: a.image || '', createdAt: a.createdAt })) }));

@@ -238,7 +238,7 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
   transition:transform .65s cubic-bezier(.2,.8,.2,1),opacity .5s,filter .5s;will-change:transform;display:flex;flex-direction:column;overflow:hidden;background:#0d0804;border:3px solid #2e2118;color:var(--ink);text-decoration:none}
 .sc-card .sc-top{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0a0603;border-bottom:2px solid #000;font:7px var(--display);letter-spacing:.06em;color:var(--soft);white-space:nowrap;overflow:hidden}
 .sc-card .sc-top b{margin-left:auto;color:#000;background:var(--accent);padding:4px 6px;font-weight:400}
-.sc-card .sc-top b.vid{background:#ff3b30;color:#fff}
+.sc-card .sc-top b.k-vid{background:#ff3b30;color:#fff}.sc-card .sc-top b.k-short{background:#ff0080;color:#fff}.sc-card .sc-top b.k-stream{background:#9146ff;color:#fff}.sc-card .sc-top b.k-live{background:#e91916;color:#fff}.sc-card .sc-top b.k-ss{background:#3a78b8;color:#fff}
 .sc-card .sc-top span{overflow:hidden;text-overflow:ellipsis}
 .sc-card .art{flex:1;background:#000 center/cover no-repeat;position:relative;overflow:hidden}
 .sc-card .art::after{content:"";position:absolute;inset:0;background:linear-gradient(#0000 55%,#000c)}
@@ -886,6 +886,7 @@ function toast(t,d){const el=document.createElement('div');el.className='toast';
 
 /* showcase: approved screenshots and videos from all events, as a 3D ring of cards */
 let SC=[],scAt=0,scCards=[],scPeek=-1,scPeekT=0;
+const SC_KIND={video:['VIDEO','vid'],short:['SHORT','short'],stream:['STREAM','stream'],live:['● LIVE','live'],premiere:['PREMIERE','vid'],screenshot:['SCREENSHOT','ss']};
 const SC_AUTO=4000,SC_SIDE=3;
 const ytId=u=>(String(u||'').match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/)||[])[1]||'';
 const scDate=iso=>iso?new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',year:'numeric'}).format(new Date(iso)):'';
@@ -895,9 +896,9 @@ function renderShots(items){
   if(!SC.length){SC=[{empty:1,caption:'Screenshots and videos from every event show here',eventTitle:'COMING SOON'}]}
   scCards=SC.map((m,i)=>{const el=document.createElement('a');el.className='sc-card';el.dataset.i=i;
     el.href=m.empty?'#showcase':'/event.html?slug='+encodeURIComponent(m.eventSlug||'');
-    const vid=m.type==='youtube',title=m.caption||m.eventTitle||'Showcase';
+    const vid=m.type==='youtube',title=m.caption||m.eventTitle||'Showcase',K=SC_KIND[m.kind]||(vid?SC_KIND.video:SC_KIND.screenshot);
     el.setAttribute('aria-label',title+(m.creator?' by '+m.creator:''));
-    el.innerHTML=`<div class="sc-top"><span>${escH((m.eventTitle||'MTC').toUpperCase())}</span>${m.empty?'':`<b class="${vid?'vid':''}">${vid?'VIDEO':'SCREENSHOT'}</b>`}</div>
+    el.innerHTML=`<div class="sc-top"><span>${escH((m.eventTitle||'MTC').toUpperCase())}</span>${m.empty?'':`<b class="k-${K[1]}">${K[0]}</b>`}</div>
       <div class="art"${m.empty?' style="background:repeating-linear-gradient(45deg,#8a4a10 0 22px,#2a1606 22px 44px)"':''}>${vid?'<span class="play" aria-hidden="true"></span>':''}
       <div class="cap"><b>${escH(title)}</b>${m.creator?`<small>by ${escH(m.creator)}</small>`:''}</div></div>`;
     st.appendChild(el);return el});
@@ -923,7 +924,7 @@ function scLayout(){
   const face=m.creatorLogo||m.thumb||'';
   $('#scBar').innerHTML=`<div class="th${m.creatorLogo?' logo':''}"${face?` style="background-image:url('${escH(face)}')"`:''} title="${escH(m.creator||'')}"></div>
     <div class="tx"><h3><span>${escH(m.caption||m.eventTitle||'Event showcase')}</span>${m.eventTitle&&!m.empty?`<em>${escH(m.eventTitle.toUpperCase())}</em>`:''}</h3>
-      <p>${m.empty?'Join an event and add your screenshots or video after it.':[m.creator?'by '+escH(m.creator):'',escH(scDate(m.published||m.createdAt))].filter(Boolean).join(' · ')}</p></div>
+      <p>${m.empty?'Join an event and add your screenshots or video after it.':[m.creator?(m.type==='youtube'?'by ':'shared by ')+escH(m.creator):'',escH(scDate(m.published||m.createdAt))].filter(Boolean).join(' · ')}</p></div>
     <div class="sc-ctl"><div class="sc-nav"><button type="button" data-sc="-1" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3"/></svg></button>
       <span><b>${n?scAt+1:0}</b> / ${n}</span><button type="button" data-sc="1" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3"/></svg></button></div>
       ${m.empty?'':`<button type="button" class="sc-go" data-open="${scAt}">${vid?'▶ WATCH':'VIEW'}</button>`}</div>`;
