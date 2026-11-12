@@ -235,12 +235,12 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
 .sc-embers i{position:absolute;bottom:-10px;width:3px;height:3px;background:#ffb347;box-shadow:0 0 6px #ff9a2a;opacity:0;animation:ember linear infinite}
 @keyframes ember{10%{opacity:.9}80%{opacity:.6}100%{opacity:0;transform:translate(var(--dx),-480px)}}
 .sc-card{position:absolute;left:50%;top:50%;width:min(400px,68vw);aspect-ratio:16/10.6;margin:0;transform-style:preserve-3d;cursor:pointer;
-  transition:transform .65s cubic-bezier(.2,.8,.2,1),opacity .5s,filter .5s;will-change:transform;display:flex;flex-direction:column;background:#0d0804;border:3px solid #2e2118;color:var(--ink);text-decoration:none}
+  transition:transform .65s cubic-bezier(.2,.8,.2,1),opacity .5s,filter .5s;will-change:transform;display:flex;flex-direction:column;overflow:hidden;background:#0d0804;border:3px solid #2e2118;color:var(--ink);text-decoration:none}
 .sc-card .sc-top{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0a0603;border-bottom:2px solid #000;font:7px var(--display);letter-spacing:.06em;color:var(--soft);white-space:nowrap;overflow:hidden}
 .sc-card .sc-top b{margin-left:auto;color:#000;background:var(--accent);padding:4px 6px;font-weight:400}
 .sc-card .sc-top b.vid{background:#ff3b30;color:#fff}
 .sc-card .sc-top span{overflow:hidden;text-overflow:ellipsis}
-.sc-card .art{flex:1;background:#000 center/cover no-repeat;position:relative}
+.sc-card .art{flex:1;background:#000 center/cover no-repeat;position:relative;overflow:hidden}
 .sc-card .art::after{content:"";position:absolute;inset:0;background:linear-gradient(#0000 55%,#000c)}
 .sc-card .cap{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;z-index:1}
 .sc-card .cap b{display:block;font:9px/1.5 var(--display);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -885,7 +885,7 @@ const MAP_ICON='';
 function toast(t,d){const el=document.createElement('div');el.className='toast';el.innerHTML=MAP_ICON+`<div><b>${t}</b><span>${d}</span></div>`;$('#toasts').appendChild(el);setTimeout(()=>el.remove(),4300)}
 
 /* showcase: approved screenshots and videos from all events, as a 3D ring of cards */
-let SC=[],scAt=0,scCards=[],scPeek=-1;
+let SC=[],scAt=0,scCards=[],scPeek=-1,scPeekT=0;
 const SC_AUTO=4000,SC_SIDE=3;
 const ytId=u=>(String(u||'').match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/)||[])[1]||'';
 const scDate=iso=>iso?new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',year:'numeric'}).format(new Date(iso)):'';
@@ -898,7 +898,7 @@ function renderShots(items){
     const vid=m.type==='youtube',title=m.caption||m.eventTitle||'Showcase';
     el.setAttribute('aria-label',title+(m.creator?' by '+m.creator:''));
     el.innerHTML=`<div class="sc-top"><span>${escH((m.eventTitle||'MTC').toUpperCase())}</span>${m.empty?'':`<b class="${vid?'vid':''}">${vid?'VIDEO':'SCREENSHOT'}</b>`}</div>
-      <div class="art"${m.empty?' style="background:repeating-linear-gradient(45deg,#8a4a10 0 22px,#2a1606 22px 44px)"':''}>${vid?'<span class="play" aria-hidden="true"></span><span class="livetag"><i></i>PLAYING</span>':''}
+      <div class="art"${m.empty?' style="background:repeating-linear-gradient(45deg,#8a4a10 0 22px,#2a1606 22px 44px)"':''}>${vid?'<span class="play" aria-hidden="true"></span>':''}
       <div class="cap"><b>${escH(title)}</b>${m.creator?`<small>by ${escH(m.creator)}</small>`:''}</div></div>`;
     st.appendChild(el);return el});
   scAt=0;scLayout();scArm();
@@ -910,7 +910,7 @@ function scLayout(){
   scCards.forEach((el,i)=>{const d=scOff(i),a=Math.abs(d),show=a<=SC_SIDE;
     el.classList.toggle('on',d===0);el.classList.toggle('far',!show);el.tabIndex=d===0?0:-1;el.setAttribute('aria-hidden',d===0?'false':'true');
     const pk=d!==0&&i===scPeek&&show;el.classList.toggle('peek',pk);
-    el.style.transform=`translate(-50%,-50%) translateX(${d*sp*100}%) translateZ(${-a*170+(pk?90:0)}px) translateY(${pk?-14:0}px) rotateY(${-Math.sign(d)*Math.min(a,2)*(pk?14:24)}deg) scale(${1-Math.min(a,3)*.1+(pk?.06:0)})`;
+    el.style.transform=`translate(-50%,-50%) translateX(${d*sp*100}%) translateZ(${-a*170}px) rotateY(${-Math.sign(d)*Math.min(a,2)*24}deg) scale(${1-Math.min(a,3)*.1+(pk?.07:0)})`;
     el.style.opacity=show?String(pk?1:1-a*.22):'0';el.style.filter=a&&!pk?`brightness(${1-a*.2}) blur(${a*.9}px)`:'none';el.style.zIndex=String(pk?99:100-a);
     const art=el.querySelector('.art'),m=SC[i];if(show&&m&&!m.empty&&!art.dataset.done){art.style.backgroundImage=`url('${String(m.thumb||'').replace(/'/g,'%27')}')`;art.dataset.done=1}});
   scPreview();
@@ -924,7 +924,7 @@ function scLayout(){
       ${m.empty?'':`<button type="button" class="sc-go" data-open="${scAt}">${vid?'▶ WATCH':'VIEW'}</button>`}</div>`;
 }
 /* the video in front plays by itself, muted (desktop only; not with reduced motion or data saver) */
-const scCanPreview=!reduce&&matchMedia('(min-width:760px) and (hover:hover)').matches&&!(navigator.connection&&navigator.connection.saveData);
+const scCanPreview=false;   // previews turned off: the front card shows its picture, WATCH opens the video
 let scPv=null,scPvT=0;
 function scPreview(){
   clearTimeout(scPvT);
@@ -967,7 +967,8 @@ addEventListener('pointerup',e=>{if(scDown==null)return;const dx=e.clientX-scDow
 scStage.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY)&&Math.abs(e.deltaX)>25){e.preventDefault();if(!scGo.w){scGo(e.deltaX>0?1:-1);scArm();scGo.w=setTimeout(()=>{scGo.w=0},450)}}},{passive:false});
 // the timer stops only while the mouse is on a video / screenshot card
 scStage.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const c=e.target.closest('.sc-card');const on=!!c;if(on!==scHover){scHover=on;scArm()}
-  const pk=c&&!c.classList.contains('on')?+c.dataset.i:-1;if(pk!==scPeek){scPeek=pk;scLayout()}});
+  const pk=c&&!c.classList.contains('on')?+c.dataset.i:-1;clearTimeout(scPeekT);
+  if(pk>=0){if(pk!==scPeek){scPeek=pk;scLayout()}}else if(scPeek>=0)scPeekT=setTimeout(()=>{scPeek=-1;scLayout()},120)});
 scStage.addEventListener('pointerleave',e=>{if(e.pointerType!=='mouse')return;if(scHover){scHover=false;scArm()}if(scPeek>=0){scPeek=-1;scLayout()}});
 document.addEventListener('visibilitychange',scArm);
 new IntersectionObserver(es=>{scOn=es[0].isIntersecting;if(!scOn&&scPv){const o=scCards[+scPv.dataset.i];if(o)o.classList.remove('previewing');scPv.remove();scPv=null}else scPreview();scArm()},{threshold:.3}).observe(show);
