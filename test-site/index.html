@@ -251,6 +251,9 @@ footer{padding:28px 6vw;color:var(--soft);font-size:13px;display:flex;justify-co
 .sc-card.on .play{opacity:1;transform:scale(1)}
 .sc-card.on:hover .play{transform:scale(1.1)}
 .sc-card.far{pointer-events:none}
+.sc-card.peek{border-color:#f7931e;box-shadow:0 0 0 1px #000,0 0 22px #f7931e66,0 22px 44px #000c;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s,filter .25s}
+.sc-card:not(.on) .cap{opacity:0;transition:opacity .25s}.sc-card.peek .cap{opacity:1}
+.sc-card.peek .play{opacity:.9;transform:scale(.9)}
 .sc-card .pv{position:absolute;inset:0;z-index:1;background:#000;opacity:0;transition:opacity .5s}.sc-card .pv.ready{opacity:1}
 .sc-card .pv iframe{position:absolute;left:50%;top:50%;width:178%;height:178%;translate:-50% -50%;border:0;pointer-events:none}
 .sc-card.previewing .play{opacity:0}
@@ -882,7 +885,7 @@ const MAP_ICON='';
 function toast(t,d){const el=document.createElement('div');el.className='toast';el.innerHTML=MAP_ICON+`<div><b>${t}</b><span>${d}</span></div>`;$('#toasts').appendChild(el);setTimeout(()=>el.remove(),4300)}
 
 /* showcase: approved screenshots and videos from all events, as a 3D ring of cards */
-let SC=[],scAt=0,scCards=[];
+let SC=[],scAt=0,scCards=[],scPeek=-1;
 const SC_AUTO=4000,SC_SIDE=3;
 const ytId=u=>(String(u||'').match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/)||[])[1]||'';
 const scDate=iso=>iso?new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',year:'numeric'}).format(new Date(iso)):'';
@@ -906,8 +909,9 @@ function scLayout(){
   const n=SC.length,w=innerWidth,sp=w<760?.62:.58;
   scCards.forEach((el,i)=>{const d=scOff(i),a=Math.abs(d),show=a<=SC_SIDE;
     el.classList.toggle('on',d===0);el.classList.toggle('far',!show);el.tabIndex=d===0?0:-1;el.setAttribute('aria-hidden',d===0?'false':'true');
-    el.style.transform=`translate(-50%,-50%) translateX(${d*sp*100}%) translateZ(${-a*170}px) rotateY(${-Math.sign(d)*Math.min(a,2)*24}deg) scale(${1-Math.min(a,3)*.1})`;
-    el.style.opacity=show?String(1-a*.22):'0';el.style.filter=a?`brightness(${1-a*.2}) blur(${a*.9}px)`:'none';el.style.zIndex=String(100-a);
+    const pk=d!==0&&i===scPeek&&show;el.classList.toggle('peek',pk);
+    el.style.transform=`translate(-50%,-50%) translateX(${d*sp*100}%) translateZ(${-a*170+(pk?90:0)}px) translateY(${pk?-14:0}px) rotateY(${-Math.sign(d)*Math.min(a,2)*(pk?14:24)}deg) scale(${1-Math.min(a,3)*.1+(pk?.06:0)})`;
+    el.style.opacity=show?String(pk?1:1-a*.22):'0';el.style.filter=a&&!pk?`brightness(${1-a*.2}) blur(${a*.9}px)`:'none';el.style.zIndex=String(pk?99:100-a);
     const art=el.querySelector('.art'),m=SC[i];if(show&&m&&!m.empty&&!art.dataset.done){art.style.backgroundImage=`url('${String(m.thumb||'').replace(/'/g,'%27')}')`;art.dataset.done=1}});
   scPreview();
   const m=SC[scAt]||{},vid=m.type==='youtube';
@@ -933,7 +937,7 @@ function scPreview(){
     pv.querySelector('iframe').addEventListener('load',()=>setTimeout(()=>{pv.classList.add('ready');card.classList.add('previewing')},700));
     card.querySelector('.art').appendChild(pv);scPv=pv},450)}
 function scGo(d){if(SC.length<2)return;scAt=(scAt+d+SC.length)%SC.length;scLayout();scArm()}
-function scTo(i){scAt=i;scLayout();scArm()}
+function scTo(i){scAt=i;scPeek=-1;scLayout();scArm()}
 /* a video plays in a pop-up; a screenshot opens big */
 function scOpen(i){const m=SC[i];if(!m||m.empty)return;const id=m.type==='youtube'?ytId(m.url):'';
   const box=document.createElement('div');box.className='sc-modal';box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');
@@ -962,8 +966,9 @@ scStage.addEventListener('pointerdown',e=>{scDown=e.clientX;scDragged=false});
 addEventListener('pointerup',e=>{if(scDown==null)return;const dx=e.clientX-scDown;scDown=null;if(Math.abs(dx)>40){scDragged=true;scGo(dx<0?1:-1);scArm();setTimeout(()=>{scDragged=false},50)}});
 scStage.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY)&&Math.abs(e.deltaX)>25){e.preventDefault();if(!scGo.w){scGo(e.deltaX>0?1:-1);scArm();scGo.w=setTimeout(()=>{scGo.w=0},450)}}},{passive:false});
 // the timer stops only while the mouse is on a video / screenshot card
-scStage.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const on=!!e.target.closest('.sc-card');if(on!==scHover){scHover=on;scArm()}});
-scStage.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&scHover){scHover=false;scArm()}});
+scStage.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const c=e.target.closest('.sc-card');const on=!!c;if(on!==scHover){scHover=on;scArm()}
+  const pk=c&&!c.classList.contains('on')?+c.dataset.i:-1;if(pk!==scPeek){scPeek=pk;scLayout()}});
+scStage.addEventListener('pointerleave',e=>{if(e.pointerType!=='mouse')return;if(scHover){scHover=false;scArm()}if(scPeek>=0){scPeek=-1;scLayout()}});
 document.addEventListener('visibilitychange',scArm);
 new IntersectionObserver(es=>{scOn=es[0].isIntersecting;if(!scOn&&scPv){const o=scCards[+scPv.dataset.i];if(o)o.classList.remove('previewing');scPv.remove();scPv=null}else scPreview();scArm()},{threshold:.3}).observe(show);
 addEventListener('resize',scLayout);
