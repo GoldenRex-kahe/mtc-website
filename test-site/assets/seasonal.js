@@ -531,13 +531,13 @@
     const r = seeded(seed * 97 + Math.round(w)), pts = [], step = Math.max(14, Math.min(28, w / 10));
     for (let x = -3; x < w + 3; x += step) pts.push([x, 3 + r() * 6 + (r() < .2 ? 3 : 0)]);
     pts.push([w + 3, 4 + r() * 3]);
-    // top of the snow: soft bumps; bottom: sits on the box edge (y = 13), with a couple of short drips
+    // top of the snow: soft bumps; bottom: sits on the box edge (y = 13, inside its black border)
     const top = smooth(pts.map(([x, y]) => [x, 13 - y]));
-    let drips = ''; for (let i = 0; i < Math.max(1, Math.round(w / 140)); i++) { const x = 8 + r() * (w - 16), L = 2 + r() * 4; drips += `<path d="M${f1(x - 2.2)} 12.5Q${f1(x - 1.2)} ${f1(13 + L)} ${f1(x)} ${f1(13.5 + L)}Q${f1(x + 1.2)} ${f1(13 + L)} ${f1(x + 2.2)} 12.5Z" fill="#eef6ff"/>`; }
+    const drips = '';   // nothing hangs over the edge: the snow stays above the box, never over its text
     let glints = ''; for (let i = 0; i < Math.max(1, Math.round(w / 90)); i++) { const x = 6 + r() * (w - 12); glints += `<circle class="sz-tw" cx="${f1(x)}" cy="${f1(6 + r() * 4)}" r=".9" fill="#fff" style="--d:${(1.8 + r() * 2.4).toFixed(1)}s;--dl:-${(r() * 4).toFixed(1)}s"/>`; }
     const body = `${top}L${f1(w + 3)} 13.5L-3 13.5Z`;
     return `<svg width="${f1(w + 6)}" height="22" viewBox="-3 0 ${f1(w + 6)} 22" aria-hidden="true" style="overflow:visible">
-      <path d="${body}" fill="#000" opacity=".35" transform="translate(0 1.6)" filter="url(#szCapBlur)"/>
+      <path d="${body}" fill="#000" opacity=".35" transform="translate(0 -.6)" filter="url(#szCapBlur)"/>
       <path d="${body}" fill="url(#szCapSnow)"/><path d="${top}" fill="none" stroke="#fff" stroke-width="1" opacity=".9"/>${drips}${glints}</svg>`;
   }
   function placeCaps() {
@@ -549,7 +549,7 @@
     }).slice(0, 70);
     const html = els.map((el, i) => {
       const b = el.getBoundingClientRect(), x = b.left + scrollX, y = b.top + scrollY;
-      return `<div style="position:absolute;left:${f1(x - 3)}px;top:${f1(y - 11)}px;width:${f1(b.width + 6)}px;height:22px">${capSvg(b.width, i + 1)}</div>`;
+      return `<div style="position:absolute;left:${f1(x - 3)}px;top:${f1(y - 11)}px;width:${f1(b.width + 6)}px;height:22px;clip-path:inset(-12px -12px 9px -12px)">${capSvg(b.width, i + 1)}</div>`;
     }).join('');
     capBox.innerHTML = `<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="szCapSnow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#eef6ff"/><stop offset="1" stop-color="#cfe1f5"/></linearGradient><filter id="szCapBlur" x="-5%" y="-50%" width="110%" height="200%"><feGaussianBlur stdDeviation="1.2"/></filter></defs></svg>${html}`;
   }
