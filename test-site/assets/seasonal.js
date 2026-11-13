@@ -540,12 +540,20 @@
       <path d="${body}" fill="#000" opacity=".35" transform="translate(0 -.6)" filter="url(#szCapBlur)"/>
       <path d="${body}" fill="url(#szCapSnow)"/><path d="${top}" fill="none" stroke="#fff" stroke-width="1" opacity=".9"/>${drips}${glints}</svg>`;
   }
+  // only boxes you can see: a visible top border or a solid background (not see-through areas like the team skin stage)
+  const alpha = c => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return 0; const v = m[1].split(/[ ,\/]+/).filter(Boolean); return v.length > 3 ? parseFloat(v[3]) : 1; };
+  function hasEdge(el) {
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden') return false;
+    if (el.querySelector(':scope > canvas')) return false;
+    return (parseFloat(cs.borderTopWidth) >= 1 && cs.borderTopStyle !== 'none' && alpha(cs.borderTopColor) > .3) || alpha(cs.backgroundColor) > .5 || cs.backgroundImage !== 'none';
+  }
   function placeCaps() {
     if (!capBox) return;
     const els = [...document.querySelectorAll(CAP_SEL)].filter(el => {
-      if (el.closest('#nav, .sz-hello, .sc-stage, [hidden]')) return false;
+      if (el.closest('#nav, .sz-hello, .sc-stage, [hidden], .modal, dialog, [role=dialog]')) return false;   // popups are hidden see-through, not removed
       if (el.parentElement && el.parentElement.closest(CAP_SEL)) return false;   // only the outer box gets snow
-      const b = el.getBoundingClientRect(); return b.width >= 90 && b.height >= 36 && getComputedStyle(el).visibility !== 'hidden';
+      const b = el.getBoundingClientRect(); return b.width >= 90 && b.height >= 36 && hasEdge(el);
     }).slice(0, 70);
     const html = els.map((el, i) => {
       const b = el.getBoundingClientRect(), x = b.left + scrollX, y = b.top + scrollY;
