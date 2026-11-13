@@ -248,7 +248,7 @@ function eventsTab() {
   $('#newEv').onclick = () => { editing = 'new'; render(); };
   const openNew = ev => reload().then(() => { editing = ev.id; render(); });
   MTCX.templateBar($('#tplBar'), openNew);
-  $('#pane').insertAdjacentHTML('beforeend', '<div id="scBox"></div><div id="promoBox"></div><div id="bpBox"></div>'); MTCX.serverControl($('#scBox')); MTCX.promoCard($('#promoBox')); MTCX.botProfile($('#bpBox'));
+  $('#pane').insertAdjacentHTML('beforeend', '<div id="scBox"></div><div id="promoBox"></div><div id="thBox"></div><div id="bpBox"></div>'); MTCX.serverControl($('#scBox')); MTCX.promoCard($('#promoBox')); MTCX.seasonCard($('#thBox')); MTCX.botProfile($('#bpBox'));
   document.querySelectorAll('[data-dup]').forEach(b => b.onclick = () => MTCX.duplicate(b.dataset.dup).then(r => { toast('Copied as a draft. Set the new dates, then save.'); openNew(r.event); }).catch(x => toast(x.message, true)));
   document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { editing = b.dataset.edit; render(); });
   document.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => {

@@ -47,6 +47,7 @@
 
   /* pop-up video (trailer / announcement) set in Admin > Events */
   if (path !== '/admin.html') { const ps = document.createElement('script'); ps.src = '/assets/promo.js'; ps.defer = true; document.body.appendChild(ps); }
+  if (path !== '/admin.html') { const ss = document.createElement('script'); ss.src = '/assets/seasonal.js'; ss.defer = true; document.body.appendChild(ss); }   // snow, Diwali lights... (Admin > Seasonal theme)
 
   /* phone menu */
   const b = el.querySelector('#menuBtn');

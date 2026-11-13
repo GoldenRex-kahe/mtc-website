@@ -1795,6 +1795,7 @@ function describe(key, p, b, out, c) {
     case 'DELETE /api/admin/events/:id/files/:fid': return { kind: 'delete', icon: '🗑️', title: `Deleted an archive file from ${(c.event && c.event.title) || 'an event'}` };
     case 'PUT /api/admin/events/:id/files/:fid': return { kind: 'update', icon: '✏️', title: `Edited an archive file in ${(c.event && c.event.title) || 'an event'}`, details: [['Name', b.name], ['Members only', b.members === undefined ? '' : b.members ? 'Yes' : 'No']] };
     case 'POST /api/admin/backups': return { kind: 'other', icon: '💾', title: 'Made a backup', details: [['File', out.name]] };
+    case 'PUT /api/admin/theme': return { kind: 'update', icon: '🎨', title: `Set the seasonal theme: ${b.mode}` };
     case 'PUT /api/admin/bot-profile': return { kind: 'discord', icon: '🤖', title: `Changed the bot's ${[b.avatar !== undefined && (b.avatar ? 'avatar' : 'avatar (removed)'), b.banner !== undefined && (b.banner ? 'banner' : 'banner (removed)')].filter(Boolean).join(' and ')}` };
     default: return (community && community.describeExtra(key, p, b, out)) || { kind: 'other', icon: '•', title: key };
   }
@@ -1831,6 +1832,9 @@ const serverPlugin = require('./plugin')({ on, D, store, cfg, err, readBody, nee
 serverPlugin.NO_LOG.forEach(k => NO_LOG.add(k));
 // the bot's own avatar and banner (server/botprofile.js)
 require('./botprofile')({ on, cfg, err, readBody, needAdmin });
+// seasonal look (snow, Diwali lights...) (server/theme.js)
+const seasonal = require('./theme')({ on, D, store, err, readBody, needAdmin });
+seasonal.NO_LOG.forEach(k => NO_LOG.add(k));
 // pages get link-preview tags (title, text, picture, countdown) filled in on the server, so Discord and WhatsApp show them
 const pageCache = new Map();
 function serveHtml(res, rel, url) {

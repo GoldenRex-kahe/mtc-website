@@ -460,5 +460,32 @@
     };
   }
 
-  window.MTCX = { botProfile, serverControl, promoCard, community, season, stats, notes, modSummary, whitelist, checkCell, bindCheck, templateBar, duplicate, saveTemplate };
+  /* ---- seasonal theme: snow, Diwali lights, Pongal petals... ---- */
+  async function seasonCard(box) {
+    let d; try { d = await api('/api/admin/theme'); } catch { return; }
+    const DESC = { winter: 'Falling snow, a snowy edge on the menu', christmas: 'Snow and blinking lights', newyear: 'Fireworks, confetti and lights', pongal: 'Marigold petals and a warm sun',
+      diwali: 'Rising sparks, fireworks and diya lamps', halloween: 'Bats and embers', monsoon: 'Rain' };
+    const COL = { winter: '#9fd3ff', christmas: '#30d158', newyear: '#ffd60a', pongal: '#ff9f1c', diwali: '#ffb627', halloween: '#9d4edd', monsoon: '#64a8ff' };
+    const tile = (k, name, sub, col) => `<button type="button" class="th-tile${d.mode === k ? ' on' : ''}" data-th="${k}" style="--c:${col}"><b>${esc(name)}</b><small>${esc(sub)}</small>${k !== 'auto' && k !== 'off' ? `<a href="/?season=${k}" target="_blank" rel="noopener" data-prev>PREVIEW</a>` : ''}</button>`;
+    if (!document.getElementById('thCss')) document.head.insertAdjacentHTML('beforeend', `<style id="thCss">
+      .th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:12px}
+      .th-tile{position:relative;text-align:left;display:grid;gap:4px;padding:12px 12px 12px 16px;background:#0d0804;border:3px solid #000;color:var(--ink);cursor:pointer;box-shadow:inset 4px 0 0 var(--c)}
+      .th-tile b{font:10px/1.5 var(--display);letter-spacing:.04em}.th-tile small{font-size:13px;color:var(--soft);line-height:1.4}
+      .th-tile.on{outline:3px solid var(--accent);outline-offset:-3px;background:#1d130a}.th-tile.on b::after{content:" ✓";color:var(--accent)}
+      .th-tile a{justify-self:start;margin-top:4px;font:7px var(--display);color:var(--soft);text-decoration:underline}.th-tile a:hover{color:var(--accent)}</style>`);
+    const autoName = d.auto ? d.themes[d.auto] : 'nothing';
+    box.innerHTML = `<div class="card" style="margin-top:22px"><div class="row"><h2 style="margin:0;flex:1">SEASONAL THEME</h2><span class="badge ${d.active ? 'live' : 'withdrawn'}">${d.active ? 'SHOWING: ' + esc(d.themes[d.active].toUpperCase()) : 'OFF'}</span></div>
+      <p class="soft small">Pixel effects over the whole website for the time of year. They never block clicks, pause when the tab is hidden, and visitors can turn them off with a small button. People who ask their device for less motion get the decorations without moving parts.</p>
+      <div class="th-grid">
+        ${tile('auto', 'AUTO (BY DATE)', `Today: ${autoName}. New Year, Pongal, Diwali, Christmas, Halloween, then Winter (Dec–Feb) or Monsoon (mid Oct–Nov).`, '#f7931e')}
+        ${Object.entries(d.themes).map(([k, n]) => tile(k, n.toUpperCase(), DESC[k] || '', COL[k] || '#888')).join('')}
+        ${tile('off', 'OFF', 'No seasonal effects', '#555')}
+      </div></div>`;
+    box.querySelectorAll('[data-th]').forEach(b => b.onclick = e => {
+      if (e.target.closest('[data-prev]')) return;   // the preview link opens the home page with that season
+      api('/api/admin/theme', { method: 'PUT', body: { mode: b.dataset.th } }).then(r => { toast(r.active ? `Showing ${d.themes[r.active]} on the website.` : 'Seasonal effects are off.'); seasonCard(box); }).catch(x => toast(x.message, true));
+    });
+  }
+
+  window.MTCX = { seasonCard, botProfile, serverControl, promoCard, community, season, stats, notes, modSummary, whitelist, checkCell, bindCheck, templateBar, duplicate, saveTemplate };
 })();
