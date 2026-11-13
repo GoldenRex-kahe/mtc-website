@@ -62,8 +62,7 @@
   @keyframes szDrop{0%{transform:scale(.25);opacity:0}12%{opacity:1}68%{transform:scale(1) translateY(0);opacity:1}100%{transform:scale(1) translateY(48px);opacity:0}}
   .sz-glint{animation:szGlint var(--d,5s) ease-in-out var(--dl,0s) infinite}
   @keyframes szGlint{0%,78%,100%{opacity:0}88%{opacity:1}}
-  .mtcnav .brand{position:relative}
-  .sz-cap{position:absolute;left:-4px;top:-8px;width:44px;height:15px;pointer-events:none;z-index:2;overflow:visible}
+  .sz-caps{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:30}
   .sz-hello{position:fixed;left:50%;top:86px;z-index:47;transform:translateX(-50%);display:grid;justify-items:center;gap:5px;padding:13px 24px 12px;max-width:92vw;text-align:center;
     background:#0d0804db;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid color-mix(in srgb,var(--c) 55%,#0000);border-radius:14px;
     box-shadow:0 0 0 1px #000,0 14px 44px #000b,0 0 40px color-mix(in srgb,var(--c) 28%,#0000);cursor:pointer;animation:szHello .75s cubic-bezier(.2,1.25,.4,1) both}
@@ -82,7 +81,7 @@
   .sz-btn:hover em,.sz-btn:focus-visible em{opacity:1;transform:none}
   @media(max-width:760px){.sz-hello{padding:10px 16px}.sz-hello b{font-size:9px}.sz-hello span{font-size:12px}.sz-aurora{height:45vh}.sz-btn{width:40px;height:40px}}
   @media(prefers-reduced-motion:reduce){.sz-aurora,.sz-sun,.sz-swing,.sz-tw,.sz-flick,.sz-bob,.sz-thread,.sz-drop,.sz-glint,.sz-hello{animation:none!important}.sz-drop{opacity:0}}
-  @media print{.sz-fx,.sz-layer,.sz-deco,.sz-cap,.sz-hello,.sz-btn,.sz-sun{display:none}}`;
+  @media print{.sz-caps,.sz-fx,.sz-layer,.sz-deco,.sz-hello,.sz-btn,.sz-sun{display:none}}`;
   const addCss = () => { if (document.getElementById('szCss')) return; const s = document.createElement('style'); s.id = 'szCss'; s.textContent = CSS; document.head.appendChild(s); };
 
   // ================================================================ 1) the moving effects (canvas)
@@ -509,10 +508,7 @@
     }
     return `<rect x="0" y="-1" width="${W}" height="2" fill="#9cc8ff" opacity=".35"/>${drops}`;
   }
-  const CAP = `<svg class="sz-cap" viewBox="0 0 44 15" aria-hidden="true"><defs><linearGradient id="szCapG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#d6e7f8"/></linearGradient></defs>
-    <path d="M1 14C1 9 5 6 10 6C12 2 18 1 22 3C27 0 34 2 36 6C41 6 43 10 43 14Z" fill="#000" opacity=".3" transform="translate(0 1.2)"/><path d="M1 14C1 9 5 6 10 6C12 2 18 1 22 3C27 0 34 2 36 6C41 6 43 10 43 14Z" fill="url(#szCapG)"/>
-    <path d="M8 13.5q1 3.4 2 0M30 13.5q1 4.2 2 0" fill="#fff"/><circle class="sz-tw" cx="18" cy="5" r="1" fill="#fff"/></svg>`;
-  function clearDeco() { document.querySelectorAll('.sz-deco,.sz-cap').forEach(x => x.remove()); }
+  function clearDeco() { document.querySelectorAll('.sz-deco').forEach(x => x.remove()); }
   function decorate() {
     clearDeco(); const nav = document.getElementById('nav'); if (!nav) return;
     const w = Math.round(nav.getBoundingClientRect().width || innerWidth); if (w < 200) return;
@@ -526,8 +522,48 @@
         gr._k = setInterval(() => { a = Math.max(5, a * .94); gr.style.setProperty('--amp', a.toFixed(1) + 'deg'); if (a <= 5.05) clearInterval(gr._k); }, 50);
       }));
     }
-    if (key === 'winter' || key === 'christmas') { const b = nav.querySelector('.brand'); if (b) b.insertAdjacentHTML('afterbegin', CAP); }
   }
+
+  // ---- snow settled on the tops of cards and boxes (winter, Christmas)
+  const CAP_SEL = '.card, .ev, .cr, .pd, .tile, .box, .panel, .lbt, .sc-bar, .vid, .shot, .stchip, .c-hero';
+  let capBox = null, capT = 0, capMo = null, capRo = null;
+  function capSvg(w, seed) {
+    const r = seeded(seed * 97 + Math.round(w)), pts = [], step = Math.max(14, Math.min(28, w / 10));
+    for (let x = -3; x < w + 3; x += step) pts.push([x, 3 + r() * 6 + (r() < .2 ? 3 : 0)]);
+    pts.push([w + 3, 4 + r() * 3]);
+    // top of the snow: soft bumps; bottom: sits on the box edge (y = 13), with a couple of short drips
+    const top = smooth(pts.map(([x, y]) => [x, 13 - y]));
+    let drips = ''; for (let i = 0; i < Math.max(1, Math.round(w / 140)); i++) { const x = 8 + r() * (w - 16), L = 2 + r() * 4; drips += `<path d="M${f1(x - 2.2)} 12.5Q${f1(x - 1.2)} ${f1(13 + L)} ${f1(x)} ${f1(13.5 + L)}Q${f1(x + 1.2)} ${f1(13 + L)} ${f1(x + 2.2)} 12.5Z" fill="#eef6ff"/>`; }
+    let glints = ''; for (let i = 0; i < Math.max(1, Math.round(w / 90)); i++) { const x = 6 + r() * (w - 12); glints += `<circle class="sz-tw" cx="${f1(x)}" cy="${f1(6 + r() * 4)}" r=".9" fill="#fff" style="--d:${(1.8 + r() * 2.4).toFixed(1)}s;--dl:-${(r() * 4).toFixed(1)}s"/>`; }
+    const body = `${top}L${f1(w + 3)} 13.5L-3 13.5Z`;
+    return `<svg width="${f1(w + 6)}" height="22" viewBox="-3 0 ${f1(w + 6)} 22" aria-hidden="true" style="overflow:visible">
+      <path d="${body}" fill="#000" opacity=".35" transform="translate(0 1.6)" filter="url(#szCapBlur)"/>
+      <path d="${body}" fill="url(#szCapSnow)"/><path d="${top}" fill="none" stroke="#fff" stroke-width="1" opacity=".9"/>${drips}${glints}</svg>`;
+  }
+  function placeCaps() {
+    if (!capBox) return;
+    const els = [...document.querySelectorAll(CAP_SEL)].filter(el => {
+      if (el.closest('#nav, .sz-hello, .sc-stage, [hidden]')) return false;
+      if (el.parentElement && el.parentElement.closest(CAP_SEL)) return false;   // only the outer box gets snow
+      const b = el.getBoundingClientRect(); return b.width >= 90 && b.height >= 36 && getComputedStyle(el).visibility !== 'hidden';
+    }).slice(0, 70);
+    const html = els.map((el, i) => {
+      const b = el.getBoundingClientRect(), x = b.left + scrollX, y = b.top + scrollY;
+      return `<div style="position:absolute;left:${f1(x - 3)}px;top:${f1(y - 11)}px;width:${f1(b.width + 6)}px;height:22px">${capSvg(b.width, i + 1)}</div>`;
+    }).join('');
+    capBox.innerHTML = `<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="szCapSnow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#eef6ff"/><stop offset="1" stop-color="#cfe1f5"/></linearGradient><filter id="szCapBlur" x="-5%" y="-50%" width="110%" height="200%"><feGaussianBlur stdDeviation="1.2"/></filter></defs></svg>${html}`;
+  }
+  const queueCaps = () => { clearTimeout(capT); capT = setTimeout(placeCaps, 350); };
+  function startCaps() {
+    stopCaps(); if (key !== 'winter' && key !== 'christmas') return;
+    capBox = document.createElement('div'); capBox.className = 'sz-caps'; capBox.setAttribute('aria-hidden', 'true'); document.body.appendChild(capBox);
+    placeCaps(); setTimeout(placeCaps, 900); setTimeout(placeCaps, 2500);
+    // the pages fill in their cards after loading, and images change the layout: place the snow again when that happens
+    capMo = new MutationObserver(ms => { if (ms.some(m => !(m.target.closest && m.target.closest('.sz-caps, .sz-deco, .sz-hello')))) queueCaps(); });
+    capMo.observe(document.body, { childList: true, subtree: true });
+    if ('ResizeObserver' in window) { capRo = new ResizeObserver(queueCaps); capRo.observe(document.body); }
+  }
+  function stopCaps() { if (capMo) capMo.disconnect(); if (capRo) capRo.disconnect(); capMo = capRo = null; clearTimeout(capT); if (capBox) capBox.remove(); capBox = null; }
 
   // ================================================================ 3) colour layers, greeting, button
   function layers() {
@@ -577,12 +613,12 @@
   // ================================================================ start
   function apply(k) {
     key = SEASONS[k] ? k : ''; addCss(); document.documentElement.dataset.season = key;
-    stopFx(); clearDeco(); document.querySelectorAll('.sz-layer,.sz-sun,.sz-hello').forEach(x => x.remove());
-    if (key && ls.get('mtcFxOff') !== '1') { decorate(); layers(); startFx(); greet(); }
+    stopFx(); stopCaps(); clearDeco(); document.querySelectorAll('.sz-layer,.sz-sun,.sz-hello').forEach(x => x.remove());
+    if (key && ls.get('mtcFxOff') !== '1') { decorate(); layers(); startFx(); startCaps(); greet(); }
     button();
   }
   let rz = 0;
-  addEventListener('resize', () => { size(); clearTimeout(rz); rz = setTimeout(() => { if (key && ls.get('mtcFxOff') !== '1') decorate(); }, 200); });
+  addEventListener('resize', () => { size(); clearTimeout(rz); rz = setTimeout(() => { if (key && ls.get('mtcFxOff') !== '1') { decorate(); placeCaps(); } }, 200); });
   const start = () => {
     if (preview && (SEASONS[preview] || preview === 'off')) return apply(preview === 'off' ? '' : preview);
     let cached = null; try { cached = JSON.parse(ls.get('mtcTheme') || 'null'); } catch {}
