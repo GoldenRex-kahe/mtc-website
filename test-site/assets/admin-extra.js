@@ -393,5 +393,72 @@
     clearTimeout(box._t); box._t = setTimeout(() => { if (document.body.contains(box)) serverControl(box); }, 30000);
   }
 
-  window.MTCX = { serverControl, promoCard, community, season, stats, notes, modSummary, whitelist, checkCell, bindCheck, templateBar, duplicate, saveTemplate };
+  /* ---- the bot's own Discord avatar and banner ---- */
+  async function botProfile(box) {
+    let d; try { d = (await api('/api/admin/bot-profile')).bot; } catch (x) { box.innerHTML = `<div class="card" style="margin-top:22px"><h2 style="margin-top:0">BOT PROFILE</h2><p class="msg err">${esc(x.message)}</p></div>`; return; }
+    let evs = []; try { evs = ((await api('/api/events')).events || []).filter(e => e.banner); } catch {}
+    const pend = { avatar: undefined, banner: undefined };   // undefined = no change, null = remove, string = new picture
+    let bannerY = 50, bannerSrc = null, avatarSrc = null;
+    if (!document.getElementById('bpCss')) document.head.insertAdjacentHTML('beforeend', `<style id="bpCss">
+      .bp-wrap{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:22px;align-items:start}
+      .bp-prof{background:#111214;border:3px solid #000;border-radius:10px;overflow:hidden;box-shadow:0 10px 30px #0008}
+      .bp-ban{aspect-ratio:17/6;background:#5865f2 center/cover no-repeat}
+      .bp-av{width:92px;height:92px;border-radius:50%;border:7px solid #111214;margin:-48px 0 0 14px;background:#2b2d31 center/cover;position:relative}
+      .bp-meta{padding:6px 16px 16px}.bp-meta b{display:block;font:700 19px/1.3 Archivo,sans-serif;color:#f2f3f5}
+      .bp-meta span{font-size:13px;color:#b5bac1}.bp-meta em{font-style:normal;font-size:10px;font-weight:700;background:#5865f2;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:2px}
+      .bp-new{outline:3px dashed var(--accent);outline-offset:3px}
+      .bp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0 14px}
+      @media(max-width:760px){.bp-wrap{grid-template-columns:1fr}}</style>`);
+    const draw = () => {
+      const ban = pend.banner === undefined ? d.banner : pend.banner, av = pend.avatar === undefined ? d.avatar : pend.avatar;
+      $('#bpBan').style.backgroundImage = ban ? `url('${ban}')` : ''; $('#bpBan').style.backgroundColor = ban ? '' : (d.accent || '#5865f2');
+      $('#bpBan').classList.toggle('bp-new', pend.banner !== undefined); $('#bpAv').style.backgroundImage = av ? `url('${av}')` : ''; $('#bpAv').classList.toggle('bp-new', pend.avatar !== undefined);
+      const changes = Object.keys(pend).filter(k => pend[k] !== undefined);
+      $('#bpSave').disabled = !changes.length; $('#bpSave').textContent = changes.length ? 'SAVE ' + changes.map(k => k.toUpperCase()).join(' + ') : 'NOTHING TO SAVE';
+      $('#bpUndo').hidden = !changes.length; $('#bpY').closest('label').hidden = !bannerSrc;
+    };
+    // fit a picture into a box (cover), like Discord shows it; GIFs keep their animation and are sent as they are
+    const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('That picture could not be opened.')); i.src = src; });
+    const crop = async (src, W, H, y = 50) => { const i = await loadImg(src), c = document.createElement('canvas'); c.width = W; c.height = H;
+      const k = Math.max(W / i.width, H / i.height), w = i.width * k, h = i.height * k; c.getContext('2d').drawImage(i, (W - w) / 2, (H - h) * (y / 100), w, h);
+      const png = c.toDataURL('image/png'); return png.length < 7.5e6 ? png : c.toDataURL('image/jpeg', .9); };
+    const readFile = f => new Promise((ok, no) => { if (!/^image\/(png|jpeg|webp|gif)$/.test(f.type)) return no(new Error('Pick a PNG, JPG, WEBP or GIF picture.'));
+      if (f.size > 10 * 1024 * 1024) return no(new Error('That picture is over 10 MB.')); const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(f); });
+    const setBanner = async () => { pend.banner = /^data:image\/gif/.test(bannerSrc) ? bannerSrc : await crop(bannerSrc, 1360, 480, bannerY); draw(); };
+
+    box.innerHTML = `<div class="card" style="margin-top:22px"><div class="row"><h2 style="margin:0;flex:1">BOT PROFILE</h2><span class="badge live">${esc(d.name)}</span></div>
+      <p class="soft small">The picture and banner of the MTC bot in Discord. New pictures are cropped to Discord's shapes (avatar 1024×1024, banner 680×240 at 17:6). Animated GIFs are kept as they are. <b>Discord lets a bot change these only a few times an hour.</b></p>
+      <div class="bp-wrap">
+        <div><div class="bp-prof"><div class="bp-ban" id="bpBan"></div><div class="bp-av" id="bpAv"></div><div class="bp-meta"><b>${esc(d.name)}<em>APP</em></b><span>${esc(d.username)}</span></div></div>
+          <p class="soft small" style="margin-top:8px">Preview. Dashed outline = not saved yet.</p></div>
+        <div>
+          <label>Avatar</label><div class="bp-row"><label class="btn grey sm" style="margin:0">CHOOSE PICTURE<input type="file" id="bpAvF" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label></div>
+          <label>Banner</label><div class="bp-row"><label class="btn grey sm" style="margin:0">CHOOSE PICTURE<input type="file" id="bpBanF" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
+            ${evs.length ? `<select id="bpEv" style="width:auto;max-width:260px"><option value="">…or use an event banner</option>${evs.map(e => `<option value="${esc(e.banner)}">${esc(e.title)}</option>`).join('')}</select>` : ''}
+            ${d.banner ? '<button class="btn ghost sm" type="button" id="bpBanX">REMOVE BANNER</button>' : ''}</div>
+          <label hidden>Banner position (up / down) <input type="range" id="bpY" min="0" max="100" value="50"></label>
+          <div class="row" style="gap:8px;margin-top:10px"><button class="btn" type="button" id="bpSave" disabled>NOTHING TO SAVE</button><button class="btn ghost sm" type="button" id="bpUndo" hidden>UNDO</button></div>
+        </div>
+      </div></div>`;
+    draw();
+    const fail = x => toast(x.message || String(x), true);
+    $('#bpAvF').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      try { avatarSrc = await readFile(f); pend.avatar = /^data:image\/gif/.test(avatarSrc) ? avatarSrc : await crop(avatarSrc, 1024, 1024); draw(); } catch (x) { fail(x); } };
+    $('#bpBanF').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      try { bannerSrc = await readFile(f); bannerY = 50; $('#bpY').value = 50; await setBanner(); } catch (x) { fail(x); } };
+    if ($('#bpEv')) $('#bpEv').onchange = async e => { if (!e.target.value) return;
+      try { const blob = await (await fetch(e.target.value)).blob(); bannerSrc = await readFile(new File([blob], 'b', { type: blob.type })); bannerY = 50; $('#bpY').value = 50; await setBanner(); } catch (x) { fail(x); } };
+    $('#bpY').oninput = () => { bannerY = +$('#bpY').value; clearTimeout(botProfile.t); botProfile.t = setTimeout(() => setBanner().catch(fail), 60); };
+    if ($('#bpBanX')) $('#bpBanX').onclick = () => { bannerSrc = null; pend.banner = null; draw(); };
+    $('#bpUndo').onclick = () => { pend.avatar = undefined; pend.banner = undefined; bannerSrc = avatarSrc = null; if ($('#bpEv')) $('#bpEv').value = ''; draw(); };
+    $('#bpSave').onclick = async () => {
+      const body = {}; for (const k of ['avatar', 'banner']) if (pend[k] !== undefined) body[k] = pend[k];
+      if (!confirm(`Change the bot's ${Object.keys(body).join(' and ')} in Discord now?`)) return;
+      $('#bpSave').disabled = true; $('#bpSave').textContent = 'SAVING...';
+      try { await api('/api/admin/bot-profile', { method: 'PUT', body }); toast('Saved. Discord can take a minute to show it everywhere.'); botProfile(box); }
+      catch (x) { fail(x); draw(); }
+    };
+  }
+
+  window.MTCX = { botProfile, serverControl, promoCard, community, season, stats, notes, modSummary, whitelist, checkCell, bindCheck, templateBar, duplicate, saveTemplate };
 })();

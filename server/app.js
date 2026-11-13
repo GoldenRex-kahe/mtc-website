@@ -1795,6 +1795,7 @@ function describe(key, p, b, out, c) {
     case 'DELETE /api/admin/events/:id/files/:fid': return { kind: 'delete', icon: '🗑️', title: `Deleted an archive file from ${(c.event && c.event.title) || 'an event'}` };
     case 'PUT /api/admin/events/:id/files/:fid': return { kind: 'update', icon: '✏️', title: `Edited an archive file in ${(c.event && c.event.title) || 'an event'}`, details: [['Name', b.name], ['Members only', b.members === undefined ? '' : b.members ? 'Yes' : 'No']] };
     case 'POST /api/admin/backups': return { kind: 'other', icon: '💾', title: 'Made a backup', details: [['File', out.name]] };
+    case 'PUT /api/admin/bot-profile': return { kind: 'discord', icon: '🤖', title: `Changed the bot's ${[b.avatar !== undefined && (b.avatar ? 'avatar' : 'avatar (removed)'), b.banner !== undefined && (b.banner ? 'banner' : 'banner (removed)')].filter(Boolean).join(' and ')}` };
     default: return (community && community.describeExtra(key, p, b, out)) || { kind: 'other', icon: '•', title: key };
   }
 }
@@ -1828,6 +1829,8 @@ community.NO_LOG.forEach(k => NO_LOG.add(k));
 // the Minecraft plugin that opens and closes the event server (server/plugin.js)
 const serverPlugin = require('./plugin')({ on, D, store, cfg, err, readBody, needAdmin, evById, evBy, sessionOf });
 serverPlugin.NO_LOG.forEach(k => NO_LOG.add(k));
+// the bot's own avatar and banner (server/botprofile.js)
+require('./botprofile')({ on, cfg, err, readBody, needAdmin });
 // pages get link-preview tags (title, text, picture, countdown) filled in on the server, so Discord and WhatsApp show them
 const pageCache = new Map();
 function serveHtml(res, rel, url) {
