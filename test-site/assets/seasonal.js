@@ -527,18 +527,41 @@
   // ---- snow settled on the tops of cards and boxes (winter, Christmas)
   const CAP_SEL = '.card, .ev, .cr, .pd, .tile, .box, .panel, .lbt, .sc-bar, .vid, .shot, .stchip, .c-hero';
   let capBox = null, capT = 0, capMo = null, capRo = null;
+  // snow settled on a ledge: a soft, lumpy layer that is thicker in places, with rounded ends that curl over the box's sides.
+  // B is the box's top edge inside the drawing; nothing goes below it over the box (only past its left and right sides).
+  const CAP_B = 20, CAP_H = 30;
   function capSvg(w, seed) {
-    const r = seeded(seed * 97 + Math.round(w)), pts = [], step = Math.max(14, Math.min(28, w / 10));
-    for (let x = -3; x < w + 3; x += step) pts.push([x, 3 + r() * 6 + (r() < .2 ? 3 : 0)]);
-    pts.push([w + 3, 4 + r() * 3]);
-    // top of the snow: soft bumps; bottom: sits on the box edge (y = 13, inside its black border)
-    const top = smooth(pts.map(([x, y]) => [x, 13 - y]));
-    const drips = '';   // nothing hangs over the edge: the snow stays above the box, never over its text
-    let glints = ''; for (let i = 0; i < Math.max(1, Math.round(w / 90)); i++) { const x = 6 + r() * (w - 12); glints += `<circle class="sz-tw" cx="${f1(x)}" cy="${f1(6 + r() * 4)}" r=".9" fill="#fff" style="--d:${(1.8 + r() * 2.4).toFixed(1)}s;--dl:-${(r() * 4).toFixed(1)}s"/>`; }
-    const body = `${top}L${f1(w + 3)} 13.5L-3 13.5Z`;
-    return `<svg width="${f1(w + 6)}" height="22" viewBox="-3 0 ${f1(w + 6)} 22" aria-hidden="true" style="overflow:visible">
-      <path d="${body}" fill="#000" opacity=".35" transform="translate(0 -.6)" filter="url(#szCapBlur)"/>
-      <path d="${body}" fill="url(#szCapSnow)"/><path d="${top}" fill="none" stroke="#fff" stroke-width="1" opacity=".9"/>${drips}${glints}</svg>`;
+    const r = seeded(seed * 131 + Math.round(w) * 7), B = CAP_B, id = 'szc' + seed;
+    const T = Math.max(6, Math.min(12, w / 38));                 // usual thickness of the snow
+    // big drifts (every ~60px) + small lumps (every ~9px), blended smoothly
+    const big = []; for (let x = 0; x <= w + 60; x += 60) big.push(.5 + r() * .75);
+    const at = x => { const i = Math.floor(x / 60), u = x / 60 - i, a = big[i], b = big[i + 1] ?? a, k = (1 - Math.cos(u * Math.PI)) / 2; return a + (b - a) * k; };
+    const step = Math.max(6, Math.min(10, w / 40)), top = [];
+    const end = x => { const u = Math.min(x, w - x) / Math.min(26, w / 4); return u >= 1 ? 1 : Math.sqrt(Math.max(0, u * (2 - u))); };   // rounded ends
+    for (let x = 1; x < w - 1; x += step) top.push([x, B - T * at(x) * (.82 + r() * .28) * (.45 + .55 * end(x))]);
+    top.push([w - 1, B - T * at(w) * .5]);
+    // the ends hang a little past the box and droop down its sides
+    const oL = 2 + r() * 2.5, oR = 2 + r() * 2.5, dL = 3 + r() * 4, dR = 3 + r() * 4;
+    const ridge = smooth(top);
+    const body = `M${f1(-oL)} ${f1(B + dL)}C${f1(-oL - 1.6)} ${f1(B - 1)} ${f1(-1)} ${f1(top[0][1] - .5)} ${f1(top[0][0])} ${f1(top[0][1])}` + ridge.replace(/^M[^C]*/, '') +
+      `C${f1(w + 1)} ${f1(top[top.length - 1][1] - .5)} ${f1(w + oR + 1.6)} ${f1(B - 1)} ${f1(w + oR)} ${f1(B + dR)}` +
+      `Q${f1(w + oR * .4)} ${f1(B + dR + 1.2)} ${f1(w)} ${f1(B + 1.6)}L0 ${f1(B + 1.6)}Q${f1(-oL * .4)} ${f1(B + dL + 1.2)} ${f1(-oL)} ${f1(B + dL)}Z`;
+    // soft blue hollows between the lumps, and the shaded underside where the snow meets the box
+    let holes = ''; for (let i = 0; i < Math.max(2, Math.round(w / 70)); i++) { const x = 10 + r() * (w - 20), rx = 6 + r() * 12; holes += `<ellipse cx="${f1(x)}" cy="${f1(B - T * .45)}" rx="${f1(rx)}" ry="${f1(T * .22)}" fill="#7f9fc6" opacity="${(.16 + r() * .14).toFixed(2)}" filter="url(#szCapSoft)"/>`; }
+    let grains = ''; for (let i = 0; i < Math.round(w / 9); i++) { const x = 2 + r() * (w - 4), y = B - r() * T * .9; grains += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${(.35 + r() * .45).toFixed(2)}" fill="${r() < .5 ? '#fff' : '#b9cbe3'}" opacity="${(.5 + r() * .5).toFixed(2)}"/>`; }
+    let glints = ''; for (let i = 0; i < Math.max(1, Math.round(w / 110)); i++) { const x = 8 + r() * (w - 16), y = B - T * (.5 + r() * .4), s = 1.6 + r() * 1.4;
+      glints += `<path class="sz-tw" d="M${f1(x)} ${f1(y - s)}L${f1(x + s * .22)} ${f1(y - s * .22)} ${f1(x + s)} ${f1(y)} ${f1(x + s * .22)} ${f1(y + s * .22)} ${f1(x)} ${f1(y + s)} ${f1(x - s * .22)} ${f1(y + s * .22)} ${f1(x - s)} ${f1(y)} ${f1(x - s * .22)} ${f1(y - s * .22)}Z" fill="#fff" style="--d:${(2.2 + r() * 2.6).toFixed(1)}s;--dl:-${(r() * 4).toFixed(1)}s"/>`; }
+    return `<svg width="${f1(w + 12)}" height="${CAP_H}" viewBox="-6 0 ${f1(w + 12)} ${CAP_H}" aria-hidden="true" style="overflow:visible">
+      <defs><clipPath id="${id}"><path d="${body}"/></clipPath></defs>
+      <path d="${body}" fill="#000" opacity=".5" transform="translate(0 1.2)" filter="url(#szCapBlur)"/>
+      <path d="${body}" fill="url(#szCapSnow)"/>
+      <g clip-path="url(#${id})">
+        ${holes}
+        <path d="${ridge}" fill="none" stroke="#8eaad0" stroke-width="3" opacity=".28" transform="translate(0 3)" filter="url(#szCapBlur)"/>
+        <rect x="-8" y="${B - 2.2}" width="${f1(w + 16)}" height="6" fill="url(#szCapUnder)"/>
+        ${grains}
+      </g>
+      <path d="${ridge}" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" opacity=".95"/>${glints}</svg>`;
   }
   // only boxes you can see: a visible top border or a solid background (not see-through areas like the team skin stage)
   const alpha = c => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return 0; const v = m[1].split(/[ ,\/]+/).filter(Boolean); return v.length > 3 ? parseFloat(v[3]) : 1; };
@@ -557,9 +580,10 @@
     }).slice(0, 70);
     const html = els.map((el, i) => {
       const b = el.getBoundingClientRect(), x = b.left + scrollX, y = b.top + scrollY;
-      return `<div style="position:absolute;left:${f1(x - 3)}px;top:${f1(y - 11)}px;width:${f1(b.width + 6)}px;height:22px;clip-path:inset(-12px -12px 9px -12px)">${capSvg(b.width, i + 1)}</div>`;
+      const W = b.width + 12, L = 6 + 4, R = 6 + b.width - 4, E = CAP_B + 2;   // below the edge only past the box's sides (and its border)
+      return `<div style="position:absolute;left:${f1(x - 6)}px;top:${f1(y - CAP_B)}px;width:${f1(W)}px;height:${CAP_H}px;clip-path:polygon(-20px -20px,${f1(W + 20)}px -20px,${f1(W + 20)}px ${CAP_H}px,${f1(R)}px ${CAP_H}px,${f1(R)}px ${E}px,${f1(L)}px ${E}px,${f1(L)}px ${CAP_H}px,-20px ${CAP_H}px)">${capSvg(b.width, i + 1)}</div>`;
     }).join('');
-    capBox.innerHTML = `<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="szCapSnow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#eef6ff"/><stop offset="1" stop-color="#cfe1f5"/></linearGradient><filter id="szCapBlur" x="-5%" y="-50%" width="110%" height="200%"><feGaussianBlur stdDeviation="1.2"/></filter></defs></svg>${html}`;
+    capBox.innerHTML = `<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="szCapSnow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#f6faff"/><stop offset=".8" stop-color="#dde8f5"/><stop offset="1" stop-color="#b7c9e1"/></linearGradient><linearGradient id="szCapUnder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9db6d6" stop-opacity="0"/><stop offset=".45" stop-color="#9db6d6" stop-opacity=".55"/><stop offset="1" stop-color="#6f8db5" stop-opacity=".8"/></linearGradient><filter id="szCapBlur" x="-5%" y="-60%" width="110%" height="220%"><feGaussianBlur stdDeviation="1.1"/></filter><filter id="szCapSoft" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="2.2"/></filter></defs></svg>${html}`;
   }
   const queueCaps = () => { clearTimeout(capT); capT = setTimeout(placeCaps, 350); };
   function startCaps() {
