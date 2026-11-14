@@ -45,6 +45,31 @@
     addEventListener('scroll', onScroll, { passive: true }); onScroll();
   }
 
+  /* BETA tag (bottom right) while the website is new: set BETA to false to remove it */
+  const BETA = true;
+  if (BETA && path !== '/admin.html' && !document.getElementById('betaTag')) {
+    document.head.insertAdjacentHTML('beforeend', `<style>
+      #betaTag{position:fixed;right:14px;bottom:14px;z-index:44;display:flex;align-items:center;gap:7px;padding:7px 10px 7px 9px;background:#150e08ee;border:2px solid #000;box-shadow:0 0 0 2px #F7931E,0 6px 18px #0009;color:#F7EBD8;font:8px/1 "Press Start 2P",monospace;letter-spacing:.08em;cursor:default;user-select:none}
+      #betaTag i{width:6px;height:6px;background:#F7931E;box-shadow:0 0 6px #F7931E;animation:betaP 2s ease-in-out infinite}
+      #betaTag span{max-width:0;overflow:hidden;white-space:nowrap;font:600 12px/1 Archivo,system-ui,sans-serif;letter-spacing:0;color:#d9c8b0;transition:max-width .35s ease,margin .35s}
+      #betaTag:hover span,#betaTag:focus span{max-width:260px;margin-left:2px}
+      @keyframes betaP{50%{opacity:.35}}
+      @media(max-width:600px){#betaTag{right:10px;bottom:10px;padding:6px 8px;font-size:7px}}
+      @media(prefers-reduced-motion:reduce){#betaTag i{animation:none}}
+      @media print{#betaTag{display:none}}</style>`);
+    const t = document.createElement('div'); t.id = 'betaTag'; t.tabIndex = 0; t.setAttribute('role', 'note');
+    t.title = 'The website is in beta. Found a bug? Tell us on Discord.';
+    t.innerHTML = '<i aria-hidden="true"></i>BETA<span>Found a bug? Tell us on Discord.</span>';
+    document.body.appendChild(t);
+    // the announcement pop-up sits in the same corner: while it is showing, the tag moves up above it
+    let lift = 0;
+    const place = () => { const pop = document.querySelector('.mtc-promo.in'), h = pop ? Math.round(innerHeight - pop.getBoundingClientRect().top) : 0;
+      if (h !== lift) { lift = h; t.style.bottom = (h > 0 ? h + 12 : (innerWidth <= 600 ? 10 : 14)) + 'px'; } };
+    t.style.transition = 'bottom .45s cubic-bezier(.2,.9,.3,1.1)';
+    new MutationObserver(place).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    addEventListener('resize', place); setInterval(place, 1500);
+  }
+
   /* pop-up video (trailer / announcement) set in Admin > Events */
   if (path !== '/admin.html') { const ps = document.createElement('script'); ps.src = '/assets/promo.js'; ps.defer = true; document.body.appendChild(ps); }
   if (path !== '/admin.html') { const ss = document.createElement('script'); ss.src = '/assets/seasonal.js'; ss.defer = true; document.body.appendChild(ss); }   // snow, Diwali lights... (Admin > Seasonal theme)

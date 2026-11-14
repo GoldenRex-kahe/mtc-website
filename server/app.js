@@ -1569,11 +1569,17 @@ on('GET', '/api/admin/backups/:name', async (req, res, p) => {
 
 // ---------------------------------------------------------------- static files
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
+const NOT_FOUND = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page not found | MTC</title>
+<link rel="icon" type="image/png" href="/assets/favicon-32.png"><link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Archivo:wght@400;600&display=swap" rel="stylesheet">
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#150E08;color:#F7EBD8;font-family:Archivo,system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box">
+<main><img src="/assets/logo.png" alt="MTC" width="84" height="84" style="image-rendering:pixelated"><p style="font:44px/1 'Press Start 2P',monospace;color:#F7931E;margin:22px 0 12px;text-shadow:4px 4px 0 #000">404</p>
+<h1 style="font:13px/1.6 'Press Start 2P',monospace;margin:0 0 10px">THIS CHUNK DIDN'T LOAD</h1><p style="color:#c9b89e;margin:0 0 26px">The page you are looking for isn't here. It may have moved or never existed.</p>
+<a href="/" style="display:inline-block;font:10px 'Press Start 2P',monospace;background:#F7931E;color:#1a0f05;padding:14px 18px;border:3px solid #000;box-shadow:4px 4px 0 #000;text-decoration:none">BACK TO MTC</a></main>`;
 function serveFile(res, root, rel, cache) {
   const file = path.normalize(path.join(root, rel));
   if (!file.startsWith(root + path.sep) && file !== root) { res.writeHead(403); return res.end('Forbidden'); }
   fs.stat(file, (e, st) => {
-    if (e || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end('<!doctype html><meta charset="utf-8"><title>Not found</title><body style="background:#150E08;color:#F7EBD8;font-family:sans-serif;padding:40px"><h1>Page not found</h1><p><a style="color:#F7931E" href="/">Back to MTC</a></p>'); }
+    if (e || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(NOT_FOUND); }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': cache });
     fs.createReadStream(file).pipe(res);
   });
