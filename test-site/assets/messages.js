@@ -4,12 +4,13 @@
   const { $, esc, api, toast } = MTC;
   const md = t => (window.MTCmd ? MTCmd.md(t) : esc(t).replace(/\n/g, '<br>'));
   const blankEmbed = () => ({ title: '', description: '', url: '', color: '#F7931E', timestamp: '', author: { name: '', url: '', icon: '' }, thumbnail: '', footer: { text: '', icon: '' }, fields: [] });
-  const blank = () => ({ format: 'plain', content: '', embed: blankEmbed(), image: '' });
+  const blank = () => ({ format: 'plain', content: '', embed: blankEmbed(), image: '', images: [] });
+  const MAXPICS = 10;   // Discord takes up to 10 pictures in one message
   // drafts from older versions / history: fill in missing parts
   const norm = d => { d = d || blank(); const b = blankEmbed(), e = d.embed || {};
     const ft = typeof e.footer === 'string' ? { text: e.footer, icon: '' } : { ...b.footer, ...(e.footer || {}) };
     d.embed = { ...b, ...e, author: { ...b.author, ...(e.author || {}) }, footer: ft, fields: Array.isArray(e.fields) ? e.fields : [] };
-    d.image = d.image || ''; d.content = d.content || ''; d.format = d.format === 'embed' ? 'embed' : 'plain'; return d; };
+    d.images = (Array.isArray(d.images) ? d.images : [d.image]).filter(Boolean).slice(0, MAXPICS); d.image = d.images[0] || ''; d.content = d.content || ''; d.format = d.format === 'embed' ? 'embed' : 'plain'; return d; };
   const PICS = ['image', 'embed.thumbnail', 'embed.author.icon', 'embed.footer.icon'];
   const getP = (o, p) => p.split('.').reduce((a, k) => a && a[k], o);
   const setP = (o, p, v) => { const ks = p.split('.'), last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; };
@@ -18,7 +19,7 @@
     showOnSite: false, dmUsers: [], dmRoles: [], dmPing: { mention: false }, job: null };
   try { const saved = JSON.parse(sessionStorage.getItem('mtcMsg') || 'null'); if (saved) Object.assign(S, saved, { meta: null, members: null, job: null }); } catch {}
   S.drafts.post = norm(S.drafts.post); S.drafts.dm = norm(S.drafts.dm); S.dmPing = S.dmPing || { mention: false };
-  const keep = () => { try { const { meta, members, job, ...rest } = S; const d = clone(rest); for (const k of ['post', 'dm']) for (const p of PICS) if (String(getP(d.drafts[k], p) || '').startsWith('data:')) setP(d.drafts[k], p, ''); sessionStorage.setItem('mtcMsg', JSON.stringify(d)); } catch {} };
+  const keep = () => { try { const { meta, members, job, ...rest } = S; const d = clone(rest); for (const k of ['post', 'dm']) for (const p of PICS) if (String(getP(d.drafts[k], p) || '').startsWith('data:')) setP(d.drafts[k], p, ''); for (const k of ['post', 'dm']) { const dk = d.drafts[k]; dk.images = (dk.images || []).filter(x => !String(x).startsWith('data:')); dk.image = dk.images[0] || ''; } sessionStorage.setItem('mtcMsg', JSON.stringify(d)); } catch {} };
 
   let cssDone = false;
   function css() {
@@ -64,6 +65,17 @@
 .dc .em .fl b{display:block;color:#fff;font-size:13px}
 .dc .em .f{display:flex;gap:6px;align-items:center}.dc .em .f img{width:20px;height:20px;border-radius:50%}
 .dc .em img.att{grid-column:1/-1}
+.dc .att-g{display:grid;gap:3px;margin-top:8px;max-width:420px;border-radius:6px;overflow:hidden;grid-column:1/-1}
+.dc .att-g.n2,.dc .att-g.n4{grid-template-columns:1fr 1fr}.dc .att-g.n3{grid-template-columns:2fr 1fr;grid-template-rows:1fr 1fr}.dc .att-g.n3 img:first-child{grid-row:1/3}
+.dc .att-g.nm{grid-template-columns:repeat(3,1fr)}
+.dc .att-g img{width:100%;height:100%;aspect-ratio:16/10;object-fit:cover;display:block}.dc .att-g.n1 img{aspect-ratio:auto;max-height:300px;object-fit:contain}
+.mg-pics{border:2px dashed transparent;padding:4px;margin:0 -4px;transition:border-color .2s}.mg-pics.drop{border-color:var(--accent)}
+.mg-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-bottom:10px}
+.mg-gal figure{position:relative;margin:0;border:3px solid #000;background:#0d0804;aspect-ratio:1}
+.mg-gal img{width:100%;height:100%;object-fit:cover;display:block}
+.mg-main{position:absolute;left:3px;top:3px;background:var(--accent);color:var(--accent-ink);font:7px var(--display);padding:3px 4px}
+.mg-gb{position:absolute;right:3px;bottom:3px;display:flex;gap:3px}.mg-gb button{width:24px;height:24px;padding:0;border:2px solid #000;background:#000c;color:#fff;cursor:pointer;font-size:11px;line-height:1}
+.mg-gb button[data-gx]:hover{background:#c0392b}.mg-gb button:hover{background:#3a2c20}
 .mg-prog{height:14px;border:3px solid #000;background:#0d0804;margin:8px 0}.mg-prog i{display:block;height:100%;background:var(--accent);transition:width .3s}`;
     document.head.appendChild(s);
   }
@@ -102,7 +114,7 @@
       <label for="mg_c">${d.format === 'embed' ? 'Text above the embed <span class="soft">(optional)</span>' : 'Message'}</label>
       <textarea data-md id="mg_c" maxlength="2000" rows="${d.format === 'embed' ? 2 : 6}">${esc(d.content)}</textarea>
       ${d.format === 'embed' ? embedForm(d.embed) : ''}
-      <label>${d.format === 'embed' ? 'Big image <span class="soft">(at the bottom of the embed)</span>' : 'Image <span class="soft">(optional)</span>'}</label>${picField('image', d.image)}
+      <label>${d.format === 'embed' ? 'Images <span class="soft">(at the bottom of the embed; Discord shows up to 4 there as a grid, more are sent along under it)</span>' : 'Images <span class="soft">(optional, up to 10, shown as a gallery)</span>'}</label>${picsField(d.images)}
       ${isPost ? '' : '<p class="soft small" style="margin:10px 0 0">Tips: <code>{name}</code> becomes each person\'s name, <code>{mention}</code> pings them.</p>'}
       ${isPost ? `<label class="check" style="margin-top:14px"><input type="checkbox" id="mg_site"${S.showOnSite ? ' checked' : ''}> Also show on the website (home page news)</label>` : ''}
       <div class="row" style="margin-top:18px"><button class="btn" id="mg_send" type="button">${isPost ? 'POST' : 'SEND DMs'}</button>
@@ -123,6 +135,14 @@
     return `<div class="mg-pic" data-pic="${path}"><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Upload image">
       <input type="url" placeholder="or paste an image link (https://...)" value="${esc(link)}" aria-label="Image link">
       ${val ? `<img src="${esc(val)}" alt=""><button type="button" class="btn grey sm" data-nopic>REMOVE</button>` : ''}</div>`;
+  }
+  function picsField(list) {
+    return `<div class="mg-pics" id="mg_pics">
+      ${list.length ? `<div class="mg-gal">${list.map((v, i) => `<figure><img src="${esc(v)}" alt="Image ${i + 1}">${i === 0 && list.length > 1 ? '<span class="mg-main">MAIN</span>' : ''}
+        <div class="mg-gb">${i ? `<button type="button" data-gl="${i}" title="Move left" aria-label="Move image ${i + 1} left">←</button>` : ''}${i < list.length - 1 ? `<button type="button" data-gr="${i}" title="Move right" aria-label="Move image ${i + 1} right">→</button>` : ''}<button type="button" data-gx="${i}" title="Remove" aria-label="Remove image ${i + 1}">✕</button></div></figure>`).join('')}</div>` : ''}
+      ${list.length < MAXPICS ? `<div class="row" style="gap:8px;align-items:center"><label class="btn grey sm" style="margin:0;cursor:pointer">+ ADD IMAGES<input type="file" id="mg_gfile" multiple accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
+        <input type="url" id="mg_glink" placeholder="or paste an image link (https://...) and press Enter" aria-label="Image link" style="flex:1;min-width:200px"></div>
+        <p class="soft small" style="margin:6px 0 0">${list.length}/${MAXPICS} images${list.length ? ' · you can also paste or drop pictures here' : ' · you can pick several at once, paste or drop them here'}</p>` : `<p class="soft small" style="margin:6px 0 0">${MAXPICS}/${MAXPICS} images (Discord's limit)</p>`}</div>`;
   }
   function embedForm(e) {
     const ts = e.timestamp === 'now' ? 'now' : e.timestamp ? 'at' : '';
@@ -181,6 +201,23 @@
       w.querySelector('input[type=url]').onchange = () => { read(d); keep(); draw(pane); };
       const rm = w.querySelector('[data-nopic]'); if (rm) rm.onclick = () => { read(d); setP(d, p, ''); keep(); draw(pane); };
     });
+    // several images: pick, paste, drop, link; reorder; remove
+    const addFiles = async files => { read(d); files = [...files].filter(f => /^image\//.test(f.type));
+      const room = MAXPICS - d.images.length; if (!files.length) return; if (files.length > room) toast(`Only ${room} more image${room === 1 ? '' : 's'} fit (Discord takes ${MAXPICS}).`, true);
+      for (const f of files.slice(0, room)) { if (f.size > 5e6) { toast(`${f.name} is over 5 MB, skipped.`, true); continue; }
+        try { d.images.push(f.type === 'image/gif' ? await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); }) : await MTC.imageToDataUrl(f, 1600)); } catch (x) { toast(x.message, true); } }
+      d.image = d.images[0] || ''; keep(); draw(pane); };
+    const gf = $('#mg_gfile'); if (gf) gf.onchange = ev => addFiles(ev.target.files);
+    const gl = $('#mg_glink'); if (gl) gl.onkeydown = ev => { if (ev.key !== 'Enter') return; ev.preventDefault(); const u = gl.value.trim();
+      if (!/^https:\/\/\S+$/.test(u)) return toast('Paste a full link starting with https://', true); read(d); if (d.images.length < MAXPICS) d.images.push(u); d.image = d.images[0]; keep(); draw(pane); };
+    const gp = $('#mg_pics');
+    gp.onclick = e => { const b = e.target.closest('[data-gx],[data-gl],[data-gr]'); if (!b) return; read(d); const L = d.images;
+      if (b.dataset.gx) L.splice(+b.dataset.gx, 1);
+      else { const i = +(b.dataset.gl || b.dataset.gr), j = b.dataset.gl ? i - 1 : i + 1; [L[i], L[j]] = [L[j], L[i]]; }
+      d.image = L[0] || ''; keep(); draw(pane); };
+    gp.ondragover = e => { e.preventDefault(); gp.classList.add('drop'); }; gp.ondragleave = () => gp.classList.remove('drop');
+    gp.ondrop = e => { e.preventDefault(); gp.classList.remove('drop'); addFiles(e.dataTransfer.files); };
+    $('#mgBody').onpaste = e => { const fs = [...(e.clipboardData && e.clipboardData.files || [])]; if (fs.length && !e.target.closest('[data-pic]')) { e.preventDefault(); addFiles(fs); } };
     if (d.format === 'embed') {
       $('#mg_addf').onclick = () => { read(d); d.embed.fields.push({ name: '', value: '', inline: true }); keep(); draw(pane); const r = document.querySelectorAll('.mg-fld'); r[r.length - 1].querySelector('.fn').focus(); };
       document.querySelectorAll('[data-fx]').forEach(b => b.onclick = () => { read(d); d.embed.fields.splice(+b.dataset.fx, 1); keep(); draw(pane); });
@@ -228,22 +265,23 @@
     const text = (pings.length ? pings.map(p => `<span class="mention">${esc(p)}</span>`).join(' ') + (d.content ? '<br>' : '') : '') + (d.content ? md(fill(d.content)) : '');
     const e = d.embed, flds = e.fields.filter(x => x.name || x.value);
     const tsTxt = e.timestamp === 'now' ? 'Today at ' + new Date().toLocaleTimeString('en-IN', {hour: 'numeric', minute: '2-digit'}) : e.timestamp ? new Date(e.timestamp).toLocaleString('en-IN', {day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit'}) : '';
+    const gal = list => list.length ? `<div class="att-g n${list.length > 4 ? 'm' : list.length}">${list.map(v => `<img src="${esc(v)}" alt="">`).join('')}</div>` : '';
     const embed = d.format === 'embed' && (e.title || e.description || d.image || e.thumbnail || flds.length || e.author.name) ? `<div class="em" style="border-left-color:${esc(e.color)}">
       ${e.thumbnail ? `<img class="th" src="${esc(e.thumbnail)}" alt="">` : ''}
       ${e.author.name ? `<div class="au">${e.author.icon ? `<img src="${esc(e.author.icon)}" alt="">` : ''}${esc(fill(e.author.name))}</div>` : ''}
       ${e.title ? `<div class="t">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(fill(e.title))}</a>` : esc(fill(e.title))}</div>` : ''}
       ${e.description ? `<div class="d">${md(fill(e.description))}</div>` : ''}
       ${flds.length ? `<div class="fl">${flds.map(x => `<div class="${x.inline ? 'in' : ''}"><b>${esc(fill(x.name))}</b>${md(fill(x.value))}</div>`).join('')}</div>` : ''}
-      ${d.image ? `<img class="att" src="${esc(d.image)}" alt="">` : ''}
+      ${d.images.length === 1 ? `<img class="att" src="${esc(d.image)}" alt="">` : gal(d.images.slice(0, 4))}
       ${e.footer.text || tsTxt ? `<div class="f">${e.footer.icon && e.footer.text ? `<img src="${esc(e.footer.icon)}" alt="">` : ''}${esc(fill(e.footer.text))}${e.footer.text && tsTxt ? ' • ' : ''}${esc(tsTxt)}</div>` : ''}</div>` : '';
-    const img = d.format !== 'embed' && d.image ? `<img class="att" src="${esc(d.image)}" alt="">` : '';
+    const img = d.format !== 'embed' ? (d.images.length === 1 ? `<img class="att" src="${esc(d.image)}" alt="">` : gal(d.images)) : gal(d.images.slice(4));
     $('#mg_prev').innerHTML = `${isPost ? `<p class="small" style="margin:0 0 10px;color:#949ba4"># ${esc(chName)}</p>` : '<p class="small" style="margin:0 0 10px;color:#949ba4">Direct message</p>'}
       <div class="who"><div class="av"></div><div style="min-width:0;flex:1"><div class="nm">MTC<span>APP</span></div>
       <div class="tx">${text || (embed || img ? '' : '<span style="color:#949ba4">Your message shows here.</span>')}</div>${embed}${img}</div></div>`;
   }
-  const msgBody = d => ({ content: d.content, embed: d.format === 'embed' ? d.embed : null, image: d.image });
+  const msgBody = d => ({ content: d.content, embed: d.format === 'embed' ? d.embed : null, image: d.images[0] || '', images: d.images });
   // after sending, uploads become server paths: keep them in the draft so it can be sent again without re-uploading
-  const adopt = (d, m) => { d.image = m.image || ''; if (m.embed && d.format === 'embed') { d.embed.thumbnail = m.embed.thumbnail; d.embed.author.icon = m.embed.author.icon; d.embed.footer.icon = m.embed.footer.icon; } keep(); };
+  const adopt = (d, m) => { d.images = (m.images && m.images.length ? m.images : [m.image]).filter(Boolean); d.image = d.images[0] || ''; if (m.embed && d.format === 'embed') { d.embed.thumbnail = m.embed.thumbnail; d.embed.author.icon = m.embed.author.icon; d.embed.footer.icon = m.embed.footer.icon; } keep(); };
   async function send(d, isPost, pane) {
     read(d); const btn = $('#mg_send');
     try {
@@ -306,12 +344,12 @@
       const who = m.kind === 'channel' ? `#${esc(m.target.channel)}${m.ping && (m.ping.everyone || m.ping.here || m.ping.roles.length) ? ' · pinged ' + esc([m.ping.everyone && '@everyone', m.ping.here && '@here', ...m.ping.roles.map(r => '@' + roleName(r))].filter(Boolean).join(', ')) : ''}`
         : `DM to ${m.target.count} ${[...m.target.roles.map(r => esc(r) + ' role'), ...m.target.users.map(esc)].slice(0, 6).join(', ')}`;
       const res = m.kind === 'channel' ? (m.result.link ? `<a href="${esc(m.result.link)}" target="_blank" rel="noopener">open</a>` : '') : m.result.sending ? 'sending...' : `${m.result.sent} sent${m.result.failed ? `, ${m.result.failed} failed` : ''}`;
-      return `<div class="item" style="align-items:flex-start">${t.image ? `<img src="${esc(t.image)}" alt="" style="width:60px;height:60px;object-fit:cover;border:2px solid #000">` : ''}<div class="grow">
+      return `<div class="item" style="align-items:flex-start">${t.image ? `<span style="position:relative;flex:none"><img src="${esc(t.image)}" alt="" style="width:60px;height:60px;object-fit:cover;border:2px solid #000;display:block">${t.images && t.images.length > 1 ? `<b style="position:absolute;right:2px;bottom:2px;background:#000c;color:#fff;font-size:11px;padding:1px 4px">+${t.images.length - 1}</b>` : ''}</span>` : ''}<div class="grow">
         <b>${esc((e && (e.title || (e.author && e.author.name))) || t.content.split('\n')[0].slice(0, 80) || '(image)')}</b> <span class="badge ${m.kind === 'channel' ? 'live' : 'verified'}">${m.kind === 'channel' ? 'CHANNEL' : 'DM'}${e ? ' · EMBED' : ''}</span><br>
         <span class="soft small">${who} · ${esc(fmt(m.at))} by ${esc(m.by)} · ${res}</span></div>
         <div class="row"><button class="btn grey sm" data-re="${m.id}" data-to="post">USE AS POST</button><button class="btn grey sm" data-re="${m.id}" data-to="dm">USE AS DM</button></div></div>`; }).join('')}</div>` : '<p class="soft">Nothing sent yet.</p>';
     box.querySelectorAll('[data-re]').forEach(b => b.onclick = () => { const m = d.messages.find(x => x.id === b.dataset.re).message, to = b.dataset.to;
-      S.drafts[to] = norm({ format: m.embed ? 'embed' : 'plain', content: m.content, embed: m.embed ? clone(m.embed) : blankEmbed(), image: m.image || '' });
+      S.drafts[to] = norm({ format: m.embed ? 'embed' : 'plain', content: m.content, embed: m.embed ? clone(m.embed) : blankEmbed(), image: m.image || '', images: (m.images || []).slice() });
       S.sub = to; keep(); draw(pane); toast('Loaded into the ' + (to === 'dm' ? 'DM' : 'channel post') + ' composer.'); });
   }
   async function alerts(box) {

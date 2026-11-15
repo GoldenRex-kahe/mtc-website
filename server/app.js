@@ -1402,7 +1402,9 @@ function pic(v) {
 }
 function cleanMessage(m) {
   m = m && typeof m === 'object' ? m : {};
-  const out = { content: str(m.content, 2000), embed: null, image: pic(m.image) };
+  // several pictures (up to 10, Discord's limit); the first one is the main picture (old drafts only have `image`)
+  const imgs = (Array.isArray(m.images) ? m.images : [m.image]).filter(Boolean).slice(0, 10).map(pic);
+  const out = { content: str(m.content, 2000), embed: null, image: imgs[0] || '', images: imgs };
   if (m.embed && typeof m.embed === 'object') {
     const e = m.embed, au = e.author || {}, ft = typeof e.footer === 'string' ? { text: e.footer } : (e.footer || {});
     const ts = e.timestamp === 'now' ? 'now' : (e.timestamp && !isNaN(Date.parse(e.timestamp)) ? new Date(e.timestamp).toISOString() : '');
@@ -1434,6 +1436,9 @@ function payloadOf(m, { ping, name, mentionId } = {}) {
     if (!files.some(x => x.name === fname)) files.push({ name: fname, buf: fs.readFileSync(path.join(store.UPLOADS, n)), type: MIME[ext] || 'application/octet-stream' });
     return 'attachment://' + fname;
   };
+  // pictures outside an embed: uploads go as attachments (Discord shows them as a gallery), links go in the text
+  const imgs = (m.images && m.images.length ? m.images : [m.image]).filter(Boolean), linkTxt = [];
+  const loose = list => list.forEach((x, i) => { if (/^https:/.test(x)) linkTxt.push(x); else ref(x, 'pic' + (i + 1)); });
   const pre = [];
   if (ping && ping.everyone) pre.push('@everyone');
   if (ping && ping.here) pre.push('@here');
@@ -1447,15 +1452,16 @@ function payloadOf(m, { ping, name, mentionId } = {}) {
     if (e.title) em.title = fill(e.title); if (e.description) em.description = fill(e.description); if (e.url) em.url = e.url;
     if (e.author && e.author.name) { em.author = { name: fill(e.author.name) }; if (e.author.url) em.author.url = e.author.url; if (e.author.icon) em.author.icon_url = ref(e.author.icon, 'author'); }
     if (e.thumbnail) em.thumbnail = { url: ref(e.thumbnail, 'thumbnail') };
-    if (m.image) em.image = { url: ref(m.image, 'image') };
+    if (imgs[0]) em.image = { url: ref(imgs[0], 'image1') };
     if (e.fields && e.fields.length) em.fields = e.fields.map(x => ({ name: fill(x.name), value: fill(x.value), inline: x.inline }));
     if (e.footer && e.footer.text) { em.footer = { text: fill(e.footer.text) }; if (e.footer.icon) em.footer.icon_url = ref(e.footer.icon, 'footer'); }
     if (e.timestamp) em.timestamp = e.timestamp === 'now' ? new Date().toISOString() : e.timestamp;
     p.embeds = [em];
-  } else if (m.image) {
-    if (/^https:/.test(m.image)) p.content = [p.content, m.image].filter(Boolean).join('\n').slice(0, 2000);
-    else ref(m.image, 'image');
-  }
+    // Discord shows up to 4 pictures as a grid inside one embed: extra embeds with the same link and only a picture
+    if (imgs.length > 1) { const g = em.url || cfg.publicUrl + '/'; em.url = g; imgs.slice(1, 4).forEach((x, i) => p.embeds.push({ url: g, image: { url: ref(x, 'image' + (i + 2)) } })); }
+    loose(imgs.slice(4));   // more than 4: sent along as normal pictures
+  } else loose(imgs);
+  if (linkTxt.length) p.content = [p.content, ...linkTxt].filter(Boolean).join('\n').slice(0, 2000);
   return { payload: p, files };
 }
 function cleanPing(pg, roleIds) {
@@ -1500,7 +1506,7 @@ on('PUT', '/api/admin/alerts', async req => {
 on('GET', '/api/admin/messages', async req => { needAdmin(req); return { messages: D().messages.slice().reverse(), jobs: [...dmJobs.values()].filter(j => !j.done).map(jobView) }; });
 
 on('POST', '/api/admin/messages/channel', async req => {
-  const u = needAdmin(req); const b = await readBody(req);
+  const u = needAdmin(req); const b = await readBody(req, 40 * 1024 * 1024);   // room for several pictures
   const chs = await discord.channels(); const ch = chs.find(c => c.id === String(b.channelId || ''));
   if (!ch) throw err(400, 'Pick a channel.');
   const ping = cleanPing(b.ping, (await discord.roles()).map(r => r.id));
@@ -1520,7 +1526,7 @@ on('POST', '/api/admin/messages/channel', async req => {
 const dmJobs = new Map();
 const jobView = j => ({ id: j.id, total: j.total, sent: j.sent, failed: j.failed.length, done: j.done, failures: j.failed.slice(0, 50) });
 on('POST', '/api/admin/messages/dm', async req => {
-  const u = needAdmin(req); const b = await readBody(req);
+  const u = needAdmin(req); const b = await readBody(req, 40 * 1024 * 1024);   // room for several pictures
   if ([...dmJobs.values()].some(j => !j.done)) throw err(409, 'A DM batch is still sending. Wait for it to finish.');
   const mem = (await discord.allMembers(true)).members;
   const users = (Array.isArray(b.users) ? b.users : []).map(String), roleIds = (Array.isArray(b.roles) ? b.roles : []).map(String);

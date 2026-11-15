@@ -422,10 +422,15 @@ module.exports = function install(x) {
   // A scheduled post replays the same request the Messages tab would send, as the admin who scheduled it.
   on('GET', '/api/admin/scheduled', async req => { needAdmin(req); return { scheduled: list('scheduled').slice().sort((a, b) => a.at.localeCompare(b.at)).map(({ by, ...s }) => ({ ...s, byName: by.name })) }; });
   on('POST', '/api/admin/scheduled', async req => {
-    const u = needAdmin(req); const b = await readBody(req), at = isoOrNull(b.at);
+    const u = needAdmin(req); const b = await readBody(req, 40 * 1024 * 1024), at = isoOrNull(b.at);
     if (!at || new Date(at).getTime() < Date.now() + 30e3) throw err(400, 'Pick a time in the future.');
     if (!['channel', 'dm'].includes(b.kind)) throw err(400, 'Unknown message kind.');
     const body = b.body || {}, m = body.message || {};
+    // uploaded pictures are saved as files now, so the saved request stays small
+    const keepPic = v => typeof v === 'string' && v.startsWith('data:') ? saveImage(v) : v;
+    if (Array.isArray(m.images)) m.images = m.images.slice(0, 10).map(keepPic);
+    m.image = keepPic(m.image);
+    if (m.embed && typeof m.embed === 'object') { m.embed.thumbnail = keepPic(m.embed.thumbnail); if (m.embed.author) m.embed.author.icon = keepPic(m.embed.author.icon); if (m.embed.footer && typeof m.embed.footer === 'object') m.embed.footer.icon = keepPic(m.embed.footer.icon); }
     const s = { id: id(), kind: b.kind, at, body, status: 'waiting', by: u, summary: str((m.embed && m.embed.title) || m.content || 'Image', 100), target: str(b.targetLabel, 120), createdAt: now() };
     list('scheduled').push(s); store.save(); return { ok: true, id: s.id };
   });
