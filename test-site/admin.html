@@ -73,6 +73,8 @@ td input[type=text]{padding:7px 8px;font-size:14px;min-width:110px}
 const {$, esc, api, badge, when, toast, imageToDataUrl, tile, day, me} = MTC;
 MTC.nav('admin');
 let D = null, tab = sessionStorage.getItem('mtcTab') || 'events', editing = null, regFilter = '';
+// links from Discord alerts open a tab: admin.html#creators, #media, #regs...
+{ const h = location.hash.slice(1); if (/^[a-z]+$/.test(h)) { tab = h; sessionStorage.setItem('mtcTab', h); history.replaceState(null, '', location.pathname + location.search); } }
 const TYPES = {survival: 'Survival', minigame: 'Minigame', build: 'Build', pvp: 'PvP', other: 'Other'};
 const STATUSES = ['draft', 'soon', 'open', 'live', 'completed', 'unsuccessful', 'cancelled'];
 const evName = id => (D.events.find(e => e.id === id) || {}).title || 'Deleted event';

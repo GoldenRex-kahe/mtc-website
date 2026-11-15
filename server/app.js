@@ -1101,6 +1101,8 @@ on('PUT', '/api/me/setup', async req => {
       for (const q of D().profiles) if (q.userId === u.uid && q.status === 'pending') q.status = 'replaced';
       D().profiles.push({ id: store.id(), userId: u.uid, username: u.un, name: u.name, youtube, mc: real, socials: {}, featured: null, skin: rec.skin || '', status: 'pending', submittedAt: store.now() });
       sent = true;
+      alertStaff('profile', { title: '⭐ Creator verification request', text: `**${u.name}** (@${u.un}) asked to be verified as a creator.`, tab: 'creators',
+        fields: [{ name: '📺 YouTube', value: youtube, inline: false }, { name: '🧱 Minecraft', value: `${real}${edition === 'bedrock' ? ' (Bedrock)' : edition === 'offline' ? ' (Offline)' : ' (Java)'}`, inline: true }, { name: '👤 Discord', value: `<@${u.uid}>`, inline: true }] });
     }
   }
   rec.setupAt = rec.setupAt || store.now();
@@ -1119,7 +1121,10 @@ on('PUT', '/api/me/profile', async req => {
   for (const q of list) if (q.userId === u.uid && q.status === 'pending') q.status = 'replaced';
   list.push({ id: store.id(), userId: u.uid, username: u.un, name: u.name, youtube, mc, mcEdition, socials, featured, skin, status: 'pending', submittedAt: store.now() });
   store.save();
-  alertStaff('profile', { title: '⭐ Creator profile to review', text: `**${u.name}** (@${u.un}) sent their channel: ${youtube}`, tab: 'creators' });
+  const exx = yt.readExtras(), was = !!((exx[u.uid] || exx[(u.un || '').toLowerCase()] || {}).verified);   // already verified: this is an update
+  alertStaff('profile', { title: was ? '✏️ Creator profile update to review' : '⭐ Creator verification request', text: `**${u.name}** (@${u.un}) ${was ? 'changed their creator profile and it needs approval.' : 'asked to be verified as a creator.'}`, tab: 'creators',
+    fields: [{ name: '📺 YouTube', value: youtube, inline: false }, { name: '🧱 Minecraft', value: mc ? `${mc}${mcEdition === 'bedrock' ? ' (Bedrock)' : mcEdition === 'offline' ? ' (Offline)' : ' (Java)'}` : '', inline: true }, { name: '👤 Discord', value: `<@${u.uid}>`, inline: true },
+      { name: '🔗 Socials', value: Object.keys(socials || {}).filter(k => socials[k]).join(', '), inline: true }, { name: '🎨 New skin', value: skin ? 'Yes' : '', inline: true }] });
   return { ok: true };
 });
 on('POST', '/api/events/:slug/media', async (req, res, p) => {
