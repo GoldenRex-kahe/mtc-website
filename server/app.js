@@ -1906,6 +1906,7 @@ const server = http.createServer(async (req, res) => {
 });
 // ---------------------------------------------------------------- the Discord bot: online status + slash commands
 const SITE = () => cfg.publicUrl;
+const MC_EMOJI = '<a:minecraft:1571434264761733222>';   // animated Minecraft emoji from the MTC Discord (only shows in text and field values, not titles)
 const pageOfEvent = e => SITE() + '/event.html?slug=' + encodeURIComponent(e.slug);
 const ORANGE = 0xF7931E;
 const COMMANDS = [
@@ -2022,7 +2023,7 @@ async function onCommand(it) {
     return reply(it, { embeds: [{ author: { name: `${name}${tu.username ? ' · @' + tu.username : ''}`, ...(avatar ? { icon_url: avatar } : {}) },
       title: verified ? `⭐ ${x.channelName || name}` : name, color: verified ? 0x4c9a2a : ORANGE,
       thumbnail: { url: x.logo ? (x.logo.startsWith('http') ? x.logo : SITE() + x.logo) : st.mc ? `https://mc-heads.net/avatar/${encodeURIComponent(st.mc)}/96` : avatar || SITE() + '/assets/logo.png' },
-      fields: [{ name: '⛏️ Minecraft', value: st.mc ? `${st.mc}${mcOf(tu.id, tu.username).edition === 'bedrock' ? ' (Bedrock)' : mcOf(tu.id, tu.username).edition === 'offline' ? ' (Offline)' : ' (Java)'}` : 'not set (`/setmc`)', inline: true }, { name: '🎮 Events played', value: String(st.played), inline: true }, { name: '🏆 Wins', value: String(st.wins), inline: true },
+      fields: [{ name: '🧱 Minecraft', value: st.mc ? `${MC_EMOJI} ${st.mc}${mcOf(tu.id, tu.username).edition === 'bedrock' ? ' (Bedrock)' : mcOf(tu.id, tu.username).edition === 'offline' ? ' (Offline)' : ' (Java)'}` : 'not set (`/setmc`)', inline: true }, { name: '🎮 Events played', value: String(st.played), inline: true }, { name: '🏆 Wins', value: String(st.wins), inline: true },
         { name: '🥇 Top 3', value: String(st.podiums), inline: true }, { name: '✅ Creator', value: verified ? 'Verified' : 'Not yet', inline: true }],
       footer: { text: 'MC Thamizh Creators' } }], ...(buttons.filter(Boolean).length ? { components: linkRow(buttons.filter(Boolean)) } : {}) });
   }
@@ -2030,7 +2031,7 @@ async function onCommand(it) {
     const r = await discord.creatorMembers().catch(() => null), list = r ? publicCreators(r.members) : [];
     if (!list.length) return reply(it, note('⭐ Creators', 'No verified creators yet.'));
     return reply(it, { embeds: [{ title: `⭐ Verified MTC creators (${list.length})`, color: ORANGE, url: SITE() + '/#creators',
-      description: list.slice(0, 30).map(c => `• [${c.name}](${SITE()}/creator.html?u=${encodeURIComponent(c.username)})${c.mc ? ` · ⛏️ ${c.mc}` : ''}`).join('\n').slice(0, 4000), footer: { text: 'MC Thamizh Creators' } }],
+      description: list.slice(0, 30).map(c => `• [${c.name}](${SITE()}/creator.html?u=${encodeURIComponent(c.username)})${c.mc ? ` · ${MC_EMOJI} ${c.mc}` : ''}`).join('\n').slice(0, 4000), footer: { text: 'MC Thamizh Creators' } }],
       components: linkRow([{ label: 'All creators', url: SITE() + '/#creators', emoji: '⭐' }]) });
   }
   if (cmd === 'server') {
