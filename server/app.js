@@ -226,7 +226,10 @@ function publicCreators(members) {
 // ---------------------------------------------------------------- event fields from the admin form
 // --- Discord alerts: DMs to members when an admin decides something, and a staff channel for new things to review
 const ALERT_KINDS = { registration: 'Event registrations', media: 'Showcase uploads', profile: 'Creator profiles', application: 'Join applications', member: 'Member verified / blocked / warned', reminder: 'Event reminders (1 hour and 10 min before)', community: 'Badges, ideas, polls and feedback' };
-const alertCfg = () => { const a = D().settings.alerts || {}; return { reportFails: a.reportFails !== false, logChannel: a.logChannel || '', dm: { ...Object.fromEntries(Object.keys(ALERT_KINDS).map(k => [k, true])), ...(a.dm || {}) }, staffChannel: a.staffChannel || '', staff: { ...Object.fromEntries(Object.keys(ALERT_KINDS).map(k => [k, true])), ...(a.staff || {}) } }; };
+const alertCfg = () => { const a = D().settings.alerts || {}; return { reportFails: a.reportFails !== false, logChannel: a.logChannel || '', dm: { ...Object.fromEntries(Object.keys(ALERT_KINDS).map(k => [k, true])), ...(a.dm || {}) }, staffChannel: a.staffChannel || '', staff: { ...Object.fromEntries(Object.keys(ALERT_KINDS).map(k => [k, true])), ...(a.staff || {}) },
+  // staff role pinged on alerts that need someone to review (creator verification, showcase uploads, join applications)
+  staffRole: a.staffRole !== undefined ? a.staffRole : STAFF_ROLE, staffPing: { ...Object.fromEntries(Object.keys(ALERT_KINDS).map(k => [k, PING_KINDS.includes(k)])), ...(a.staffPing || {}) } }; };
+const STAFF_ROLE = '1571445641421389885', PING_KINDS = ['profile', 'media', 'application'];
 const COL = { ok: 0x4c9a2a, no: 0xa63a2b, info: 0x3a78b8, new: 0xF7931E };
 const logAlert = x => { const l = D().settings.alertLog = D().settings.alertLog || []; l.push({ id: store.id(), at: store.now(), ...x }); if (l.length > 200) l.splice(0, l.length - 200); return l[l.length - 1]; };
 const dmError = e => e.code === 50007 ? 'Discord would not deliver it: their DMs are closed, or they left the server.' : e.code === 10013 ? 'That Discord account no longer exists.' : e.status === 429 ? 'Discord asked the bot to slow down. Try again in a minute.' : e.message;
@@ -270,7 +273,8 @@ const failedDmCount = () => (D().settings.alertLog || []).filter(x => x.ok === f
 function alertStaff(kind, { title, text, fields = [], tab = '' }) {
   const c = alertCfg(); if (!c.staffChannel || !c.staff[kind] || !discord.ready()) return;
   const embed = { title: title.slice(0, 256), description: String(text || '').slice(0, 4000), color: COL.new, fields: fields.filter(f => f && f.value).slice(0, 10), footer: { text: 'MTC website' }, timestamp: new Date().toISOString() };
-  discord.send(c.staffChannel, { embeds: [embed], components: linkRow([{ label: 'Open admin', url: cfg.publicUrl + '/admin.html' + (tab ? '#' + tab : ''), emoji: '🛠️' }]), allowed_mentions: { parse: [] } })
+  const ping = c.staffRole && c.staffPing[kind] ? c.staffRole : '';
+  discord.send(c.staffChannel, { ...(ping ? { content: `<@&${ping}> something needs review` } : {}), embeds: [embed], components: linkRow([{ label: 'Open admin', url: cfg.publicUrl + '/admin.html' + (tab ? '#' + tab : ''), emoji: '🛠️' }]), allowed_mentions: { parse: [], roles: ping ? [ping] : [] } })
     .catch(e => { logAlert({ kind, to: 'staff channel', title, ok: false, error: e.message }); store.save(); });
 }
 audit.init({ send: (ch, payload) => discord.send(ch, payload), channel: () => (discord.ready() ? alertCfg().logChannel : '') });
@@ -1505,7 +1509,8 @@ on('PUT', '/api/admin/alerts', async req => {
   const chs = b.staffChannel || b.logChannel ? await discord.channels() : [];
   if (b.staffChannel) { if (!chs.some(c => c.id === String(b.staffChannel))) throw err(400, 'That channel is not in the server.'); staffChannel = String(b.staffChannel); }
   let logChannel = ''; if (b.logChannel) { if (!chs.some(c => c.id === String(b.logChannel))) throw err(400, 'That log channel is not in the server.'); logChannel = String(b.logChannel); }
-  D().settings.alerts = { dm: pick(b.dm), staff: pick(b.staff), staffChannel, logChannel, reportFails: b.reportFails !== false }; store.save();
+  let staffRole = ''; if (b.staffRole) { if (!(await discord.roles()).some(r => r.id === String(b.staffRole))) throw err(400, 'That staff role is not in the server.'); staffRole = String(b.staffRole); }
+  D().settings.alerts = { dm: pick(b.dm), staff: pick(b.staff), staffChannel, logChannel, staffRole, staffPing: pick(b.staffPing), reportFails: b.reportFails !== false }; store.save();
   return { ok: true, alerts: alertCfg() };
 });
 on('GET', '/api/admin/messages', async req => { needAdmin(req); return { messages: D().messages.slice().reverse(), jobs: [...dmJobs.values()].filter(j => !j.done).map(jobView) }; });

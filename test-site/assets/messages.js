@@ -367,7 +367,8 @@
       <div class="card accent" style="margin:0"><h2>STAFF ALERTS</h2>
         <p class="soft small">Post a note in a staff channel when something new needs review on the website.</p>
         <label for="al_ch">Staff channel</label><select id="al_ch">${opts}${cat !== null ? '</optgroup>' : ''}</select>
-        ${kinds.filter(([k]) => k !== 'member').map(([k, l]) => `<label class="check"><input type="checkbox" data-st="${k}"${a.staff[k] ? ' checked' : ''}> New ${esc(l.toLowerCase())}</label>`).join('')}
+        <label for="al_role">Staff role to ping <span class="soft">(on the alerts ticked "ping")</span></label><select id="al_role"><option value="">Nobody (no ping)</option>${S.meta.roles.map(r => `<option value="${r.id}"${r.id === a.staffRole ? ' selected' : ''}>@${esc(r.name)}</option>`).join('')}</select>
+        ${kinds.filter(([k]) => k !== 'member').map(([k, l]) => `<div class="row" style="gap:10px;align-items:center;flex-wrap:nowrap"><label class="check" style="flex:1"><input type="checkbox" data-st="${k}"${a.staff[k] ? ' checked' : ''}> New ${esc(l.toLowerCase())}</label><label class="check small" style="margin:0;white-space:nowrap" title="Ping the staff role on this alert"><input type="checkbox" data-sp="${k}"${a.staffPing[k] ? ' checked' : ''}> ping</label></div>`).join('')}
         <label class="check" style="margin-top:12px"><input type="checkbox" id="al_fail"${a.reportFails ? ' checked' : ''}> <b>⚠️ Report DMs that could not be delivered</b> <span class="soft small">(goes to the staff channel, or the log channel if no staff channel is set)</span></label></div></div>
       <div class="card accent" style="margin-top:18px"><h2>ACTIVITY LOG CHANNEL</h2>
         <p class="soft small">Every change made on the website, by admins and members (approvals, edits, deletes, posts, DMs, logins, registrations, uploads, applications), is posted here. Use a private staff-only channel. You can also read it in the ACTIVITY tab.</p>
@@ -408,7 +409,7 @@
     drawLog();
     $('#al_save').onclick = async () => {
       const dm = {}, staff = {}; box.querySelectorAll('[data-dm]').forEach(c => dm[c.dataset.dm] = c.checked); box.querySelectorAll('[data-st]').forEach(c => staff[c.dataset.st] = c.checked); staff.member = false;
-      try { await api('/api/admin/alerts', {method: 'PUT', body: {dm, staff, staffChannel: $('#al_ch').value, logChannel: $('#al_log').value, reportFails: $('#al_fail').checked}}); toast('Alert settings saved.'); } catch (x) { toast(x.message, true); }
+      try { await api('/api/admin/alerts', {method: 'PUT', body: {dm, staff, staffPing: Object.fromEntries([...document.querySelectorAll('[data-sp]')].map(c => [c.dataset.sp, c.checked])), staffRole: $('#al_role').value, staffChannel: $('#al_ch').value, logChannel: $('#al_log').value, reportFails: $('#al_fail').checked}}); toast('Alert settings saved.'); } catch (x) { toast(x.message, true); }
     };
   }
   async function news(box) {
