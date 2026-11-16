@@ -562,13 +562,17 @@ function creatorsTab() {
     norole: ['NO CREATOR ROLE', 'They are in the Discord but do not have the Creator role. Give them the role in Discord and they come back by themselves.'],
     gone: ['NOT FOUND IN DISCORD', 'No member with this name and the website could not tell who it is now. If they changed their Discord username, press LINK TO MEMBER and type the new one. If they left, they come back when they rejoin with the Creator role.'],
     nologo: ['NO LOGO', 'Their channel picture could not be saved. Verify them again under VERIFY A CREATOR.'], unknown: ['UNKNOWN', 'Discord could not be checked right now.'], other: ['NOT SHOWING', '']};
+  const bindDel = () => document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (!confirm(`Delete the creator profile of ${b.dataset.nm}?\n\nTheir channel link, logo, socials and skin are removed and they leave the Creators page. They stay in the Discord and can be verified again later.`)) return;
+    act(() => api('/api/admin/creators/delete', {method: 'POST', body: {key: b.dataset.del}}), r => `Deleted ${r.name}.`); });
   api('/api/admin/creators/missing').then(h => {
     $('#hid_n').textContent = h.creators.length ? `(${h.creators.length})` : '';
     $('#hid').innerHTML = h.creators.length ? h.creators.map(c => `<div class="item" style="align-items:flex-start">${c.logo ? `<img src="${esc(c.logo)}" alt="" style="width:40px;height:40px;border:2px solid #000">` : '<b style="width:40px;height:40px;border:2px solid #000;display:grid;place-items:center">?</b>'}
       <div class="grow"><b>${esc(c.name)}</b> <span class="badge ${c.reason === 'hidden' ? 'pending' : 'rejected'}">${WHY[c.reason][0]}</span><br>
         <span class="soft small">${c.username ? '@' + esc(c.username) + ' · ' : ''}<a href="${esc(c.youtube)}" target="_blank" rel="noopener">YouTube</a></span>
         ${WHY[c.reason][1] ? `<p class="soft small" style="margin:4px 0 0">${esc(WHY[c.reason][1])}</p>` : ''}</div>
-      ${c.reason === 'hidden' ? `<button class="btn green sm" data-show="${esc(c.key)}">SHOW AGAIN</button>` : c.reason === 'gone' ? `<button class="btn sm" data-link="${esc(c.key)}" title="They changed their Discord username: pick who they are now">LINK TO MEMBER</button>` : ''}</div>`).join('') : '<p class="soft">Nobody. Everyone with a channel set up is on the Creators page.</p>';
+      ${c.reason === 'hidden' ? `<button class="btn green sm" data-show="${esc(c.key)}">SHOW AGAIN</button>` : c.reason === 'gone' ? `<button class="btn sm" data-link="${esc(c.key)}" title="They changed their Discord username: pick who they are now">LINK TO MEMBER</button>` : ''}<button class="btn ghost sm" data-del="${esc(c.key)}" data-nm="${esc(c.name)}" title="Delete their creator profile">🗑 DELETE</button></div>`).join('') : '<p class="soft">Nobody. Everyone with a channel set up is on the Creators page.</p>';
+    bindDel();
     document.querySelectorAll('[data-link]').forEach(b => b.onclick = () => { const n = prompt('Their Discord username now (for example zedx_mc):', ''); if (!n || !n.trim()) return;
       act(() => api('/api/admin/creators/relink', {method: 'POST', body: {key: b.dataset.link, username: n.trim()}}), r => `${r.name} is linked to @${r.username}.`); });
     document.querySelectorAll('[data-show]').forEach(b => b.onclick = () => act(() => api('/api/admin/creators/show', {method: 'POST', body: {key: b.dataset.show}}), r => r.name + ' is back on the Creators page.'));
@@ -577,9 +581,10 @@ function creatorsTab() {
     const drawVer = () => { const q = ($('#ver_q').value || '').trim().toLowerCase();
       const list = d.creators.filter(c => !q || c.name.toLowerCase().includes(q) || c.username.toLowerCase().includes(q));
       $('#ver_n').textContent = `${d.creators.length} of ${d.total}`;
-      $('#ver').innerHTML = list.length ? list.map(c => `<div class="item"><img src="${esc(c.logo)}" alt="" style="width:40px;height:40px;border:2px solid #000"><div class="grow"><b>${esc(c.name)}</b><br><span class="soft small">@${esc(c.username)}</span></div><button class="btn sm" data-ed="${esc(c.id)}">EDIT</button><button class="btn red sm" data-un="${esc(c.username)}">HIDE</button></div>`).join('') : '<p class="soft">No match.</p>';
+      $('#ver').innerHTML = list.length ? list.map(c => `<div class="item"><img src="${esc(c.logo)}" alt="" style="width:40px;height:40px;border:2px solid #000"><div class="grow"><b>${esc(c.name)}</b><br><span class="soft small">@${esc(c.username)}</span></div><button class="btn sm" data-ed="${esc(c.id)}">EDIT</button><button class="btn red sm" data-un="${esc(c.username)}">HIDE</button><button class="btn ghost sm" data-del="${esc(c.id)}" data-nm="${esc(c.name)}" title="Delete their creator profile">🗑 DELETE</button></div>`).join('') : '<p class="soft">No match.</p>';
       document.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => { pendingEdit = b.dataset.ed; tab = 'members'; sessionStorage.setItem('mtcTab', tab); render(); });
       document.querySelectorAll('[data-un]').forEach(b => b.onclick = () => { if (confirm('Hide ' + b.dataset.un + ' from the Creators page?')) act(() => api('/api/admin/creators/unverify', {method: 'POST', body: {username: b.dataset.un}}), 'Hidden.'); });
+      bindDel();
     };
     $('#ver_q').oninput = drawVer; drawVer();
     return;

@@ -1435,6 +1435,17 @@ on('POST', '/api/admin/creators/relink', async req => {
   moveCreator(ex, key, m); yt.writeExtras(ex);
   return { ok: true, name: ex[m.id].channelName || m.username, username: m.username };
 });
+// delete a creator's profile (channel, logo, socials, skin). It is kept in a hidden "_trash" list in creators-extra.json,
+// so a mistake can still be undone by hand; the person can be verified again any time.
+on('POST', '/api/admin/creators/delete', async req => {
+  needAdmin(req); const b = await readBody(req), raw = str(b.key, 40), ex = yt.readExtras();
+  const key = ex[raw] ? raw : Object.keys(ex).find(k => k[0] !== '_' && ex[k] && String(ex[k].username || '').toLowerCase() === raw.toLowerCase()) || (ex[raw.toLowerCase()] ? raw.toLowerCase() : '');
+  if (!key || key[0] === '_') throw err(404, 'No creator entry with that name.');
+  const x = ex[key]; ex._trash = (ex._trash || []).concat({ key, at: store.now(), entry: x }).slice(-50); delete ex[key]; yt.writeExtras(ex);
+  for (const q of D().profiles) if ((q.userId === key || String(q.username || '').toLowerCase() === key) && q.status === 'pending') q.status = 'replaced';
+  store.save();
+  return { ok: true, name: x.channelName || x.username || key };
+});
 on('POST', '/api/admin/creators/show', async req => {
   needAdmin(req); const b = await readBody(req), key = str(b.key, 40);
   const ex = yt.readExtras(), x = ex[key]; if (!x || key[0] === '_') throw err(404, 'No creator entry with that name.');
@@ -1862,6 +1873,7 @@ function describe(key, p, b, out, c) {
     case 'POST /api/admin/creators/verify': return { kind: 'approve', icon: '✅', title: `Verified creator by hand: @${b.username}`, details: [['YouTube', b.youtube], ['Channel', out.channel], ['Minecraft', b.mc]] };
     case 'POST /api/admin/creators/unverify': return { kind: 'delete', icon: '🙈', title: `Hid creator from the site: @${b.username}` };
     case 'POST /api/admin/creators/relink': return { kind: 'update', icon: '🔗', title: `Linked creator ${b.key} to @${out.username || b.username}` };
+    case 'POST /api/admin/creators/delete': return { kind: 'delete', icon: '🗑️', title: `Deleted creator profile: ${out.name || b.key}` };
     case 'POST /api/admin/creators/show': return { kind: 'approve', icon: '👀', title: `Showed creator on the site again: ${out.name || b.key}` };
     case 'POST /api/admin/announce': return { kind: 'create', icon: '📰', title: `Published news: ${b.title}`, details: [['Also in Discord', yn(b.discord)]] };
     case 'DELETE /api/admin/announcements/:id': return { kind: 'delete', icon: '🗑️', title: `Deleted news: ${(c.news && c.news.title) || ''}` };
