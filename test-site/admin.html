@@ -517,6 +517,9 @@ function creatorsTab() {
       <div class="card"><div class="row" style="margin-bottom:12px"><h2 style="margin:0;margin-right:auto">ON THE SITE <span class="soft small" id="ver_n"></span></h2>
         <label for="ver_q" class="sr">Search creators on the site</label><input type="search" id="ver_q" placeholder="Search" style="max-width:180px"></div>
         <div id="ver" class="list"><p class="soft">Loading...</p></div></div>
+      <div class="card"><h2 style="margin:0 0 6px">HIDDEN OR MISSING <span class="soft small" id="hid_n"></span></h2>
+        <p class="soft small" style="margin:0 0 12px">Creators who have a channel set up but are not on the Creators page, and why. Hidden ones can be shown again with one click.</p>
+        <div id="hid" class="list"><p class="soft">Loading...</p></div></div>
     </div>`;
   document.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => { b.disabled = true; act(() => api('/api/admin/profiles/' + b.dataset.ok + '/approve', {method: 'POST'}), r => 'Verified: ' + r.channel); });
   document.querySelectorAll('[data-no]').forEach(b => b.onclick = () => { const reason = prompt('Reason (the creator sees this):', ''); if (reason !== null) act(() => api('/api/admin/profiles/' + b.dataset.no + '/reject', {method: 'POST', body: {reason}}), 'Rejected.'); });
@@ -555,6 +558,19 @@ function creatorsTab() {
     if (!checked && !confirm('You have not checked this channel yet. Verify anyway?')) return;
     $('#v_go').disabled = true;
     act(() => api('/api/admin/creators/verify', {method: 'POST', body: {username: picked.username, youtube: $('#v_y').value.trim(), mc: $('#v_m').value.trim(), edition: MTC.readEd('v_ed')}}), r => 'Verified: ' + r.channel); };
+  const WHY = { hidden: ['HIDDEN', 'An admin hid them from the Creators page.'], blocked: ['BLOCKED', 'Their account is blocked. Unblock them in MEMBERS first.'],
+    norole: ['NO CREATOR ROLE', 'They are in the Discord but do not have the Creator role. Give them the role in Discord and they come back by themselves.'],
+    gone: ['NOT FOUND IN DISCORD', 'No member with this name: they left the server or changed their Discord username. If they renamed, verify them again under VERIFY A CREATOR.'],
+    nologo: ['NO LOGO', 'Their channel picture could not be saved. Verify them again under VERIFY A CREATOR.'], unknown: ['UNKNOWN', 'Discord could not be checked right now.'], other: ['NOT SHOWING', '']};
+  api('/api/admin/creators/missing').then(h => {
+    $('#hid_n').textContent = h.creators.length ? `(${h.creators.length})` : '';
+    $('#hid').innerHTML = h.creators.length ? h.creators.map(c => `<div class="item" style="align-items:flex-start">${c.logo ? `<img src="${esc(c.logo)}" alt="" style="width:40px;height:40px;border:2px solid #000">` : '<b style="width:40px;height:40px;border:2px solid #000;display:grid;place-items:center">?</b>'}
+      <div class="grow"><b>${esc(c.name)}</b> <span class="badge ${c.reason === 'hidden' ? 'pending' : 'rejected'}">${WHY[c.reason][0]}</span><br>
+        <span class="soft small">${c.username ? '@' + esc(c.username) + ' · ' : ''}<a href="${esc(c.youtube)}" target="_blank" rel="noopener">YouTube</a></span>
+        ${WHY[c.reason][1] ? `<p class="soft small" style="margin:4px 0 0">${esc(WHY[c.reason][1])}</p>` : ''}</div>
+      ${c.reason === 'hidden' ? `<button class="btn green sm" data-show="${esc(c.key)}">SHOW AGAIN</button>` : ''}</div>`).join('') : '<p class="soft">Nobody. Everyone with a channel set up is on the Creators page.</p>';
+    document.querySelectorAll('[data-show]').forEach(b => b.onclick = () => act(() => api('/api/admin/creators/show', {method: 'POST', body: {key: b.dataset.show}}), r => r.name + ' is back on the Creators page.'));
+  }).catch(x => { $('#hid').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; });
   api('/api/creators').then(d => {
     const drawVer = () => { const q = ($('#ver_q').value || '').trim().toLowerCase();
       const list = d.creators.filter(c => !q || c.name.toLowerCase().includes(q) || c.username.toLowerCase().includes(q));

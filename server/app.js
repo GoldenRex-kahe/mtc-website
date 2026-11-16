@@ -1387,6 +1387,29 @@ on('POST', '/api/admin/creators/unverify', async req => {
   if (!yt.unverifyCreator(str(b.username, 40))) throw err(404, 'No creator entry with that name.');
   return { ok: true };
 });
+// creators who have a channel set up but are not on the Creators page, and why (hidden by an admin, lost the role, left, renamed)
+on('GET', '/api/admin/creators/missing', async req => {
+  needAdmin(req);
+  const all = (await discord.allMembers().catch(() => ({ members: [] }))).members, ex = yt.readExtras(), out = [];
+  const shown = new Set(publicCreators(all.filter(m => m.creator)).map(c => c.id));
+  for (const [key, x] of Object.entries(ex)) {
+    if (key[0] === '_' || !x || !x.socials || !x.socials.youtube) continue;
+    const m = all.find(v => v.id === key || v.username.toLowerCase() === key);
+    if (m && shown.has(m.id)) continue;
+    const reason = x.verified !== true ? (x.blocked ? 'blocked' : 'hidden') : !x.logo ? 'nologo' : !all.length ? 'unknown' : !m ? 'gone' : !m.creator ? 'norole' : 'other';
+    out.push({ key, name: x.channelName || key, logo: x.logo || '', youtube: x.socials.youtube, username: m ? m.username : (/^\d{15,}$/.test(key) ? '' : key), member: m ? m.name : '', reason, at: x.editedAt || x.verifiedAt || '' });
+  }
+  return { creators: out.sort((a, b) => (a.reason === 'hidden' ? 0 : 1) - (b.reason === 'hidden' ? 0 : 1) || a.name.localeCompare(b.name)) };
+});
+on('POST', '/api/admin/creators/show', async req => {
+  needAdmin(req); const b = await readBody(req), key = str(b.key, 40);
+  const ex = yt.readExtras(), x = ex[key]; if (!x || key[0] === '_') throw err(404, 'No creator entry with that name.');
+  if (!x.logo || !x.socials || !x.socials.youtube) throw err(400, 'This creator has no channel set up. Use VERIFY A CREATOR above.');
+  const dup = Object.entries(ex).find(([k, v]) => k !== key && k[0] !== '_' && v && v.verified && v.socials && v.socials.youtube === x.socials.youtube);
+  if (dup) throw err(409, `This channel is already on the Creators page for @${dup[0]}. Hide it there first.`);
+  x.verified = true; x.blocked = false; x.verifiedAt = x.verifiedAt || new Date().toISOString().slice(0, 10); x.editedAt = store.now(); yt.writeExtras(ex);
+  return { ok: true, name: x.channelName || key };
+});
 on('POST', '/api/admin/announce', async req => {
   needAdmin(req); const b = await readBody(req);
   const a = { id: store.id(), title: str(b.title, 120), body: str(b.body, 2000), createdAt: store.now(), postedToDiscord: false };
@@ -1804,6 +1827,7 @@ function describe(key, p, b, out, c) {
     case 'POST /api/admin/profiles/:id/reject': return { kind: 'reject', icon: '⛔', title: `Rejected creator profile: ${(c.profile && c.profile.name) || ''}`, details: [['Reason', b.reason]] };
     case 'POST /api/admin/creators/verify': return { kind: 'approve', icon: '✅', title: `Verified creator by hand: @${b.username}`, details: [['YouTube', b.youtube], ['Channel', out.channel], ['Minecraft', b.mc]] };
     case 'POST /api/admin/creators/unverify': return { kind: 'delete', icon: '🙈', title: `Hid creator from the site: @${b.username}` };
+    case 'POST /api/admin/creators/show': return { kind: 'approve', icon: '👀', title: `Showed creator on the site again: ${out.name || b.key}` };
     case 'POST /api/admin/announce': return { kind: 'create', icon: '📰', title: `Published news: ${b.title}`, details: [['Also in Discord', yn(b.discord)]] };
     case 'DELETE /api/admin/announcements/:id': return { kind: 'delete', icon: '🗑️', title: `Deleted news: ${(c.news && c.news.title) || ''}` };
     case 'PUT /api/admin/alerts': return { kind: 'update', icon: '🔔', title: 'Changed alert and log settings', details: [['Staff channel', b.staffChannel ? `<#${b.staffChannel}>` : 'Off'], ['Log channel', b.logChannel ? `<#${b.logChannel}>` : 'Off']] };
