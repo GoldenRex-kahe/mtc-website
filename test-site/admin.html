@@ -560,7 +560,7 @@ function creatorsTab() {
     act(() => api('/api/admin/creators/verify', {method: 'POST', body: {username: picked.username, youtube: $('#v_y').value.trim(), mc: $('#v_m').value.trim(), edition: MTC.readEd('v_ed')}}), r => 'Verified: ' + r.channel); };
   const WHY = { hidden: ['HIDDEN', 'An admin hid them from the Creators page.'], blocked: ['BLOCKED', 'Their account is blocked. Unblock them in MEMBERS first.'],
     norole: ['NO CREATOR ROLE', 'They are in the Discord but do not have the Creator role. Give them the role in Discord and they come back by themselves.'],
-    gone: ['NOT FOUND IN DISCORD', 'No member with this name: they left the server or changed their Discord username. If they renamed, verify them again under VERIFY A CREATOR.'],
+    gone: ['NOT FOUND IN DISCORD', 'No member with this name and the website could not tell who it is now. If they changed their Discord username, press LINK TO MEMBER and type the new one. If they left, they come back when they rejoin with the Creator role.'],
     nologo: ['NO LOGO', 'Their channel picture could not be saved. Verify them again under VERIFY A CREATOR.'], unknown: ['UNKNOWN', 'Discord could not be checked right now.'], other: ['NOT SHOWING', '']};
   api('/api/admin/creators/missing').then(h => {
     $('#hid_n').textContent = h.creators.length ? `(${h.creators.length})` : '';
@@ -568,7 +568,9 @@ function creatorsTab() {
       <div class="grow"><b>${esc(c.name)}</b> <span class="badge ${c.reason === 'hidden' ? 'pending' : 'rejected'}">${WHY[c.reason][0]}</span><br>
         <span class="soft small">${c.username ? '@' + esc(c.username) + ' · ' : ''}<a href="${esc(c.youtube)}" target="_blank" rel="noopener">YouTube</a></span>
         ${WHY[c.reason][1] ? `<p class="soft small" style="margin:4px 0 0">${esc(WHY[c.reason][1])}</p>` : ''}</div>
-      ${c.reason === 'hidden' ? `<button class="btn green sm" data-show="${esc(c.key)}">SHOW AGAIN</button>` : ''}</div>`).join('') : '<p class="soft">Nobody. Everyone with a channel set up is on the Creators page.</p>';
+      ${c.reason === 'hidden' ? `<button class="btn green sm" data-show="${esc(c.key)}">SHOW AGAIN</button>` : c.reason === 'gone' ? `<button class="btn sm" data-link="${esc(c.key)}" title="They changed their Discord username: pick who they are now">LINK TO MEMBER</button>` : ''}</div>`).join('') : '<p class="soft">Nobody. Everyone with a channel set up is on the Creators page.</p>';
+    document.querySelectorAll('[data-link]').forEach(b => b.onclick = () => { const n = prompt('Their Discord username now (for example zedx_mc):', ''); if (!n || !n.trim()) return;
+      act(() => api('/api/admin/creators/relink', {method: 'POST', body: {key: b.dataset.link, username: n.trim()}}), r => `${r.name} is linked to @${r.username}.`); });
     document.querySelectorAll('[data-show]').forEach(b => b.onclick = () => act(() => api('/api/admin/creators/show', {method: 'POST', body: {key: b.dataset.show}}), r => r.name + ' is back on the Creators page.'));
   }).catch(x => { $('#hid').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; });
   api('/api/creators').then(d => {

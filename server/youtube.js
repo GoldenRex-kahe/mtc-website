@@ -35,6 +35,7 @@ const readExtras = () => { try { return JSON.parse(fs.readFileSync(EXTRA, 'utf8'
 const writeExtras = o => { const tmp = EXTRA + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(o, null, 2) + '\n'); fs.renameSync(tmp, EXTRA); };
 async function verifyCreator(key, link, { mc, socials } = {}) {
   key = /^\d{15,}$/.test(key) ? key : String(key).toLowerCase();
+  key = findKey(readExtras(), key);
   const info = await channelInfo(link);
   // one channel, one creator: refuse if another member already shows this channel
   const owner = Object.entries(readExtras()).find(([k, v]) => k !== key && k[0] !== '_' && v.verified && v.socials && v.socials.youtube === info.url);
@@ -43,14 +44,16 @@ async function verifyCreator(key, link, { mc, socials } = {}) {
   const extras = readExtras(), prev = extras[key] || {};
   const cleanSocials = {};
   for (const [k, v] of Object.entries({ ...(prev.socials || {}), ...(socials || {}) })) if (v) cleanSocials[k] = v;
-  extras[key] = { ...prev, verified: true, verifiedAt: new Date().toISOString().slice(0, 10), channelName: info.name, logo,
+  extras[key] = { ...prev, verified: true, verifiedAt: new Date().toISOString().slice(0, 10), editedAt: new Date().toISOString(), channelName: info.name, logo,
     ...(mc ? { mc } : {}), socials: { ...cleanSocials, youtube: info.url } };
   writeExtras(extras);
   return { key, ...info, logo };
 }
+// profiles are filed under the Discord ID now: find one by ID, by its current username, or by the old key
+const findKey = (ex, key) => ex[key] ? key : (Object.keys(ex).find(k => k[0] !== '_' && ex[k] && String(ex[k].username || '').toLowerCase() === key) || key);
 function unverifyCreator(key) {
   key = /^\d{15,}$/.test(key) ? key : String(key).toLowerCase();
-  const extras = readExtras(); if (!extras[key]) return false;
+  const extras = readExtras(); key = findKey(extras, key); if (!extras[key]) return false;
   extras[key].verified = false; writeExtras(extras); return true;
 }
 
