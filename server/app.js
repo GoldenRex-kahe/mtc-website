@@ -635,11 +635,16 @@ on('GET', '/auth/discord', async (req, res, p, url) => {
 on('GET', '/auth/callback', async (req, res, p, url) => {
   const state = url.searchParams.get('state') || '';
   const clear = /^[a-f0-9]{32}$/.test(state) ? setCookie('mtc_st_' + state, '', 0) : setCookie('mtc_state', '', 0);
-  const back = msg => { res.writeHead(302, { Location: '/account.html' + (msg ? '?error=' + encodeURIComponent(msg) : ''), 'Set-Cookie': clear }); res.end(); };
+  // a failed login is written to the Activity log with the reason and the browser, so admins can see why someone cannot log in
+  const ua = String(req.headers['user-agent'] || ''), browser = (/Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Brave/.test(ua) ? 'Brave' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Other browser')
+    + ' on ' + (/Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Windows/.test(ua) ? 'Windows PC' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'unknown device') + (/Discord/i.test(ua) ? ' (inside the Discord app)' : '');
+  const back = (msg, who) => {
+    audit.log({ who: who || { name: 'Someone (login did not finish)' }, kind: 'security', icon: '⚠️', title: 'Discord login failed', details: [['Reason', msg], ['Browser', browser], ['Address used', req.headers.host || '']] });
+    res.writeHead(302, { Location: '/account.html' + (msg ? '?error=' + encodeURIComponent(msg) : ''), 'Set-Cookie': clear }); res.end(); };
   const stv = cookies(req)['mtc_st_' + state];
   if (!/^[a-f0-9]{32}$/.test(state) || (stv !== '1' && stv !== 'j')) {
     console.warn(`Discord login: no matching login cookie (host ${req.headers.host}, cookies: ${Object.keys(cookies(req)).join(', ') || 'none'})`);
-    return back('Login expired, please try again.');
+    return back('Login expired or the login cookie was blocked. Please try again in the same browser tab, and allow cookies for this site.');
   }
   if (url.searchParams.get('error')) return back('Discord login was cancelled.');
   try {
@@ -654,7 +659,7 @@ on('GET', '/auth/callback', async (req, res, p, url) => {
     store.save();
     res.writeHead(302, { Location: adm ? '/admin.html' : info.inGuild ? '/account.html' : '/apply.html', 'Set-Cookie': [clear, makeSession({ uid: me.id, un: me.username, name, av, adm, cr: info.creator, ig: info.inGuild })] });
     res.end();
-  } catch (e) { console.error(e); back(e.message); }
+  } catch (e) { console.error(e); back(e.message || 'Discord login failed.'); }
 });
 on('POST', '/auth/admin', async (req, res) => {
   // through the tunnel every request comes from 127.0.0.1, so use the visitor address the tunnel passes on
@@ -739,7 +744,13 @@ on('GET', '/api/creators', async (req, res, p, url) => {
 const ytFeeds = new Map();
 const MC_WORDS = /minecraft|\bmcpe\b|\bmc\b|\bsmp\b|bedwars|skywars|skyblock|hypixel|lifesteal|creeper|enderman|ender dragon|\bnether\b|redstone|manhunt|hardcore|speedrun|\bmods?\b|craft|\bbedrock\b|java edition|herobrine|villager|pillager|warden|elytra|netherite|\bmobs?\b/i;
 const TAMIL_MC = /மைன்கிராஃப்ட்|மைன்கிராப்ட்|மைன்கிராஃபட்|மின்கிராஃப்ட்|மைன்கிராஃட்/;
-const isMcText = t => MC_WORDS.test(t) || TAMIL_MC.test(t);
+// other games: a title that names one of these is not Minecraft unless it says Minecraft itself
+const OTHER_GAMES = /five\s?m\b|\bgta\b|grand theft auto|\brp\b|roleplay|\bbgmi\b|pubg|free\s?fire|valorant|fortnite|roblox|among us|call of duty|\bcod\b|\bapex\b|clash of clans|clash royale|brawl stars|genshin|\bcs2\b|counter.?strike|rocket league|\bfifa\b|efootball|\bludo\b|forza|red dead|\brdr2?\b|palworld|terraria|stumble guys|minecraft dungeons/i;
+const SAYS_MC = /minecraft|மைன்கிராஃப்ட்|மைன்கிராப்ட்|மின்கிராஃப்ட்/i;
+const isMcText = t => (MC_WORDS.test(t) || TAMIL_MC.test(t)) && (!OTHER_GAMES.test(t) || (SAYS_MC.test(t) && !/minecraft dungeons/i.test(t)));
+// a live stream: the title decides when it names a game; otherwise the stream's tags (never the description, which is often
+// the channel's standard blurb mentioning Minecraft, so FiveM / GTA streams counted)
+const isMcStream = (title, tags) => OTHER_GAMES.test(title) && !SAYS_MC.test(title) ? false : isMcText(title) ? true : OTHER_GAMES.test(tags) ? false : isMcText(tags);
 const YT_PAGE_HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', 'Accept-Language': 'en', Cookie: 'SOCS=CAI; CONSENT=PENDING+987' };
 const ytDec = t => String(t || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 // 1) the channel's RSS feed (cheap and exact, but YouTube answers 404 for some channels and servers)
@@ -763,21 +774,24 @@ const agoToIso = t => {
   return new Date(Date.now() - m[1] * unit).toISOString();
 };
 const countOf = t => { const m = /([\d.,]+)\s*([KMB])?/i.exec(String(t || '').replace(/,/g, '')); if (!m) return 0; return Math.round(parseFloat(m[1]) * ({ K: 1e3, M: 1e6, B: 1e9 }[(m[2] || '').toUpperCase()] || 1)) || 0; };
-// one tab of a channel: videos, streams (past, live and upcoming) or shorts
-async function ytFromPage(id, tab = 'videos', retry = true) {
-  if (retry) try { return await ytFromPage(id, tab, false); } catch (e) { await new Promise(r => setTimeout(r, 1200)); }
-  const r = await fetch('https://www.youtube.com/channel/' + id + '/' + tab, { headers: YT_PAGE_HEADERS, signal: AbortSignal.timeout(15000) });
-  if (!r.ok) throw new Error(tab + ' page ' + r.status);
-  const html = await r.text(), m = html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
-  if (!m) throw new Error(tab + ' page has no video data');
-  const found = [];
+// one tab of a channel (videos, streams = past/live/upcoming, shorts). The page holds about 30; the rest come in
+// "continuation" pages from YouTube's own browse API, the same way the site loads more when you scroll.
+function ytWalk(root) {
+  const found = []; let token = '';
   (function walk(o) {
     if (!o || typeof o !== 'object') return;
     if (o.shortsLockupViewModel) { found.push({ sh: o.shortsLockupViewModel }); return; }
     if (o.lockupViewModel && o.lockupViewModel.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO') { found.push({ lv: o.lockupViewModel }); return; }
     if (o.videoRenderer && o.videoRenderer.videoId) { found.push({ old: o.videoRenderer }); return; }
+    if (o.continuationItemRenderer) return;
+    // the "next page" token that matters is the one at the end of the list of videos (the About panel has its own)
+    if (Array.isArray(o)) { const last = o[o.length - 1], cir = last && last.continuationItemRenderer;
+      if (cir && o.length > 1) { const t = ((cir.continuationEndpoint || {}).continuationCommand || {}).token; if (t && /lockupViewModel|videoRenderer|shortsLockupViewModel/.test(JSON.stringify(o[0]).slice(0, 4000))) token = t; } }
     for (const k in o) walk(o[k]);
-  })(JSON.parse(m[1]));
+  })(root);
+  return { found, token };
+}
+function ytItems(found, tab) {
   const out = [];
   for (const v of found) {
     if (tab === 'shorts') {   // a channel without Shorts sends its home page instead: only real Shorts count
@@ -800,20 +814,60 @@ async function ytFromPage(id, tab = 'videos', retry = true) {
   }
   return out.filter(v => /^[\w-]{11}$/.test(v.id || ''));
 }
+// first page of a tab, plus what is needed to ask for the next pages
+async function ytFirstPage(id, tab) {
+  const r = await fetch('https://www.youtube.com/channel/' + id + '/' + tab, { headers: YT_PAGE_HEADERS, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(tab + ' page ' + r.status);
+  const html = await r.text(), m = html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
+  if (!m) throw new Error(tab + ' page has no video data');
+  const { found, token } = ytWalk(JSON.parse(m[1]));
+  return { items: ytItems(found, tab), token, ver: (html.match(/"INNERTUBE_CONTEXT_CLIENT_VERSION":"([^"]+)"/) || [])[1] || '2.20241101.00.00' };
+}
+async function ytFromPage(id, tab = 'videos', retry = true) {
+  if (retry) try { return (await ytFirstPage(id, tab)).items; } catch (e) { await new Promise(r => setTimeout(r, 1200)); }
+  return (await ytFirstPage(id, tab)).items;
+}
+// every item of a tab (up to maxPages continuation pages, about 30 each), in YouTube's order: newest first
+async function ytTabAll(id, tab, maxPages = 25) {
+  let first; try { first = await ytFirstPage(id, tab); } catch { await new Promise(r => setTimeout(r, 1200)); first = await ytFirstPage(id, tab); }
+  const all = [...first.items], seen = new Set(all.map(v => v.id));
+  let token = first.token;
+  for (let n = 0; token && n < maxPages; n++) {
+    const r = await fetch('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', { method: 'POST', signal: AbortSignal.timeout(15000),
+      headers: { ...YT_PAGE_HEADERS, 'Content-Type': 'application/json', 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': first.ver },
+      body: JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: first.ver, hl: 'en' } }, continuation: token }) }).catch(() => null);
+    if (!r || !r.ok) break;
+    const j = await r.json().catch(() => null); if (!j) break;
+    const w = ytWalk(j.onResponseReceivedActions || j.onResponseReceivedEndpoints || j);
+    for (const v of ytItems(w.found, tab)) if (!seen.has(v.id)) { seen.add(v.id); all.push(v); }
+    token = w.token && w.token !== token ? w.token : '';
+  }
+  return all;
+}
+// the profile's "Latest on YouTube": the first page of each tab straight away; the full lists are fetched in the background
+// for LOAD MORE (/api/creators/:key/youtube). Only Minecraft, live streams first, then newest first.
+const mcOnly = list => (list || []).filter(v => v.mc).sort((a, b) => !!b.live - !!a.live).map(({ mc, ...v }) => v);
+const ytAll = new Map();   // channel id -> { at, promise / data: { videos, streams, shorts } }
+function ytFull(id) {
+  const hit = ytAll.get(id); if (hit && Date.now() - hit.at < 30 * 60e3) return hit.p;
+  const p = Promise.all(['videos', 'streams', 'shorts'].map(t => ytTabAll(id, t).catch(e => { logErr('YouTube ' + t + ' ' + id, e); return null; })))
+    .then(([videos, streams, shorts]) => ({ videos: mcOnly(videos), streams: mcOnly(streams), shorts: mcOnly(shorts), ok: !!(videos || streams || shorts) }));
+  ytAll.set(id, { at: Date.now(), p }); p.then(d => { if (!d.ok) ytAll.delete(id); }).catch(() => ytAll.delete(id));
+  return p;
+}
 async function ytLatest(channelUrl) {
   const id = (String(channelUrl || '').match(/\/channel\/(UC[\w-]{22})/) || [])[1]; if (!id) return null;
-  const hit = ytFeeds.get(id); if (hit && Date.now() - hit.at < 20 * 60e3) return hit.data;
-  // the three tabs of the channel, at the same time; Videos falls back to the RSS feed
+  const hit = ytFeeds.get(id); if (hit && Date.now() - hit.at < 20 * 60e3) { ytFull(id); return hit.data; }
   const [vids, streams, shorts] = await Promise.all([
     ytFromPage(id, 'videos').catch(() => ytFromFeed(id).then(all => all.filter(v => !v.short))).catch(e => { logErr('YouTube videos ' + id, e); return null; }),
     ytFromPage(id, 'streams').catch(e => { logErr('YouTube streams ' + id, e); return null; }),
     ytFromPage(id, 'shorts').catch(e => { logErr('YouTube shorts ' + id, e); return null; })]);
   if (!vids && !streams && !shorts) return hit ? hit.data : { channelId: id, videos: [], streams: [], shorts: [], error: 'YouTube could not be reached right now.' };
-  // only Minecraft (title mentions Minecraft or a well-known Minecraft term, in English or Tamil); live streams first
-  const keep = (list, n) => (list || []).filter(v => v.mc).sort((a, b) => !!b.live - !!a.live).slice(0, n).map(({ mc, ...v }) => v);
-  const data = { channelId: id, videos: keep(vids, 12), streams: keep(streams, 12), shorts: keep(shorts, 12),
-    hidden: [vids, streams, shorts].reduce((n, l) => n + (l || []).filter(v => !v.mc).length, 0) };
-  ytFeeds.set(id, { at: Date.now(), data }); return data;
+  const PAGE = 12, cut = l => mcOnly(l).slice(0, PAGE);
+  // "more": the first page was full, so there may be more Minecraft ones further back (LOAD MORE finds out)
+  const data = { channelId: id, videos: cut(vids), streams: cut(streams), shorts: cut(shorts),
+    more: { videos: (vids || []).length >= 24 || mcOnly(vids).length > PAGE, streams: (streams || []).length >= 24 || mcOnly(streams).length > PAGE, shorts: (shorts || []).length >= 24 || mcOnly(shorts).length > PAGE } };
+  ytFeeds.set(id, { at: Date.now(), data }); ytFull(id); return data;
 }
 on('GET', '/api/creators/:key', async (req, res, p) => {
   const key = String(p.key || '').toLowerCase();
@@ -852,6 +906,18 @@ on('GET', '/api/creators/:key', async (req, res, p) => {
   const nb = k => { const o = list[(i + k + list.length) % list.length]; return o && o.id !== c.id ? { username: o.username, name: o.name, logo: o.logo } : null; };
   return { creator: { banner, live: community.liveOf(c.id), id: c.id, username: c.username, name: c.name, discordName: g.name || u.name || '', avatar: g.avatar || u.avatar || '', logo: c.logo, mc, mcEdition, skin: c.skin || skinUrl(mc, mcEdition),
       socials: c.socials || {}, featured: c.featured }, stats, events, media, activity, youtube: yt1, prev: nb(-1), next: nb(1), total: list.length };
+});
+// LOAD MORE on a creator's profile: the next Minecraft videos / streams / shorts of their channel, newest first
+on('GET', '/api/creators/:key/youtube', async (req, res, p, url) => {
+  const key = String(p.key || '').toLowerCase(), tab = url.searchParams.get('tab'), from = Math.max(0, +url.searchParams.get('offset') || 0), n = Math.min(48, Math.max(1, +url.searchParams.get('limit') || 12));
+  if (!['videos', 'streams', 'shorts'].includes(tab)) throw err(400, 'Pick videos, streams or shorts.');
+  const r = await discord.creatorMembers(), list = publicCreators(r.members), exk = yt.readExtras();
+  const moved = Object.entries(exk).find(([k, v]) => v && (v.oldUsernames || []).includes(key));
+  const c = list.find(c => c.username.toLowerCase() === key || c.id === key || (moved && c.id === moved[0]));
+  if (!c) throw err(404, 'That creator is not on the site.');
+  const id = (String((c.socials || {}).youtube || '').match(/\/channel\/(UC[\w-]{22})/) || [])[1]; if (!id) return { items: [], total: 0, more: false };
+  const all = await ytFull(id), l = all[tab] || [];
+  return { items: l.slice(from, from + n), total: l.length, more: from + n < l.length };
 });
 on('GET', '/api/events', async () => ({ events: sortEvents(D().events.filter(e => e.status !== 'draft')).map(pubEvent) }));
 on('GET', '/api/events/:slug', async (req, res, p) => {
@@ -1849,7 +1915,7 @@ on('PUT', '/api/admin/maintenance', async req => {
 
 // ---------------------------------------------------------------- community features (server/community.js)
 const community = require('./community')({ on, routes, D, store, cfg, err, str, int, isoOrNull, readBody, session, needUser, needAdmin, discord, alertUser, alertStaff, linkRow,
-  evById, evBy, mcOf, edOf, yt, sortEvents, publicCreators, MC_WORDS, logErr, esc, playerCard, saveImage, serverStatusOf, sessionOf });
+  evById, evBy, mcOf, edOf, yt, sortEvents, publicCreators, MC_WORDS, isMcText, isMcStream, logErr, esc, playerCard, saveImage, serverStatusOf, sessionOf });
 community.NO_LOG.forEach(k => NO_LOG.add(k));
 // the Minecraft plugin that opens and closes the event server (server/plugin.js)
 const serverPlugin = require('./plugin')({ on, D, store, cfg, err, readBody, needAdmin, evById, evBy, sessionOf });

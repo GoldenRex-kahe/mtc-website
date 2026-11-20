@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path');
 
 module.exports = function install(x) {
   const { on, routes, D, store, cfg, err, str, int, isoOrNull, readBody, session, needUser, needAdmin, discord, alertUser, alertStaff, linkRow,
-    evById, evBy, mcOf, edOf, yt, sortEvents, publicCreators, MC_WORDS, logErr, esc, playerCard, saveImage, serverStatusOf, sessionOf } = x;
+    evById, evBy, mcOf, edOf, yt, sortEvents, publicCreators, MC_WORDS, isMcText, isMcStream, logErr, esc, playerCard, saveImage, serverStatusOf, sessionOf } = x;
   const now = store.now, id = store.id;
   const S = () => D().settings;
   const list = k => (D()[k] = D()[k] || []);
@@ -485,6 +485,8 @@ module.exports = function install(x) {
   const YT_HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', 'Accept-Language': 'en',
     Cookie: 'SOCS=CAI; CONSENT=PENDING+987' };   // skips YouTube's cookie-consent page that data-centre addresses often get
   const decode = t => String(t || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  // the game card YouTube shows under a gaming video or stream ("Minecraft", "Grand Theft Auto V"...)
+  const ytGame = html => { const m = String(html).match(/"richMetadataRenderer":\{"style":"RICH_METADATA_RENDERER_STYLE_BOX_ART"[\s\S]{0,2500}?"title":\{"simpleText":"([^"]+)"/); return m ? decode(m[1]) : ''; };
   async function checkLive(c) {
     const base = String((c.socials || {}).youtube || '').replace(/\/+$/, '').replace(/\/(videos|featured|streams|shorts)$/, '');
     if (!base) return;
@@ -504,15 +506,18 @@ module.exports = function install(x) {
       const desc = decode((html.match(/<meta name="description" content="([^"]*)"/) || [])[1]);
       const tags = ((html.match(/"keywords":\[([^\]]*)\]/) || [])[1] || '').replace(/"/g, ' ');   // the stream's tags
       if (!isLive) { if (live.has(c.id)) console.log(`[live] ${c.name} is no longer live`); live.delete(c.id); return note('Not live'); }
-      // only Minecraft streams: the title, description or tags mention Minecraft (English or Tamil); other games (PUBG, BGMI, Roblox...) do not count
-      const text = title + ' ' + desc + ' ' + tags;
-      if (MC_WORDS.test(text) || TAMIL_MC.test(text)) {
+      // only Minecraft streams: the title (or, if the title names no game, the tags) must say Minecraft and not another game.
+      // The description is not used: many creators paste their channel blurb ("Minecraft videos every week...") under
+      // every stream, which made FiveM and GTA streams count.
+      const game = ytGame(html);   // YouTube rarely sends the game card to servers now; used when it does
+      const isMc = game ? /minecraft/i.test(game) && !/dungeons|legends|story mode|earth/i.test(game) : isMcStream(title, tags);
+      if (isMc) {
         const was = live.get(c.id); if (!was) console.log(`[live] ${c.name} is live: ${title}`);
         live.set(c.id, { videoId: vid, title, since: was && was.videoId === vid ? was.since : now(), creator: { id: c.id, username: c.username, name: c.name, logo: c.logo } });
-        return note('LIVE', { title });
+        return note('LIVE', { title, game });
       }
       if (live.has(c.id)) console.log(`[live] ${c.name} is live, but not with Minecraft: ${title}`);
-      live.delete(c.id); note('Live, but not a Minecraft stream (no Minecraft in the title, description or tags)', { title });
+      live.delete(c.id); note(game ? `Live, but YouTube says the game is ${game}` : 'Live, but not a Minecraft stream (no Minecraft in the title or tags, or it names another game)', { title, game });
     } catch (e) { note('Check failed: ' + (e.message || e)); /* keep the last known state on a network error */ }
   }
   async function liveLoop() {
@@ -571,7 +576,7 @@ module.exports = function install(x) {
       }
       if (pathname === '/creator.html') {
         const ex = yt.readExtras(), k = String(sp.get('u') || '').toLowerCase();
-        const c = Object.entries(ex).find(([key, v]) => v && v.verified === true && (key === k || String(v.username || '').toLowerCase() === k || (v.oldUsernames || []).includes(k)));
+        const c = Object.entries(ex).find(([key, v]) => v && v.verified === true && (key === k || String(v.username || '').toLowerCase() === k));
         if (c) return { title: `${c[1].channelName || k} | MTC creator`, text: `A verified MC Thamizh Creators member${c[1].mc ? ` · ⛏️ ${c[1].mc}` : ''}. Latest Minecraft videos, events and badges.`, image: c[1].logo || base.image };
         return { ...base, title: 'MTC creator' };
       }

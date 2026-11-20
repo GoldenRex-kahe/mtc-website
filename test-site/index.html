@@ -340,6 +340,8 @@ html,body{max-width:100%;overflow-x:clip}
   .peek.p-quantum{left:76%!important;right:auto!important}
   .peek.p-phinix{left:25%!important;right:auto!important}
   .peek.p-dr{left:49%!important;right:auto!important}
+  /* the two that hang from the top crowd the logo and slid over the menu bar on some phones: bottom four only */
+  .peeklane{display:none}
 }
 /* live data on the home page */
 .news{border:4px solid #000;border-left:10px solid var(--accent);background:var(--surface);padding:18px 20px;margin-bottom:28px}
@@ -1073,6 +1075,7 @@ const peekV=[];
 try{
   const box=$('#peeks'),lane=document.createElement('div');lane.className='peeklane';box.appendChild(lane);
   const fitLane=()=>{const n=document.getElementById('nav');if(n)lane.style.top=Math.ceil(n.getBoundingClientRect().height)+'px'};fitLane();addEventListener('resize',fitLane);setTimeout(fitLane,500);
+  if('ResizeObserver' in window&&document.getElementById('nav')){const nv=document.getElementById('nav');new ResizeObserver(fitLane).observe(nv,{box:'border-box'});nv.addEventListener('transitionend',fitLane);addEventListener('scroll',()=>{if(scrollY<120)requestAnimationFrame(fitLane)},{passive:true})}   // the bar's height changes (fonts, scroll)
   PEEK.forEach((c,i)=>{const el=document.createElement('div');el.className='peek '+c.pos+' '+c.cls;
     el.style.cssText=c.style+`;--dur:${c.dur}s;--delay:${c.delay}s;--show:${c.show||'42%'}`;el.setAttribute('aria-label',c.n);
     el.innerHTML='<div class="flip"><canvas></canvas></div>';(c.pos==='top'?lane:box).appendChild(el);c.el=el;
