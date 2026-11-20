@@ -576,7 +576,7 @@ module.exports = function install(x) {
       }
       if (pathname === '/creator.html') {
         const ex = yt.readExtras(), k = String(sp.get('u') || '').toLowerCase();
-        const c = Object.entries(ex).find(([key, v]) => v && v.verified === true && (key === k || String(v.username || '').toLowerCase() === k));
+        const c = Object.entries(ex).find(([key, v]) => v && v.verified === true && (key === k || String(v.username || '').toLowerCase() === k || (v.oldUsernames || []).includes(k)));
         if (c) return { title: `${c[1].channelName || k} | MTC creator`, text: `A verified MC Thamizh Creators member${c[1].mc ? ` · ⛏️ ${c[1].mc}` : ''}. Latest Minecraft videos, events and badges.`, image: c[1].logo || base.image };
         return { ...base, title: 'MTC creator' };
       }

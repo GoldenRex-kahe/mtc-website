@@ -39,7 +39,7 @@ async function verifyCreator(key, link, { mc, socials } = {}) {
   const info = await channelInfo(link);
   // one channel, one creator: refuse if another member already shows this channel
   const owner = Object.entries(readExtras()).find(([k, v]) => k !== key && k[0] !== '_' && v.verified && v.socials && v.socials.youtube === info.url);
-  if (owner) throw Object.assign(new Error(`This channel (${info.name}) is already on the Creators page for @${owner[0]}. Hide it there first.`), { status: 409 });
+  if (owner) throw Object.assign(new Error(`This channel (${info.name}) is already on the Creators page for ${owner[1].username ? '@' + owner[1].username : owner[1].channelName || owner[0]}. Hide or delete it there first.`), { status: 409 });
   const logo = await saveLogo(info.image, key);
   const extras = readExtras(), prev = extras[key] || {};
   const cleanSocials = {};
