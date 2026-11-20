@@ -116,7 +116,7 @@
     `<label title="${t}"><input type="radio" name="${id}" value="${v}"${(['bedrock', 'offline'].includes(ed) ? ed : 'java') === v ? ' checked' : ''}> ${l}</label>`).join('')}</div>`;
   const readEd = id => (document.querySelector(`input[name="${id}"]:checked`) || {}).value || 'java';
   const validMc = (n, ed) => ed === 'bedrock' ? /^[A-Za-z][A-Za-z0-9 _]{1,15}$/.test(n.replace(/^[.*]/, '').trim()) : /^\w{3,16}$/.test(n);
-  const edTag = ed => ed === 'bedrock' ? '<span class="edtag" title="Bedrock Edition">BE</span>' : ed === 'offline' ? '<span class="edtag off" title="Offline (non-premium) Java account">OFF</span>' : '';
+  const edTag = ed => ed === 'bedrock' ? '<span class="edtag" title="Bedrock Edition">BE</span>' : ed === 'offline' && location.pathname === '/admin.html' ? '<span class="edtag off" title="Offline (non-premium) Java account">OFF</span>' : '';
   /* live countdown: <span data-cd="ISO"> ticks every second; data-done is shown when the time has passed */
   const cdText = iso => { const ms = new Date(iso) - Date.now(); if (!(ms > 0)) return ''; const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4), sec = Math.floor(ms % 6e4 / 1e3), p = n => String(n).padStart(2, '0');
     return d ? `${d}d ${p(h)}h ${p(m)}m` : `${p(h)}h ${p(m)}m ${p(sec)}s`; };

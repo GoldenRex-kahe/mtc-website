@@ -213,39 +213,17 @@ function saveSkin(dataUrl, key) {
   return '/uploads/skins/' + file + '?v=' + Date.now();
 }
 
-// Creator profiles used to be filed under the Discord username, which breaks when someone renames. Move them to the
-// Discord ID (never changes): the ID comes from the member list, or from their logins, profile requests and applications.
-function moveCreator(ex, key, m) {
-  const x = ex[key], cur = ex[m.id];
-  const newer = !cur || String(x.editedAt || x.verifiedAt || '') >= String(cur.editedAt || cur.verifiedAt || '');
-  const y = ex[m.id] = newer ? { ...(cur || {}), ...x } : { ...x, ...cur };
-  y.username = m.username; y.oldUsernames = [...new Set([...(y.oldUsernames || []), key])].filter(n => n !== m.username.toLowerCase()).slice(-5);
-  if (key !== m.id) delete ex[key];
-}
-function relinkCreators(members) {
-  if (!members || !members.length) return;
-  const ex = yt.readExtras(), byId = new Map(members.map(m => [m.id, m])), byName = new Map(members.map(m => [m.username.toLowerCase(), m]));
-  const idOf = name => { for (const src of [D().profiles || [], D().applications || [], D().registrations || [], Object.values(D().users || {})]) {
-    const r = src.find(q => q && String(q.username || '').toLowerCase() === name && /^\d{15,}$/.test(String(q.userId || q.id || ''))); if (r) return String(r.userId || r.id); } return ''; };
-  let changed = false;
-  for (const key of Object.keys(ex)) {
-    const x = ex[key]; if (key[0] === '_' || !x || typeof x !== 'object') continue;
-    if (/^\d{15,}$/.test(key)) { const m = byId.get(key); if (m && x.username !== m.username) { moveCreator(ex, key, m); changed = true; } continue; }
-    const m = byName.get(key) || byId.get(idOf(key));
-    if (m) { moveCreator(ex, key, m); changed = true; }
-  }
-  if (changed) yt.writeExtras(ex);
-}
 function publicCreators(members) {
-  relinkCreators(members);
   const extras = yt.readExtras(), out = [];
   for (const m of members) {
     const x = extras[m.id] || extras[m.username.toLowerCase()];
     if (!x || x.verified !== true || !x.socials || !x.socials.youtube || !x.logo) continue;
-    out.push({ id: m.id, username: m.username, name: x.channelName || m.name, logo: x.logo, mc: x.mc, mcEdition: edOf(x.mcEdition), skin: x.skin || skinUrl(x.mc, x.mcEdition), socials: x.socials, featured: x.featured || null });
+    out.push({ id: m.id, username: m.username, name: String(x.channelName || m.name || '').trim(), logo: x.logo, mc: x.mc, mcEdition: edOf(x.mcEdition), skin: x.skin || skinUrl(x.mc, x.mcEdition), socials: x.socials, featured: x.featured || null });
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  return out.sort((a, b) => sortName(a.name).localeCompare(sortName(b.name)));
 }
+// A to Z ignoring spaces, emoji and symbols in front, and fancy Unicode letters (𝐊𝐑𝐆 sorts as KRG)
+function sortName(s) { return String(s || '').normalize('NFKC').replace(/^[^\p{L}\p{N}]+/u, '').toLowerCase(); }
 
 // ---------------------------------------------------------------- event fields from the admin form
 // --- Discord alerts: DMs to members when an admin decides something, and a staff channel for new things to review
@@ -840,9 +818,8 @@ async function ytLatest(channelUrl) {
 on('GET', '/api/creators/:key', async (req, res, p) => {
   const key = String(p.key || '').toLowerCase();
   const r = await discord.creatorMembers();
-  const list = publicCreators(r.members).sort((a, b) => (!!(b.socials || {}).youtube - !!(a.socials || {}).youtube) || a.name.localeCompare(b.name));
-  const exk = yt.readExtras(), moved = Object.entries(exk).find(([k, v]) => v && (v.oldUsernames || []).includes(key));
-  const i = list.findIndex(c => c.username.toLowerCase() === key || c.id === key || (moved && c.id === moved[0]));
+  const list = publicCreators(r.members).sort((a, b) => (!!(b.socials || {}).youtube - !!(a.socials || {}).youtube) || sortName(a.name).localeCompare(sortName(b.name)));
+  const i = list.findIndex(c => c.username.toLowerCase() === key || c.id === key);
   if (i < 0) throw err(404, 'That creator is not on the site.');
   const c = list[i], ex = yt.readExtras(), x = ex[c.id] || ex[c.username.toLowerCase()] || {};
   await discord.allMembers().catch(() => null);
@@ -1412,49 +1389,6 @@ on('POST', '/api/admin/creators/unverify', async req => {
   if (!yt.unverifyCreator(str(b.username, 40))) throw err(404, 'No creator entry with that name.');
   return { ok: true };
 });
-// creators who have a channel set up but are not on the Creators page, and why (hidden by an admin, lost the role, left, renamed)
-on('GET', '/api/admin/creators/missing', async req => {
-  needAdmin(req);
-  const all = (await discord.allMembers().catch(() => ({ members: [] }))).members; relinkCreators(all);
-  const ex = yt.readExtras(), out = [];
-  const shown = new Set(publicCreators(all.filter(m => m.creator)).map(c => c.id));
-  for (const [key, x] of Object.entries(ex)) {
-    if (key[0] === '_' || !x || !x.socials || !x.socials.youtube) continue;
-    const m = all.find(v => v.id === key || v.username.toLowerCase() === key);
-    if (m && shown.has(m.id)) continue;
-    const reason = x.verified !== true ? (x.blocked ? 'blocked' : 'hidden') : !x.logo ? 'nologo' : !all.length ? 'unknown' : !m ? 'gone' : !m.creator ? 'norole' : 'other';
-    out.push({ key, name: x.channelName || key, logo: x.logo || '', youtube: x.socials.youtube, username: m ? m.username : (/^\d{15,}$/.test(key) ? '' : key), member: m ? m.name : '', reason, at: x.editedAt || x.verifiedAt || '' });
-  }
-  return { creators: out.sort((a, b) => (a.reason === 'hidden' ? 0 : 1) - (b.reason === 'hidden' ? 0 : 1) || a.name.localeCompare(b.name)) };
-});
-on('POST', '/api/admin/creators/relink', async req => {
-  needAdmin(req); const b = await readBody(req), key = str(b.key, 40), name = str(b.username, 40).replace(/^@/, '').toLowerCase();
-  const ex = yt.readExtras(); if (!ex[key] || key[0] === '_') throw err(404, 'No creator entry with that name.');
-  const all = (await discord.allMembers(true)).members, m = all.find(v => v.username.toLowerCase() === name || v.id === name);
-  if (!m) throw err(404, `Nobody called @${name} is in the Discord server.`);
-  moveCreator(ex, key, m); yt.writeExtras(ex);
-  return { ok: true, name: ex[m.id].channelName || m.username, username: m.username };
-});
-// delete a creator's profile (channel, logo, socials, skin). It is kept in a hidden "_trash" list in creators-extra.json,
-// so a mistake can still be undone by hand; the person can be verified again any time.
-on('POST', '/api/admin/creators/delete', async req => {
-  needAdmin(req); const b = await readBody(req), raw = str(b.key, 40), ex = yt.readExtras();
-  const key = ex[raw] ? raw : Object.keys(ex).find(k => k[0] !== '_' && ex[k] && String(ex[k].username || '').toLowerCase() === raw.toLowerCase()) || (ex[raw.toLowerCase()] ? raw.toLowerCase() : '');
-  if (!key || key[0] === '_') throw err(404, 'No creator entry with that name.');
-  const x = ex[key]; ex._trash = (ex._trash || []).concat({ key, at: store.now(), entry: x }).slice(-50); delete ex[key]; yt.writeExtras(ex);
-  for (const q of D().profiles) if ((q.userId === key || String(q.username || '').toLowerCase() === key) && q.status === 'pending') q.status = 'replaced';
-  store.save();
-  return { ok: true, name: x.channelName || x.username || key };
-});
-on('POST', '/api/admin/creators/show', async req => {
-  needAdmin(req); const b = await readBody(req), key = str(b.key, 40);
-  const ex = yt.readExtras(), x = ex[key]; if (!x || key[0] === '_') throw err(404, 'No creator entry with that name.');
-  if (!x.logo || !x.socials || !x.socials.youtube) throw err(400, 'This creator has no channel set up. Use VERIFY A CREATOR above.');
-  const dup = Object.entries(ex).find(([k, v]) => k !== key && k[0] !== '_' && v && v.verified && v.socials && v.socials.youtube === x.socials.youtube);
-  if (dup) throw err(409, `This channel is already on the Creators page for @${dup[0]}. Hide it there first.`);
-  x.verified = true; x.blocked = false; x.verifiedAt = x.verifiedAt || new Date().toISOString().slice(0, 10); x.editedAt = store.now(); yt.writeExtras(ex);
-  return { ok: true, name: x.channelName || key };
-});
 on('POST', '/api/admin/announce', async req => {
   needAdmin(req); const b = await readBody(req);
   const a = { id: store.id(), title: str(b.title, 120), body: str(b.body, 2000), createdAt: store.now(), postedToDiscord: false };
@@ -1872,9 +1806,6 @@ function describe(key, p, b, out, c) {
     case 'POST /api/admin/profiles/:id/reject': return { kind: 'reject', icon: '⛔', title: `Rejected creator profile: ${(c.profile && c.profile.name) || ''}`, details: [['Reason', b.reason]] };
     case 'POST /api/admin/creators/verify': return { kind: 'approve', icon: '✅', title: `Verified creator by hand: @${b.username}`, details: [['YouTube', b.youtube], ['Channel', out.channel], ['Minecraft', b.mc]] };
     case 'POST /api/admin/creators/unverify': return { kind: 'delete', icon: '🙈', title: `Hid creator from the site: @${b.username}` };
-    case 'POST /api/admin/creators/relink': return { kind: 'update', icon: '🔗', title: `Linked creator ${b.key} to @${out.username || b.username}` };
-    case 'POST /api/admin/creators/delete': return { kind: 'delete', icon: '🗑️', title: `Deleted creator profile: ${out.name || b.key}` };
-    case 'POST /api/admin/creators/show': return { kind: 'approve', icon: '👀', title: `Showed creator on the site again: ${out.name || b.key}` };
     case 'POST /api/admin/announce': return { kind: 'create', icon: '📰', title: `Published news: ${b.title}`, details: [['Also in Discord', yn(b.discord)]] };
     case 'DELETE /api/admin/announcements/:id': return { kind: 'delete', icon: '🗑️', title: `Deleted news: ${(c.news && c.news.title) || ''}` };
     case 'PUT /api/admin/alerts': return { kind: 'update', icon: '🔔', title: 'Changed alert and log settings', details: [['Staff channel', b.staffChannel ? `<#${b.staffChannel}>` : 'Off'], ['Log channel', b.logChannel ? `<#${b.logChannel}>` : 'Off']] };

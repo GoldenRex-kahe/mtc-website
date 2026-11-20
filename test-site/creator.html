@@ -165,7 +165,7 @@ async function load() {
             <div class="c-sub">${c.avatar ? `<img src="${esc(c.avatar)}" alt="">` : ''}<span>${esc(c.discordName || c.username)} · @${esc(c.username)} on Discord</span></div></div></div>
         <div class="stchips"><span class="stchip sc-ver">${VI.seal}<span><small>STATUS</small>VERIFIED CREATOR</span></span>${s.events ? `<span class="stchip sc-ev">${VI.gamepad}<span><small>EVENTS</small>${s.events} PLAYED</span></span>` : ''}${s.wins ? `<span class="stchip sc-win">${VI.trophy}<span><small>WINS</small>${s.wins} WIN${s.wins > 1 ? 'S' : ''}</span></span>` : ''}${s.podiums ? `<span class="stchip sc-pod">${VI.medal}<span><small>TOP 3</small>${s.podiums} TIME${s.podiums > 1 ? 'S' : ''}</span></span>` : ''}</div>
         <div class="bdgrow" id="crBadges"></div>
-        ${c.mc ? `<div><button class="mcname" id="copyMc" title="Copy Minecraft name">${c.mcEdition === 'bedrock' ? 'BEDROCK' : c.mcEdition === 'offline' ? 'OFFLINE' : 'JAVA'}: ${esc(c.mc)} ⧉</button></div>` : ''}
+        ${c.mc ? `<div><button class="mcname" id="copyMc" title="Copy Minecraft name">${c.mcEdition === 'bedrock' ? 'BEDROCK' : 'JAVA'}: ${esc(c.mc)} ⧉</button></div>` : ''}
         ${socs.length ? `<div class="socs">${socs.map(([k, u]) => { const web = k.startsWith('website');
           return `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="/assets/icons/${SOC[k] && !web ? k : 'website'}.svg" alt="">${esc(web ? MTC.linkName(u) : SOC[k] || k)}</a>`; }).join('')}</div>` : ''}
         <div class="row" style="margin-top:auto">${c.skin ? `<a class="btn grey" href="${esc(c.skin)}" download="${esc((c.mc || c.username) + '.png')}">GET SKIN</a>` : ''}<button class="btn ghost" id="share">COPY PROFILE LINK</button></div>

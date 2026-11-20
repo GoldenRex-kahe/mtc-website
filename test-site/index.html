@@ -799,7 +799,7 @@ const PER=24;let shown=PER,query='',firstRender=true;
 function renderCreators(){
   const q=query.trim().toLowerCase();
   const list=creators.map((c,i)=>[c,i]).filter(([c])=>!q||c.n.toLowerCase().includes(q)||(c.u||'').includes(q));
-  $('#grid').innerHTML=list.slice(0,shown).map(([c,i],k)=>{const col=logoCol[c.logo]||cols[i%cols.length],yt=c.socials&&c.socials.youtube,ed=c.mcEdition==='bedrock'?'BEDROCK':c.mcEdition==='offline'?'OFFLINE':'JAVA';
+  $('#grid').innerHTML=list.slice(0,shown).map(([c,i],k)=>{const col=logoCol[c.logo]||cols[i%cols.length],yt=c.socials&&c.socials.youtube,ed=c.mcEdition==='bedrock'?'BEDROCK':'JAVA';   // offline accounts are Java players too: shown as JAVA
     const bd=(c.badges||[]).filter(b=>b.image).slice(0,6);
     return `<div class="cr fresh${c.live?' is-live':''}" tabindex="0" role="link" aria-label="${esc(c.n)}${c.live?' is live now':''}: open profile" data-i="${i}" data-id="${esc(c.id||'')}" style="--cc:${col};animation-delay:${Math.min(k,12)*40}ms">
       <div class="cr-ban${c.banner?'':' none'}"${c.banner||c.logo?` style="background-image:url('${esc(c.banner||c.logo)}')"`:''}>
@@ -822,12 +822,14 @@ $('#crSearch').addEventListener('input',e=>{query=e.target.value;shown=PER;rende
 $('#crMore').addEventListener('click',()=>{shown+=PER;renderCreators()});
 renderCreators();
 const slug=c=>(c.u||c.n).toLowerCase();
+// A to Z ignoring spaces/emoji/symbols in front and fancy Unicode letters
+const sortKey=s=>String(s||'').normalize('NFKC').replace(/^[^\p{L}\p{N}]+/u,'').toLowerCase();
 /* old #creator=name links now open the creator's own page */
 const pageOf=c=>'/creator.html?u='+encodeURIComponent(c.u||c.id||c.n);
 function initHash(){const hm=location.hash.match(/creator=(.+)/);if(hm){const k=creators.findIndex(c=>slug(c)===decodeURIComponent(hm[1]).toLowerCase());if(k>=0)location.replace(pageOf(creators[k]))}}
 fetch('/api/creators').then(r=>r.ok?r.json():Promise.reject(new Error('api '+r.status))).then(d=>{
   creators=d.creators.map(c=>({live:c.live||null,n:c.name,u:c.username,id:c.id,mc:c.mc,mcEdition:c.mcEdition,banner:c.banner||'',badges:c.badges||[],logo:c.logo,socials:c.socials||{},featured:c.featured,skin:c.skin}))
-    .sort((a,b)=>(!!b.socials.youtube-!!a.socials.youtube)||a.n.localeCompare(b.n));
+    .sort((a,b)=>(!!b.socials.youtube-!!a.socials.youtube)||sortKey(a.n).localeCompare(sortKey(b.n)));
   $('#crNote').textContent=creators.length+' of '+d.total+' creators verified so far'+(d.source==='cache'?' (Discord unreachable, using a saved list)':'')+'. Creators appear here with their YouTube channel logo after an admin verifies the channel. Send your channel link to an admin to get listed.';
 }).catch(()=>{$('#crNote').textContent='Showing sample creators. Start the MTC server (node server.js) to sync from Discord.'})
   .finally(()=>{shown=PER;renderCreators();initHash();colourCards()});
