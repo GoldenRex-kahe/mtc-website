@@ -53,6 +53,9 @@ async function creatorMembers(force) {
   return mem;
 }
 
+// someone joined, left or got a role: drop the cached lists so the next look asks Discord again (the saved file stays as a fallback)
+const forget = () => { all = null; mem = null; };
+
 // ----- one member: is this Discord user in our server, and do they hold the Creator role? -----
 async function memberInfo(userId) {
   if (!ready()) return { inGuild: false, creator: false, roles: [] };
@@ -208,4 +211,4 @@ async function dmSend(userId, payload, files) {
 
 // last fetched member list, without waiting (used for player pictures)
 const cachedMember = id => all ? all.members.find(m => m.id === id) : null;
-module.exports = { edit, followup, channels, roles, send, dmSend, addMember, refreshToken, makeInvite, deleteInvite, dm, addRole, cachedMember, ready, allMembers, creatorMembers, memberInfo, searchMembers, announce, postEmbed, loginReady, authorizeUrl, exchange, redirectUri };
+module.exports = { forget, edit, followup, channels, roles, send, dmSend, addMember, refreshToken, makeInvite, deleteInvite, dm, addRole, cachedMember, ready, allMembers, creatorMembers, memberInfo, searchMembers, announce, postEmbed, loginReady, authorizeUrl, exchange, redirectUri };

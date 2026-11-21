@@ -1065,7 +1065,7 @@ async function addDirect(a) {
   try {
     if (Date.now() > t.exp - 60e3) { const n = await discord.refreshToken(t.refresh); t = { access: n.access_token, refresh: n.refresh_token || t.refresh, exp: Date.now() + (n.expires_in || 604800) * 1000 }; saveJoin(a.userId, t); }
     const r = await discord.addMember(a.userId, t.access, a.giveRole && cfg.creatorRole ? [cfg.creatorRole] : []);
-    a.added = { how: r, at: store.now() }; dropJoin(a.userId);
+    a.added = { how: r, at: store.now() }; dropJoin(a.userId); discord.forget();
     await joinCheck(a.userId);
     try { await discord.dm(a.userId, { embeds: [{ title: 'Welcome to MTC!', color: 0xF7931E, url: cfg.publicUrl + '/account.html',
       description: `Hi ${a.name}, your application was approved and you have been added to the MC Thamizh Creators server. Say hi in the server, and finish your profile here: ${cfg.publicUrl}/account.html` }] }); a.dm = { ok: true, at: store.now() }; }
@@ -1080,10 +1080,11 @@ async function joinCheck(uid) {
   const info = await discord.memberInfo(uid);
   if (!info.inGuild) return false;
   const rec = D().users[uid] = { ...(D().users[uid] || {}), id: uid, inGuild: true };
+  if (!(D().users[uid] || {}).seenJoin) { rec.seenJoin = store.now(); discord.forget(); }
   if (a) {
     a.joinedAt = store.now();
     if (a.invite && a.invite.code) { await discord.deleteInvite(a.invite.code).catch(e => console.warn('delete invite', e.message)); a.invite.deleted = store.now(); }
-    if (a.giveRole && cfg.creatorRole && !info.creator) { try { await discord.addRole(uid, cfg.creatorRole); rec.creator = true; } catch (e) { a.roleError = e.message; } }
+    if (a.giveRole && cfg.creatorRole && !info.creator) { try { await discord.addRole(uid, cfg.creatorRole); rec.creator = true; discord.forget(); } catch (e) { a.roleError = e.message; } }
     else if (info.creator) rec.creator = true;
     if (a.mc && !rec.mc) { rec.mc = a.mc; rec.mcEdition = edOf(a.mcEdition); }
   }
@@ -1470,8 +1471,10 @@ on('POST', '/api/admin/profiles/:id/reject', async (req, res, p) => {
 on('POST', '/api/admin/creators/verify', async req => {
   needAdmin(req); const b = await readBody(req);
   const key = str(b.username, 40); if (!key) throw err(400, 'Enter the Discord username.');
-  const r = await discord.creatorMembers().catch(() => null);
-  if (r && !r.members.some(m => m.username.toLowerCase() === key.toLowerCase() || m.id === key)) throw err(400, key + ' does not hold the Creator role in Discord.');
+  const has = r => r && r.members.some(m => m.username.toLowerCase() === key.toLowerCase().replace(/^@/, '') || m.id === key);
+  let r = await discord.creatorMembers().catch(() => null);
+  if (r && !has(r)) r = await discord.creatorMembers(true).catch(() => r);   // they may have just joined or got the role: ask Discord again
+  if (r && !has(r)) throw err(400, key + ' does not hold the Creator role in Discord (or is not in the server). Give them the role, then try again.');
   const mcEd = edOf(b.edition), v = await yt.verifyCreator(key, str(b.youtube, 300), { mc: cleanMc(b.mc, mcEd) });
   if (b.mc) { const ex = yt.readExtras(); if (ex[v.key]) { ex[v.key].mcEdition = mcEd; yt.writeExtras(ex); } }
   return { ok: true, channel: v.name };
@@ -1484,7 +1487,7 @@ on('POST', '/api/admin/creators/unverify', async req => {
 // creators who have a channel set up but are not on the Creators page, and why (hidden by an admin, lost the role, left, renamed)
 on('GET', '/api/admin/creators/missing', async req => {
   needAdmin(req);
-  const all = (await discord.allMembers().catch(() => ({ members: [] }))).members; relinkCreators(all);
+  const all = (await discord.allMembers(true).catch(() => discord.allMembers().catch(() => ({ members: [] })))).members; relinkCreators(all);   // fresh list: admins look here right after someone joins
   const ex = yt.readExtras(), out = [];
   const shown = new Set(publicCreators(all.filter(m => m.creator)).map(c => c.id));
   for (const [key, x] of Object.entries(ex)) {
@@ -2256,7 +2259,10 @@ if (discord.ready() && !process.env.MTC_NO_BOT) {
     },
     INTERACTION_CREATE: it => { if (it.guild_id && it.guild_id !== cfg.guild) return; if (it.type === 2) return onCommand(it); if (it.type === 4) return onAutocomplete(it); },
     // an approved applicant joined: delete their invite and give the Creator role straight away
-    GUILD_MEMBER_ADD: m => { if (m.guild_id !== cfg.guild) return; const id = m.user && m.user.id; if (id && D().applications.some(a => a.userId === id && a.status === 'approved' && !a.joinedAt)) joinCheck(id).catch(() => {}); },
+    // the member lists are cached for 10 minutes: refresh them as soon as someone joins, leaves or their roles change
+    GUILD_MEMBER_UPDATE: m => { if (m.guild_id === cfg.guild) discord.forget(); },
+    GUILD_MEMBER_REMOVE: m => { if (m.guild_id === cfg.guild) discord.forget(); },
+    GUILD_MEMBER_ADD: m => { if (m.guild_id !== cfg.guild) return; discord.forget(); const id = m.user && m.user.id; if (id && D().applications.some(a => a.userId === id && a.status === 'approved' && !a.joinedAt)) joinCheck(id).catch(() => {}); },
   });
   setInterval(rotatePresence, 30e3).unref();
 }
