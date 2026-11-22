@@ -269,6 +269,8 @@ module.exports = function install(x) {
   const pollOpen = q => !q.closed && !pollSoon(q) && (!q.endsAt || new Date(q.endsAt).getTime() > Date.now());
   const pollState = q => pollSoon(q) ? 'soon' : pollOpen(q) ? 'open' : 'closed';
   const unmd = t => String(t || '').replace(/\*\*|__|~~|`/g, '').replace(/^#{1,6}\s+/, '').trim();   // Discord bold/heading marks do not belong in titles and buttons
+  // where and when each member last voted (for the admin VOTERS list)
+  const markVote = (q, uid, src, removed) => { const m = q.voteMeta = q.voteMeta || {}; if (removed) delete m[uid]; else m[uid] = { src, at: now() }; };
   const tallyOf = q => { const t = Object.fromEntries(q.options.map(o => [o.id, 0])); for (const v of Object.values(q.votes || {})) for (const o of v) if (o in t) t[o]++; return t; };
   function pubPoll(q, u) {
     const mine = u ? (q.votes || {})[u.uid] || [] : [], total = Object.keys(q.votes || {}).length;
@@ -288,7 +290,7 @@ module.exports = function install(x) {
     if (!pollOpen(q)) throw err(400, 'This poll has closed.');
     const b = await readBody(req), ids = [...new Set((Array.isArray(b.options) ? b.options : [b.options]).map(String))].filter(o => q.options.some(x => x.id === o));
     if (!ids.length) throw err(400, 'Pick an option.'); if (!q.multi && ids.length > 1) throw err(400, 'Pick one option.');
-    (q.votes = q.votes || {})[u.uid] = ids; store.save(); refreshPollPosts(q); return { poll: pubPoll(q, u) };
+    (q.votes = q.votes || {})[u.uid] = ids; markVote(q, u.uid, 'website'); store.save(); refreshPollPosts(q); return { poll: pubPoll(q, u) };
   });
   const cleanPoll = b => {
     const question = unmd(str(b.question, 200)); if (!question) throw err(400, 'Write the question.');
@@ -331,18 +333,84 @@ module.exports = function install(x) {
     pollTimers.set(q.id, setTimeout(async () => {
       pollTimers.delete(q.id);
       const live = list('polls').find(z => z.id === q.id); if (!live) return;
-      for (const ps of live.posts || []) await discord.edit(ps.channelId, ps.messageId, pollMessage(live)).catch(e => { if (e.status === 404) ps.gone = true; else logErr('poll post', e); });
+      for (const ps of live.posts || []) {
+        if (ps.native) {   // a native Discord poll cannot be changed: only its text above can; when the poll closes, end it on Discord too
+          const done = e => { if (e && e.status === 404) ps.gone = true; else if (e) logErr('poll post', e); };
+          await discord.edit(ps.channelId, ps.messageId, { content: nativeText(live, ps.ping) }).catch(done);
+          if (pollState(live) === 'closed' && !ps.expired) { await discord.expirePoll(ps.channelId, ps.messageId).then(() => { ps.expired = true; }).catch(e => { if (e.code === 520004 || /expired|ended/i.test(e.message)) ps.expired = true; else done(e); }); store.save(); }
+          continue;
+        }
+        await discord.edit(ps.channelId, ps.messageId, pollMessage(live)).catch(e => { if (e.status === 404) ps.gone = true; else logErr('poll post', e); });
+      }
       if ((live.posts || []).some(ps => ps.gone)) { live.posts = live.posts.filter(ps => !ps.gone); store.save(); }
     }, 3000));
   }
-  async function postPoll(q, { channelId, ping, roles }) {
+
+  // ---- native Discord poll: Discord draws it, highlights each member's own vote and shows the bars. Limits: 10 answers of
+  // 55 characters, no details under answers (they go in the message text above), and it cannot be changed once posted.
+  const NATIVE_MAX = 10;
+  function nativeText(q, ping) {
+    const st = pollState(q);
+    const parts = [ping || '', `## ${unmd(q.question)}`, q.note || '',
+      ...q.options.map((o, i) => o.details ? `**${NUM[i] || '•'} ${unmd(o.text)}**\n${o.details.split('\n').map(l => l.replace(/^\s*[*-]\s+/, '• ')).join('\n')}` : ''),
+      q.outro || '',
+      st === 'closed' ? '🔒 **Voting is closed.**' : `-# Vote in the poll below or on the website: <${site()}/community.html#poll-${q.id}> · one vote per member, your latest vote counts`];
+    let t = parts.filter(Boolean).join('\n\n');
+    if (t.length > 2000) t = t.slice(0, 1990) + '…';
+    return t;
+  }
+  const nativeHours = q => q.endsAt ? Math.min(768, Math.max(1, Math.ceil((new Date(q.endsAt).getTime() - Date.now()) / 36e5))) : 168;
+  async function postPoll(q, { channelId, ping, roles, style }) {
     const chs = await discord.channels(), ch = chs.find(c => c.id === String(channelId || '')); if (!ch) throw err(400, 'Pick a channel.');
     roles = (Array.isArray(roles) ? roles : []).map(String).filter(r => /^\d{15,}$/.test(r)).slice(0, 5);
     const pingTxt = [ping ? '@everyone' : '', ...roles.map(r => `<@&${r}>`)].filter(Boolean).join(' ');
-    const sent = await discord.send(ch.id, { ...pollMessage(q), ...(pingTxt ? { content: pingTxt } : {}), allowed_mentions: { parse: ping ? ['everyone'] : [], roles } });
-    (q.posts = q.posts || []).push({ channelId: ch.id, channel: ch.name, messageId: sent.id, at: now() }); q.shownState = pollState(q); store.save();
+    const mentions = { parse: ping ? ['everyone'] : [], roles };
+    let sent, native = style !== 'buttons';
+    if (native) {
+      if (q.options.length > NATIVE_MAX) throw err(400, `A Discord poll takes at most ${NATIVE_MAX} options. Use the button style for this one.`);
+      if (pollSoon(q)) throw err(400, 'A Discord poll can be voted on as soon as it is posted. Choose "Post when voting opens".');
+      const answers = q.options.map((o, i) => ({ poll_media: { text: unmd(o.text).slice(0, 55), emoji: { name: NUM[i] } } }));
+      sent = await discord.send(ch.id, { content: nativeText(q, pingTxt), allowed_mentions: mentions,
+        poll: { question: { text: unmd(q.question).slice(0, 300) }, answers, duration: nativeHours(q), allow_multiselect: !!q.multi, layout_type: 1 } });
+    } else sent = await discord.send(ch.id, { ...pollMessage(q), ...(pingTxt ? { content: pingTxt } : {}), allowed_mentions: mentions });
+    (q.posts = q.posts || []).push({ channelId: ch.id, channel: ch.name, messageId: sent.id, at: now(), ...(native ? { native: true, ping: pingTxt, answers: q.options.map(o => o.id) } : {}) });
+    q.shownState = pollState(q); store.save();
+    if (native) setTimeout(() => syncNative().catch(() => {}), 60e3).unref();
     return `https://discord.com/channels/${cfg.guild}/${ch.id}/${sent.id}`;
   }
+  // a vote on a native Discord poll (gateway event): it becomes that member's vote, the same as voting on the website
+  function onPollVote(ev, added) {
+    if (!ev || ev.guild_id !== cfg.guild) return;
+    for (const q of list('polls')) {
+      const ps = (q.posts || []).find(x => x.native && x.messageId === ev.message_id); if (!ps) continue;
+      const opt = ps.answers[(+ev.answer_id || 0) - 1]; if (!opt || !q.options.some(o => o.id === opt)) return;
+      if (!pollOpen(q) || userRec(ev.user_id).blocked) return;
+      const votes = q.votes = q.votes || {}, cur = votes[ev.user_id] || [];
+      const next = added ? (q.multi ? [...new Set([...cur, opt])] : [opt]) : cur.filter(x => x !== opt);
+      if (next.length) votes[ev.user_id] = next; else delete votes[ev.user_id];
+      markVote(q, ev.user_id, 'discord poll', !next.length);
+      D().users[ev.user_id] = { ...(D().users[ev.user_id] || {}), id: ev.user_id, inGuild: true };
+      store.save(); return;
+    }
+  }
+  // catch up on native poll votes missed while the site was restarting (members who have no vote here yet)
+  async function syncNative() {
+    for (const q of list('polls').filter(pollOpen)) for (const ps of (q.posts || []).filter(x => x.native && !x.expired)) {
+      try {
+        let changed = false;
+        for (let i = 0; i < ps.answers.length; i++) {
+          const opt = ps.answers[i]; if (!q.options.some(o => o.id === opt)) continue;
+          for (const uid of await discord.pollVoters(ps.channelId, ps.messageId, i + 1)) {
+            const votes = q.votes = q.votes || {};
+            if (!votes[uid]) { votes[uid] = [opt]; markVote(q, uid, 'discord poll'); changed = true; }   // members who already have a vote here keep it (their latest vote counts)
+          }
+        }
+        ps.synced = now(); if (changed) store.save();
+      } catch (e) { if (e.status === 404) ps.gone = true; else logErr('poll sync', e); }
+    }
+  }
+  setTimeout(() => syncNative().catch(() => {}), 25e3).unref();
+  setInterval(() => syncNative().catch(() => {}), 10 * 60e3).unref();
   // every 30 seconds: a poll that opened sends its scheduled Discord post; posts are updated when a poll opens or closes
   setInterval(async () => {
     for (const q of list('polls')) {
@@ -377,6 +445,7 @@ module.exports = function install(x) {
     const votes = q.votes = q.votes || {}, cur = votes[who.id] || [];
     const next = q.multi ? (cur.includes(o.id) ? cur.filter(x => x !== o.id) : [...cur, o.id]) : [o.id];
     if (next.length) votes[who.id] = next; else delete votes[who.id];
+    markVote(q, who.id, 'discord buttons', !next.length);
     const rec = D().users[who.id] = { ...(D().users[who.id] || {}), id: who.id, username: who.username || (D().users[who.id] || {}).username, inGuild: true };
     if (!rec.name) rec.name = (it.member && it.member.nick) || who.global_name || who.username;
     store.save(); refreshPollPosts(q);
@@ -389,7 +458,7 @@ module.exports = function install(x) {
 
   on('GET', '/api/admin/polls', async req => { const u = needAdmin(req); return { polls: list('polls').slice().reverse().map(q => ({ ...pubPoll(q, u), closed: !!q.closed,
     autoPost: q.autoPost ? { channel: q.autoPost.channel } : null,
-    posts: (q.posts || []).map(ps => ({ channel: ps.channel, link: `https://discord.com/channels/${cfg.guild}/${ps.channelId}/${ps.messageId}` })) })) }; });
+    posts: (q.posts || []).map(ps => ({ channel: ps.channel, native: !!ps.native, link: `https://discord.com/channels/${cfg.guild}/${ps.channelId}/${ps.messageId}` })) })) }; });
   on('POST', '/api/admin/polls', async req => { const u = needAdmin(req); const q = { id: id(), ...cleanPoll(await readBody(req)), votes: {}, closed: false, createdAt: now(), by: u.name }; list('polls').push(q); store.save(); return { ok: true, poll: pubPoll(q, u) }; });
   on('PUT', '/api/admin/polls/:id', async (req, res, p) => {
     const u = needAdmin(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
@@ -404,14 +473,25 @@ module.exports = function install(x) {
     for (const ps of (q && q.posts) || []) discord.edit(ps.channelId, ps.messageId, { embeds: [{ title: unmd(q.question), description: 'This poll was removed.', color: 0x5c5c5c }], components: [] }).catch(() => {});
     D().polls = list('polls').filter(z => z.id !== p.id); store.save(); return { ok: true };
   });
+  // who voted for what, and where (website, Discord poll, Discord buttons), for admins, also while the poll is running
+  on('GET', '/api/admin/polls/:id/voters', async (req, res, p) => {
+    needAdmin(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
+    await discord.allMembers().catch(() => null);
+    const who = uid => { const g = discord.cachedMember(uid) || {}, r = userRec(uid), m = (q.voteMeta || {})[uid] || {};
+      return { id: uid, name: g.name || r.name || r.username || uid, username: g.username || r.username || '', avatar: g.avatar || r.avatar || '', src: m.src || '', at: m.at || '' }; };
+    const options = q.options.map(o => ({ id: o.id, text: unmd(o.text), voters: Object.entries(q.votes || {}).filter(([, v]) => v.includes(o.id)).map(([uid]) => who(uid)).sort((a, b) => String(b.at).localeCompare(String(a.at))) }));
+    return { question: unmd(q.question), total: Object.keys(q.votes || {}).length, options };
+  });
   // post to Discord now, or (when: 'open') automatically when voting opens
   on('POST', '/api/admin/polls/:id/discord', async (req, res, p) => {
     needAdmin(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
     const b = await readBody(req);
     if (b.when === 'cancel') { delete q.autoPost; store.save(); return { ok: true }; }
     const chs = await discord.channels(), ch = chs.find(c => c.id === String(b.channelId || '')); if (!ch) throw err(400, 'Pick a channel.');
-    if (b.when === 'open' && pollSoon(q)) { q.autoPost = { channelId: ch.id, channel: ch.name, ping: !!b.ping, roles: Array.isArray(b.roles) ? b.roles.map(String).slice(0, 5) : [] }; store.save(); return { ok: true, scheduled: true, at: q.startsAt }; }
-    return { ok: true, link: await postPoll(q, { channelId: ch.id, ping: !!b.ping, roles: b.roles }) };
+    const style = b.style === 'buttons' ? 'buttons' : 'native';
+    if (style === 'native' && q.options.length > NATIVE_MAX) throw err(400, `A Discord poll takes at most ${NATIVE_MAX} options. Pick the button style.`);
+    if (pollSoon(q) && (b.when === 'open' || style === 'native')) { q.autoPost = { channelId: ch.id, channel: ch.name, ping: !!b.ping, roles: Array.isArray(b.roles) ? b.roles.map(String).slice(0, 5) : [], style }; store.save(); return { ok: true, scheduled: true, at: q.startsAt }; }
+    return { ok: true, link: await postPoll(q, { channelId: ch.id, ping: !!b.ping, roles: b.roles, style }) };
   });
 
   // ================================================================ event suggestions from members and creators
@@ -799,5 +879,5 @@ module.exports = function install(x) {
   });
 
   const liveList = () => [...live.values()].map(l => ({ name: l.creator.name, title: l.title, url: 'https://www.youtube.com/watch?v=' + l.videoId, since: l.since }));
-  return { onPollButton, liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
+  return { onPollButton, onPollVote, liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
 };

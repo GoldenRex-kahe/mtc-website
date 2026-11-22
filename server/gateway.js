@@ -4,8 +4,9 @@ const cfg = require('./env');
 
 const API = 'https://discord.com/api/v10';
 const INTENT_GUILDS = 1, INTENT_MEMBERS = 2; // members is "privileged": it must be switched on in the Developer Portal
+const INTENT_POLLS = 1 << 24;                // votes on native Discord polls (MESSAGE_POLL_VOTE_ADD / _REMOVE); not privileged
 let ws = null, beat = null, acked = true, seq = null, session = null, resumeUrl = null, stopped = false;
-let intents = INTENT_GUILDS | INTENT_MEMBERS, presence = { name: 'MC Thamizh Creators', type: 0 }, handlers = {};
+let intents = INTENT_GUILDS | INTENT_MEMBERS | INTENT_POLLS, presence = { name: 'MC Thamizh Creators', type: 0 }, handlers = {};
 const state = { online: false, since: null, user: null, lastError: '', reconnects: 0, membersIntent: true };
 
 function send(op, d) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ op, d })); }
@@ -45,7 +46,7 @@ async function connect() {
     clearInterval(beat); state.online = false;
     if (ev.code === 4004) { state.lastError = 'Discord rejected the bot token (4004). Check DISCORD_TOKEN in .env.'; stopped = true; console.warn(state.lastError); return; }
     if (ev.code === 4014) { // privileged "Server Members" intent is off in the Developer Portal: run without it
-      intents = INTENT_GUILDS; state.membersIntent = false; session = null; resumeUrl = null;
+      intents = INTENT_GUILDS | INTENT_POLLS; state.membersIntent = false; session = null; resumeUrl = null;
       state.lastError = 'Server Members intent is off in the Developer Portal, so instant join detection is off (the 5-minute check still runs).'; console.warn(state.lastError);
     }
     if ([4007, 4009, 4010, 4011, 4012, 4013].includes(ev.code)) { session = null; resumeUrl = null; seq = null; }

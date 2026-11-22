@@ -2262,6 +2262,9 @@ if (discord.ready() && !process.env.MTC_NO_BOT) {
     // an approved applicant joined: delete their invite and give the Creator role straight away
     // the member lists are cached for 10 minutes: refresh them as soon as someone joins, leaves or their roles change
     GUILD_MEMBER_UPDATE: m => { if (m.guild_id === cfg.guild) discord.forget(); },
+    // votes on native Discord polls posted by the site count as website votes
+    MESSAGE_POLL_VOTE_ADD: v => community.onPollVote(v, true),
+    MESSAGE_POLL_VOTE_REMOVE: v => community.onPollVote(v, false),
     GUILD_MEMBER_REMOVE: m => { if (m.guild_id === cfg.guild) discord.forget(); },
     GUILD_MEMBER_ADD: m => { if (m.guild_id !== cfg.guild) return; discord.forget(); const id = m.user && m.user.id; if (id && D().applications.some(a => a.userId === id && a.status === 'approved' && !a.joinedAt)) joinCheck(id).catch(() => {}); },
   });

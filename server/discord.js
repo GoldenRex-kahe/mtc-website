@@ -53,6 +53,18 @@ async function creatorMembers(force) {
   return mem;
 }
 
+// native Discord polls: end one early, and read who picked an answer (answer ids start at 1; 100 voters per page)
+const expirePoll = (channelId, messageId) => call(`/channels/${channelId}/polls/${messageId}/expire`, { method: 'POST' });
+async function pollVoters(channelId, messageId, answerId) {
+  const out = []; let after = '';
+  for (let i = 0; i < 50; i++) {
+    const r = await call(`/channels/${channelId}/polls/${messageId}/answers/${answerId}?limit=100${after ? '&after=' + after : ''}`);
+    const users = (r && r.users) || []; out.push(...users.map(u => u.id));
+    if (users.length < 100) break; after = users[users.length - 1].id;
+  }
+  return out;
+}
+
 // someone joined, left or got a role: drop the cached lists so the next look asks Discord again (the saved file stays as a fallback)
 const forget = () => { all = null; mem = null; };
 
@@ -211,4 +223,4 @@ async function dmSend(userId, payload, files) {
 
 // last fetched member list, without waiting (used for player pictures)
 const cachedMember = id => all ? all.members.find(m => m.id === id) : null;
-module.exports = { forget, edit, followup, channels, roles, send, dmSend, addMember, refreshToken, makeInvite, deleteInvite, dm, addRole, cachedMember, ready, allMembers, creatorMembers, memberInfo, searchMembers, announce, postEmbed, loginReady, authorizeUrl, exchange, redirectUri };
+module.exports = { expirePoll, pollVoters, forget, edit, followup, channels, roles, send, dmSend, addMember, refreshToken, makeInvite, deleteInvite, dm, addRole, cachedMember, ready, allMembers, creatorMembers, memberInfo, searchMembers, announce, postEmbed, loginReady, authorizeUrl, exchange, redirectUri };
