@@ -28,21 +28,42 @@
     const p = subTabs(pane, [['polls', '🗳️ POLLS'], ['ideas', '💡 EVENT IDEAS', fresh], ['feedback', '⭐ FEEDBACK'], ['lfg', '🤝 TEAM FINDER']], commTab, go);
     ({ polls, ideas: () => ideas(p, sug), feedback, lfg }[commTab] || polls)(p);
   }
-  // turn a written announcement into a poll: first line = question; text before the first "Option ..." line = description;
-  // each "Option ..." line starts an option and the lines under it are its details; a last line starting with 🗳️ (or
-  // "Vote", "Your vote") and anything after it = closing text
+  // turn a written announcement into a poll. Works with text copied from Discord (**bold**, ### headings, > quotes, :one:):
+  // first line = question; text before the first option = description; an option starts on a line beginning with
+  // "Option"/"Choice" (an emoji in front is fine), a number emoji (1️⃣) or "1." / "1)"; the lines under it are its details;
+  // a line starting with 🗳️, "Vote", "Your vote" or "The final" after the options, and everything after it, is the closing text.
+  // If no such lines are found, each paragraph after the description is an option (its first line is the name).
   function parsePollText(t) {
+    const KEYCAP = /^(\d{1,2})\s*️?⃣/u;
+    const OUTRO = /^(🗳|vote\b|your vote|the final|please vote|cast your)/i;
+    const CODES = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, keycap_ten: 10 };
+    const plain = l => l.replace(/:(one|two|three|four|five|six|seven|eight|nine|keycap_ten):/g, (m, w) => CODES[w] + '️⃣')
+      .replace(/^[>\s]+/, '').replace(/^#{1,6}\s+/, '').replace(/\*\*|__|~~|`/g, '').replace(/^\*(?!\s)|(?<!\s)\*$/g, '').trim();
+    const noLead = l => l.replace(/^[^\p{L}\p{N}]+/u, '');   // "📌 Option 1" -> "Option 1"
+    const optWord = l => /^(option|choice)\b/i.test(l) && !/^(options?|choices?)\s*:?$/i.test(l) && !/^options?\s+(for|to|is|are)\b/i.test(l);
+    const isOpt = l => optWord(l) || optWord(noLead(l)) || KEYCAP.test(l) || /^\d{1,2}\s*[.)]\s+\S/.test(l);
+    const optName = l => l.replace(/^(option|choice)\s*/i, '').replace(KEYCAP, '').replace(/^\d{1,2}\s*[.):]?\s*/, '').replace(/^[A-Za-z]\s*[.):]\s+/, '').replace(/^[—–:\-.)\s]+/, '').trim();
+    const bullet = x => x.replace(/^[*•\-–]\s*/, '• ');
     const lines = String(t || '').replace(/\r/g, '').split('\n'), out = { question: '', note: [], options: [], outro: [] };
     let cur = null, inOutro = false;
     for (const raw of lines) {
-      const l = raw.trim();
+      const l = plain(raw);
       if (!out.question) { if (l) out.question = l; continue; }
-      if (/^(option|choice)\b|^[1-9]\s*[⃣️.)\-:]|^[1-9]️⃣/i.test(l) && !inOutro) { cur = { text: l.replace(/^(option|choice)\s*/i, '').replace(/^[1-9]\s*(️⃣|⃣)?\s*[.)\-:—–]?\s*/u, '').replace(/^[—–\-:]\s*/, '') || l, details: [] }; out.options.push(cur); continue; }
-      if (cur && /^(🗳|vote\b|your vote|the final)/i.test(l)) inOutro = true;
-      if (inOutro) { out.outro.push(raw.trim()); continue; }
-      if (cur) { if (l) cur.details.push(l.replace(/^[*•-]\s*/, '• ')); } else out.note.push(raw.trim());
+      if (!inOutro && l && isOpt(l)) { const n = optWord(l) || KEYCAP.test(l) || /^\d/.test(l) ? l : noLead(l); cur = { text: optName(n) || n, details: [] }; out.options.push(cur); continue; }
+      if (cur && OUTRO.test(l)) inOutro = true;
+      if (inOutro) { out.outro.push(l); continue; }
+      if (cur) { if (l) cur.details.push(bullet(l)); } else out.note.push(l);
     }
-    return { question: out.question, note: out.note.join('\n').trim(), outro: out.outro.join('\n').trim(), options: out.options.map(o => ({ text: o.text.slice(0, 80), details: o.details.join('\n') })) };
+    if (out.options.length < 2) {
+      const blocks = out.note.join('\n').split(/\n\s*\n/).map(b => b.split('\n').map(x => x.trim()).filter(Boolean)).filter(b => b.length);
+      if (blocks.length >= 3) {
+        const last = blocks[blocks.length - 1], hasOutro = OUTRO.test(last[0]);
+        out.note = blocks[0]; out.outro = hasOutro ? last : [];
+        out.options = blocks.slice(1, hasOutro ? -1 : undefined).map(b => ({ text: b[0], details: b.slice(1).map(bullet) }));
+      }
+    }
+    return { question: out.question, note: out.note.join('\n').replace(/\n{3,}/g, '\n\n').trim(), outro: out.outro.join('\n').trim(),
+      options: out.options.map(o => ({ text: o.text.slice(0, 80), details: o.details.join('\n') })) };
   }
   async function polls(p) {
     const d = await api('/api/admin/polls');
@@ -72,7 +93,7 @@
     $('#paddopt').onclick = () => { if (p.querySelectorAll('.popt-ed').length >= 12) return toast('12 options at most.', true); $('#popts').insertAdjacentHTML('beforeend', optRow()); bindRows(); };
     $('#pfillgo').onclick = () => {
       const f = parsePollText($('#pfill').value); if (!f.question) return toast('Paste the announcement first.', true);
-      if (f.options.length < 2) return toast('Could not find 2 options. Start each option on its own line with "Option".', true);
+      if (f.options.length < 2) return toast(`Found ${f.options.length} option${f.options.length === 1 ? '' : 's'}. Put each option on its own line starting with "Option" or 1️⃣ 2️⃣, or leave an empty line between options. You can also type them in the boxes below.`, true);
       $('#pq').value = f.question; $('#pn').value = f.note; $('#pout').value = f.outro;
       $('#popts').innerHTML = f.options.slice(0, 12).map(optRow).join(''); bindRows();
       toast(`Filled: ${f.options.length} options. Check it, then press START POLL.`); };
