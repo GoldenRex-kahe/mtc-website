@@ -2257,7 +2257,8 @@ if (discord.ready() && !process.env.MTC_NO_BOT) {
       if (cfg.clientId) { const r = await fetch(`https://discord.com/api/v10/applications/${cfg.clientId}/guilds/${cfg.guild}/commands`, { method: 'PUT', headers: { Authorization: 'Bot ' + cfg.token, 'Content-Type': 'application/json' }, body: JSON.stringify(COMMANDS) });
         console.log(r.ok ? `Slash commands ready (${COMMANDS.length})` : 'Could not register slash commands: ' + r.status + ' ' + (await r.text()).slice(0, 200)); }
     },
-    INTERACTION_CREATE: it => { if (it.guild_id && it.guild_id !== cfg.guild) return; if (it.type === 2) return onCommand(it); if (it.type === 4) return onAutocomplete(it); },
+    INTERACTION_CREATE: it => { if (it.guild_id && it.guild_id !== cfg.guild) return; if (it.type === 2) return onCommand(it); if (it.type === 4) return onAutocomplete(it);
+      if (it.type === 3 && String((it.data || {}).custom_id || '').startsWith('poll:')) return community.onPollButton(it); },   // poll vote buttons
     // an approved applicant joined: delete their invite and give the Creator role straight away
     // the member lists are cached for 10 minutes: refresh them as soon as someone joins, leaves or their roles change
     GUILD_MEMBER_UPDATE: m => { if (m.guild_id === cfg.guild) discord.forget(); },

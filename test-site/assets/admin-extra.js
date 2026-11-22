@@ -28,33 +28,70 @@
     const p = subTabs(pane, [['polls', '🗳️ POLLS'], ['ideas', '💡 EVENT IDEAS', fresh], ['feedback', '⭐ FEEDBACK'], ['lfg', '🤝 TEAM FINDER']], commTab, go);
     ({ polls, ideas: () => ideas(p, sug), feedback, lfg }[commTab] || polls)(p);
   }
+  // turn a written announcement into a poll: first line = question; text before the first "Option ..." line = description;
+  // each "Option ..." line starts an option and the lines under it are its details; a last line starting with 🗳️ (or
+  // "Vote", "Your vote") and anything after it = closing text
+  function parsePollText(t) {
+    const lines = String(t || '').replace(/\r/g, '').split('\n'), out = { question: '', note: [], options: [], outro: [] };
+    let cur = null, inOutro = false;
+    for (const raw of lines) {
+      const l = raw.trim();
+      if (!out.question) { if (l) out.question = l; continue; }
+      if (/^(option|choice)\b|^[1-9]\s*[⃣️.)\-:]|^[1-9]️⃣/i.test(l) && !inOutro) { cur = { text: l.replace(/^(option|choice)\s*/i, '').replace(/^[1-9]\s*(️⃣|⃣)?\s*[.)\-:—–]?\s*/u, '').replace(/^[—–\-:]\s*/, '') || l, details: [] }; out.options.push(cur); continue; }
+      if (cur && /^(🗳|vote\b|your vote|the final)/i.test(l)) inOutro = true;
+      if (inOutro) { out.outro.push(raw.trim()); continue; }
+      if (cur) { if (l) cur.details.push(l.replace(/^[*•-]\s*/, '• ')); } else out.note.push(raw.trim());
+    }
+    return { question: out.question, note: out.note.join('\n').trim(), outro: out.outro.join('\n').trim(), options: out.options.map(o => ({ text: o.text.slice(0, 80), details: o.details.join('\n') })) };
+  }
   async function polls(p) {
     const d = await api('/api/admin/polls');
-    p.innerHTML = `<div class="card accent"><h2>NEW POLL</h2><p class="soft small">Members vote on the website (Community page). One vote per member; they can change it until it closes.</p>
-      <div class="fields"><div class="full"><label for="pq">Question</label><input type="text" id="pq" maxlength="200" placeholder="What should the next MTC event be?"></div>
-        <div class="full"><label for="po">Options <span class="soft">(one per line, 2 to 12)</span></label><textarea id="po" rows="4" placeholder="Hunger Games&#10;Build battle&#10;Manhunt"></textarea></div>
-        <div class="full"><label for="pn">Note <span class="soft">(optional)</span></label><input type="text" id="pn" maxlength="300"></div>
+    const optRow = (o = {}) => `<div class="popt-ed" style="border:2px solid #000;background:#140d07;padding:10px;margin-bottom:8px">
+        <div class="row" style="gap:8px"><input type="text" class="po-t" maxlength="80" placeholder="Option, e.g. Option 1 — 8 Days" value="${esc(o.text || '')}" style="flex:1"><button type="button" class="btn red sm po-x" aria-label="Remove option">✕</button></div>
+        <textarea class="po-d" rows="3" maxlength="700" placeholder="Details (optional), one per line, e.g.&#10;📅 22–30 December&#10;⏰ 3 PM – 9 PM (6 hours/day)" style="margin-top:6px">${esc(o.details || '')}</textarea></div>`;
+    p.innerHTML = `<div class="card accent"><h2>NEW POLL</h2><p class="soft small">Members vote on the website (Community page) or with buttons on the Discord post. It is one vote per member wherever they vote, and they can change it until the poll closes.</p>
+      <details style="margin:8px 0 12px"><summary><b>📋 FILL FROM TEXT</b> <span class="soft small">paste an announcement and it is split into question, description, options and details</span></summary>
+        <textarea id="pfill" rows="7" placeholder="📢 Event Schedule Poll&#10;We have 2 possible schedules...&#10;Option 1️⃣ — 8 Days&#10;* 📅 22–30 December&#10;...&#10;🗳️ Vote for the schedule you prefer!" style="margin-top:8px"></textarea>
+        <button class="btn grey sm" id="pfillgo" type="button" style="margin-top:6px">FILL THE FORM</button></details>
+      <div class="fields"><div class="full"><label for="pq">Question / title</label><input type="text" id="pq" maxlength="200" placeholder="📢 Event Schedule Poll"></div>
+        <div class="full"><label for="pn">Description <span class="soft">(optional, shown above the options)</span></label><textarea id="pn" rows="3" maxlength="1500" placeholder="We have 2 possible schedules for the upcoming event! Vote for the one you prefer."></textarea></div></div>
+      <label>Options <span class="soft">(2 to 12; details are optional)</span></label><div id="popts">${optRow()}${optRow()}</div>
+      <button class="btn grey sm" id="paddopt" type="button">+ ADD OPTION</button>
+      <div class="fields" style="margin-top:12px"><div class="full"><label for="pout">Closing text <span class="soft">(optional, shown under the options)</span></label><textarea id="pout" rows="2" maxlength="400" placeholder="🗳️ The final schedule is decided by the majority vote. Your vote matters!"></textarea></div>
         <div><label for="pe">Closes <span class="soft">(optional)</span></label><input type="datetime-local" id="pe"></div>
-        <div><label for="pr">Show results</label><select id="pr"><option value="voted">After they vote</option><option value="always">Always</option><option value="closed">Only when the poll closes</option></select></div></div>
+        <div><label for="pr">Show results</label><select id="pr"><option value="always">Always (live bars on Discord too)</option><option value="voted" selected>After they vote</option><option value="closed">Only when the poll closes</option></select></div></div>
       <label class="check"><input type="checkbox" id="pm"> Members can pick more than one option</label>
       <div style="margin-top:12px"><button class="btn" id="padd" type="button">START POLL</button></div></div>
       <div class="list">${d.polls.map(q => { const max = Math.max(1, ...q.options.map(o => o.votes || 0));
         return `<div class="card" data-poll="${q.id}" style="margin-bottom:14px"><div class="row"><h3 style="margin:0;flex:1">${esc(q.question)}</h3><span class="badge ${q.open ? 'live' : 'withdrawn'}">${q.open ? 'OPEN' : 'CLOSED'}</span></div>
-          <p class="soft small">${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}</p>
+          <p class="soft small">${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}</p>
           ${q.options.map(o => `<div class="pbar" title="${esc(o.text)}: ${o.votes} vote${o.votes === 1 ? '' : 's'}"><span>${esc(o.text)}</span><i style="width:${Math.round((o.votes || 0) / max * 100)}%"></i><b>${o.votes || 0}</b></div>`).join('')}
           <div class="row" style="margin-top:12px"><button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
+    const bindRows = () => p.querySelectorAll('.po-x').forEach(b => b.onclick = () => { if (p.querySelectorAll('.popt-ed').length > 2) b.closest('.popt-ed').remove(); else toast('A poll needs at least 2 options.', true); });
+    bindRows();
+    $('#paddopt').onclick = () => { if (p.querySelectorAll('.popt-ed').length >= 12) return toast('12 options at most.', true); $('#popts').insertAdjacentHTML('beforeend', optRow()); bindRows(); };
+    $('#pfillgo').onclick = () => {
+      const f = parsePollText($('#pfill').value); if (!f.question) return toast('Paste the announcement first.', true);
+      if (f.options.length < 2) return toast('Could not find 2 options. Start each option on its own line with "Option".', true);
+      $('#pq').value = f.question; $('#pn').value = f.note; $('#pout').value = f.outro;
+      $('#popts').innerHTML = f.options.slice(0, 12).map(optRow).join(''); bindRows();
+      toast(`Filled: ${f.options.length} options. Check it, then press START POLL.`); };
     $('#padd').onclick = async () => {
-      try { await api('/api/admin/polls', { method: 'POST', body: { question: $('#pq').value, options: $('#po').value.split('\n').map(s => s.trim()).filter(Boolean), note: $('#pn').value, endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked } }); toast('Poll started.'); polls(p); }
+      const options = [...p.querySelectorAll('.popt-ed')].map(r => ({ text: r.querySelector('.po-t').value.trim(), details: r.querySelector('.po-d').value.trim() })).filter(o => o.text);
+      try { await api('/api/admin/polls', { method: 'POST', body: { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked } }); toast('Poll started. Press POST TO DISCORD to put it in Discord too.'); polls(p); }
       catch (x) { toast(x.message, true); } };
     p.querySelectorAll('[data-poll]').forEach(card => {
       const id = card.dataset.poll;
-      card.querySelector('[data-pc]').onclick = e => api('/api/admin/polls/' + id, { method: 'PUT', body: { closed: e.target.dataset.pc === '1' } }).then(() => { toast('Saved.'); polls(p); }).catch(x => toast(x.message, true));
+      card.querySelector('[data-pc]').onclick = e => api('/api/admin/polls/' + id, { method: 'PUT', body: { closed: e.target.dataset.pc === '1' } }).then(() => { toast('Saved. The Discord post updates in a few seconds.'); polls(p); }).catch(x => toast(x.message, true));
       card.querySelector('[data-px]').onclick = () => { if (confirm('Delete this poll and its votes?')) api('/api/admin/polls/' + id, { method: 'DELETE' }).then(() => polls(p)).catch(x => toast(x.message, true)); };
       card.querySelector('[data-pd]').onclick = async () => {
         const box = card.querySelector('.pdc'); if (box.innerHTML) { box.innerHTML = ''; return; }
         let meta; try { meta = await api('/api/admin/discord/meta'); } catch (x) { return toast(x.message, true); }
-        box.innerHTML = `<div class="row" style="margin-top:12px"><select class="pch" style="max-width:300px">${meta.channels.map(c => `<option value="${c.id}"${c.id === meta.defaultChannel ? ' selected' : ''}>#${esc(c.name)}</option>`).join('')}</select><label class="check" style="margin:0"><input type="checkbox" class="pping"> Ping @everyone</label><button class="btn sm" type="button">POST</button></div>`;
-        box.querySelector('button').onclick = () => api('/api/admin/polls/' + id + '/discord', { method: 'POST', body: { channelId: box.querySelector('.pch').value, ping: box.querySelector('.pping').checked } }).then(() => { toast('Posted to Discord.'); box.innerHTML = ''; }).catch(x => toast(x.message, true));
+        box.innerHTML = `<div style="margin-top:12px"><div class="row" style="gap:8px"><select class="pch" style="max-width:300px">${meta.channels.map(c => `<option value="${c.id}"${c.id === meta.defaultChannel ? ' selected' : ''}>${c.news ? '📢' : '#'} ${esc(c.name)}</option>`).join('')}</select><button class="btn sm" type="button" data-go>POST</button></div>
+          <div class="row" style="gap:6px;margin-top:8px"><label class="check" style="margin:0"><input type="checkbox" class="pping"> @everyone</label>${meta.roles.slice(0, 20).map(r => `<label class="check" style="margin:0"><input type="checkbox" class="prole" value="${r.id}"> @${esc(r.name)}</label>`).join('')}</div>
+          <p class="soft small" style="margin:6px 0 0">The post has a vote button for each option and updates itself as votes come in. When the poll closes, the buttons lock and the result shows.</p></div>`;
+        box.querySelector('[data-go]').onclick = () => api('/api/admin/polls/' + id + '/discord', { method: 'POST', body: { channelId: box.querySelector('.pch').value, ping: box.querySelector('.pping').checked, roles: [...box.querySelectorAll('.prole:checked')].map(c => c.value) } })
+          .then(r => { toast('Posted to Discord.'); polls(p); if (r.link) window.open(r.link, '_blank', 'noopener'); }).catch(x => toast(x.message, true));
       };
     });
   }

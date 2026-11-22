@@ -14,6 +14,9 @@
 .ctabs a[aria-current]{background:var(--accent);color:var(--accent-ink)}
 .poll{margin-bottom:18px;scroll-margin-top:90px}
 .poll h2{font-size:15px;line-height:1.5;margin:0 0 6px}
+.poll .pnote{line-height:1.6}
+.popt.has-d{align-items:flex-start;padding:12px 14px}.popt.has-d .tick{margin-top:2px}.popt .pt{display:block;flex:1;min-width:0;position:relative}
+.popt .pnum{margin-right:6px;flex:none}.popt .pd{display:block;margin-top:6px;font-weight:400;font-size:13px;line-height:1.6;color:var(--soft);white-space:normal}
 .popt{display:flex;align-items:center;gap:10px;width:100%;position:relative;min-height:48px;margin:8px 0;padding:0 14px;background:#1a110a;border:3px solid #000;color:var(--ink);font:600 16px Archivo,sans-serif;text-align:left;cursor:pointer;overflow:hidden}
 .popt:hover:not(:disabled){border-color:var(--accent)}
 .popt:disabled{cursor:default}
@@ -56,16 +59,21 @@ async function render() {
 }
 const needLogin = can => can ? '' : `<p class="msg info">${who.user ? 'Only MTC members can vote and post. Join the MTC Discord, then log in again.' : 'Log in and join the MTC Discord to vote and post.'} ${who.user ? '' : '<a class="btn discord sm" href="/auth/discord" style="margin-left:8px">LOG IN WITH DISCORD</a>'}</p>`;
 
+const NUMS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '🅰️', '🅱️'];
+// text with line breaks; "* " / "- " lines become bullets
+const lines = t => esc(t).split('\n').map(l => l.replace(/^\s*[*-]\s+/, '• ')).join('<br>');
 async function polls() {
   const d = await api('/api/polls'); const box = $('#cp');
   const draw = () => {
     box.innerHTML = needLogin(d.canVote) + (d.polls.length ? d.polls.map(q => { const total = q.options.reduce((a, o) => a + (o.votes || 0), 0), shown = q.options.some(o => o.votes !== null);
       return `<article class="card poll" id="poll-${q.id}" data-p="${q.id}"><div class="row"><h2 style="flex:1">${esc(q.question)}</h2><span class="badge ${q.open ? 'live' : 'withdrawn'}">${q.open ? 'OPEN' : 'CLOSED'}</span></div>
-        ${q.note ? `<p class="soft">${esc(q.note)}</p>` : ''}
+        ${q.note ? `<p class="soft pnote">${lines(q.note)}</p>` : ''}
         <p class="soft small">${q.voters} voter${q.voters === 1 ? '' : 's'}${q.multi ? ' · pick as many as you like' : ' · pick one'}</p>
         ${q.endsAt && q.open ? `<div style="margin:6px 0 10px">${MTC.countdown(q.endsAt, 'Closes in')}</div>` : ''}
-        ${q.options.map(o => { const pct = shown && total ? Math.round(o.votes / total * 100) : 0, mine = q.mine.includes(o.id);
-          return `<button type="button" class="popt" data-o="${o.id}" aria-pressed="${mine}"${!q.open || !d.canVote ? ' disabled' : ''}>${shown ? `<i style="width:${pct}%"></i>` : ''}<span class="tick" aria-hidden="true">${mine ? '✓' : ''}</span><span>${esc(o.text)}</span>${shown ? `<em>${o.votes}</em><b>${pct}%</b>` : ''}</button>`; }).join('')}
+        ${q.options.map((o, k) => { const pct = shown && total ? Math.round(o.votes / total * 100) : 0, mine = q.mine.includes(o.id);
+          return `<button type="button" class="popt${o.details ? ' has-d' : ''}" data-o="${o.id}" aria-pressed="${mine}"${!q.open || !d.canVote ? ' disabled' : ''}>${shown ? `<i style="width:${pct}%"></i>` : ''}<span class="tick" aria-hidden="true">${mine ? '✓' : ''}</span><span class="pt"><span class="pnum">${NUMS[k] || ''}</span>${esc(o.text)}${o.details ? `<small class="pd">${lines(o.details)}</small>` : ''}</span>${shown ? `<em>${o.votes}</em><b>${pct}%</b>` : ''}</button>`; }).join('')}
+        ${q.outro ? `<p class="soft small pnote" style="margin-top:10px">${lines(q.outro)}</p>` : ''}
+        ${q.onDiscord && q.open ? '<p class="soft small" style="margin:6px 0 0">You can also vote with the buttons on the Discord post. One vote per member either way.</p>' : ''}
         ${q.open && d.canVote && q.multi ? `<button class="btn sm" type="button" data-send>${q.mine.length ? 'CHANGE VOTE' : 'VOTE'}</button>` : ''}
         ${q.open && !shown && q.results === 'closed' ? '<p class="soft small">Results show when the poll closes.</p>' : q.open && !shown ? '<p class="soft small">Vote to see the results.</p>' : ''}</article>`; }).join('')
       : '<div class="card"><p class="soft">No polls right now.</p></div>');

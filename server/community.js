@@ -261,14 +261,17 @@ module.exports = function install(x) {
   });
   on('DELETE', '/api/admin/badge-awards/:id', async (req, res, p) => { needAdmin(req); D().badgeAwards = list('badgeAwards').filter(a => a.id !== p.id); store.save(); return { ok: true }; });
 
-  // ================================================================ polls ("what should the next event be?")
+  // ================================================================ polls ("what should the next event be?", "which schedule?")
+  // Members vote on the website (Community page) or with the buttons on the Discord post; both use their Discord account,
+  // so it is one vote per member wherever they vote, and they can change it until the poll closes.
   const pollOpen = q => !q.closed && (!q.endsAt || new Date(q.endsAt).getTime() > Date.now());
+  const tallyOf = q => { const t = Object.fromEntries(q.options.map(o => [o.id, 0])); for (const v of Object.values(q.votes || {})) for (const o of v) if (o in t) t[o]++; return t; };
   function pubPoll(q, u) {
     const mine = u ? (q.votes || {})[u.uid] || [] : [], total = Object.keys(q.votes || {}).length;
     const show = q.results === 'always' || (q.results !== 'closed' && mine.length) || !pollOpen(q) || (u && u.adm);
-    const tally = Object.fromEntries(q.options.map(o => [o.id, 0])); for (const v of Object.values(q.votes || {})) for (const o of v) if (o in tally) tally[o]++;
-    return { id: q.id, question: q.question, note: q.note || '', multi: !!q.multi, endsAt: q.endsAt, open: pollOpen(q), results: q.results, voters: total, mine,
-      options: q.options.map(o => ({ id: o.id, text: o.text, votes: show ? tally[o.id] : null })), createdAt: q.createdAt };
+    const tally = tallyOf(q);
+    return { id: q.id, question: q.question, note: q.note || '', outro: q.outro || '', multi: !!q.multi, endsAt: q.endsAt, open: pollOpen(q), results: q.results, voters: total, mine,
+      options: q.options.map(o => ({ id: o.id, text: o.text, details: o.details || '', votes: show ? tally[o.id] : null })), createdAt: q.createdAt, onDiscord: (q.posts || []).length > 0 };
   }
   on('GET', '/api/polls', async req => {
     const u = session(req), qs = list('polls').slice().reverse();
@@ -279,32 +282,100 @@ module.exports = function install(x) {
     if (!pollOpen(q)) throw err(400, 'This poll has closed.');
     const b = await readBody(req), ids = [...new Set((Array.isArray(b.options) ? b.options : [b.options]).map(String))].filter(o => q.options.some(x => x.id === o));
     if (!ids.length) throw err(400, 'Pick an option.'); if (!q.multi && ids.length > 1) throw err(400, 'Pick one option.');
-    (q.votes = q.votes || {})[u.uid] = ids; store.save(); return { poll: pubPoll(q, u) };
+    (q.votes = q.votes || {})[u.uid] = ids; store.save(); refreshPollPosts(q); return { poll: pubPoll(q, u) };
   });
   const cleanPoll = b => {
     const question = str(b.question, 200); if (!question) throw err(400, 'Write the question.');
-    const opts = (Array.isArray(b.options) ? b.options : []).map(o => typeof o === 'string' ? { text: o } : o).map(o => ({ id: str(o.id, 20) || id(), text: str(o.text, 100) })).filter(o => o.text).slice(0, 12);
+    const opts = (Array.isArray(b.options) ? b.options : []).map(o => typeof o === 'string' ? { text: o } : o || {})
+      .map(o => ({ id: str(o.id, 20) || id(), text: str(o.text, 80), details: str(o.details, 700) })).filter(o => o.text).slice(0, 12);
     if (opts.length < 2) throw err(400, 'Add at least 2 options.');
-    return { question, note: str(b.note, 300), options: opts, multi: !!b.multi, endsAt: isoOrNull(b.endsAt), results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
+    return { question, note: str(b.note, 1500), outro: str(b.outro, 400), options: opts, multi: !!b.multi, endsAt: isoOrNull(b.endsAt), results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
   };
-  on('GET', '/api/admin/polls', async req => { const u = needAdmin(req); return { polls: list('polls').slice().reverse().map(q => ({ ...pubPoll(q, u), closed: !!q.closed })) }; });
+
+  // ---- the Discord post: the poll as an embed with a vote button per option; it is kept up to date as votes come in
+  const NUM = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '🅰️', '🅱️'];
+  const bar = (n, total) => { const k = total ? Math.round(n / total * 12) : 0; return '🟧'.repeat(k) + '⬛'.repeat(12 - k); };
+  function pollMessage(q) {
+    const open = pollOpen(q), tally = tallyOf(q), voters = Object.keys(q.votes || {}).length, totalPicks = Object.values(tally).reduce((a, b) => a + b, 0);
+    const showCounts = q.results === 'always' || !open;   // "after they vote" polls show counts privately to each voter (their button reply)
+    const best = Math.max(0, ...Object.values(tally)), winners = q.options.filter(o => best > 0 && tally[o.id] === best);
+    const fields = q.options.map((o, i) => ({ name: `${NUM[i] || '•'} ${o.text}`.slice(0, 256),
+      value: ((o.details ? o.details.split('\n').map(l => l.replace(/^\s*[*-]\s+/, '• ')).join('\n') : '') +
+        (showCounts ? `\n${bar(tally[o.id], totalPicks)} **${tally[o.id]}** vote${tally[o.id] === 1 ? '' : 's'}${totalPicks ? ` · ${Math.round(tally[o.id] / totalPicks * 100)}%` : ''}` : '')).trim().slice(0, 1024) || '​' }));
+    if (!open && winners.length) fields.push({ name: winners.length > 1 ? '🤝 Tie' : '🏆 Result', value: winners.length > 1 ? `Tied: ${winners.map(o => '**' + o.text + '**').join(' and ')} (${best} votes each)` : `**${winners[0].text}** wins with ${best} vote${best === 1 ? '' : 's'}.` });
+    if (q.outro) fields.push({ name: '​', value: q.outro.slice(0, 1024) });   // closing text under the options
+    const status = open ? `${voters} vote${voters === 1 ? '' : 's'} so far${q.endsAt ? ` · closes <t:${Math.floor(new Date(q.endsAt) / 1000)}:R>` : ''}${q.results === 'closed' ? ' · results show when it closes' : q.results === 'voted' ? ' · vote to see the results' : ''}`
+      : `🔒 Voting closed · ${voters} vote${voters === 1 ? '' : 's'}`;
+    const rows = [];
+    const btns = q.options.map((o, i) => ({ type: 2, style: 2, custom_id: `poll:${q.id}:${o.id}`, label: o.text.slice(0, 80), emoji: { name: NUM[i] || '🗳️' }, disabled: !open }));
+    for (let i = 0; i < btns.length; i += 5) rows.push({ type: 1, components: btns.slice(i, i + 5) });
+    rows.push({ type: 1, components: [{ type: 2, style: 5, label: 'Open on the website', url: site() + '/community.html#poll-' + q.id, emoji: { name: '🌐' } }] });
+    return { embeds: [{ title: (open ? '' : '🔒 ') + q.question, description: ((q.note ? q.note + '\n\n' : '') + status).trim().slice(0, 4000), color: open ? 0xF7931E : 0x5c5c5c, fields,
+      footer: { text: q.multi ? 'Pick as many as you like · tap again to remove · one vote per member, here or on the website' : 'Tap a button to vote · tap another to change · one vote per member, here or on the website' } }],
+      components: rows };
+  }
+  // edit every Discord post of the poll (at most once every 3 seconds while votes pour in)
+  const pollTimers = new Map();
+  function refreshPollPosts(q) {
+    if (!(q.posts || []).length || pollTimers.has(q.id)) return;
+    pollTimers.set(q.id, setTimeout(async () => {
+      pollTimers.delete(q.id);
+      const live = list('polls').find(z => z.id === q.id); if (!live) return;
+      for (const ps of live.posts || []) await discord.edit(ps.channelId, ps.messageId, pollMessage(live)).catch(e => { if (e.status === 404) ps.gone = true; else logErr('poll post', e); });
+      if ((live.posts || []).some(ps => ps.gone)) { live.posts = live.posts.filter(ps => !ps.gone); store.save(); }
+    }, 3000));
+  }
+  // polls that reached their closing time: lock the Discord buttons and show the result
+  setInterval(() => { for (const q of list('polls')) { const open = pollOpen(q); if ((q.posts || []).length && !!q.shownOpen !== open) { q.shownOpen = open; store.save(); refreshPollPosts(q); } } }, 60e3).unref();
+
+  // a vote button on Discord. Answered privately (only the voter sees the reply).
+  const answer = (it, text, extra = {}) => fetch(`https://discord.com/api/v10/interactions/${it.id}/${it.token}/callback`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 4, data: { content: text, flags: 64, allowed_mentions: { parse: [] }, ...extra } }) }).catch(e => console.warn('poll reply', e.message));
+  async function onPollButton(it) {
+    const [, pid, oid] = String((it.data || {}).custom_id || '').split(':');
+    const q = list('polls').find(z => z.id === pid), who = (it.member && it.member.user) || it.user || {};
+    if (!q) return answer(it, 'This poll no longer exists.');
+    if (!pollOpen(q)) { refreshPollPosts(q); return answer(it, '🔒 This poll has closed.'); }
+    if (!it.member) return answer(it, 'Vote from the MTC Discord server.');
+    if (userRec(who.id).blocked) return answer(it, 'Your account is blocked from voting. Message an admin.');
+    const o = q.options.find(x => x.id === oid); if (!o) return answer(it, 'That option is no longer in the poll.');
+    const votes = q.votes = q.votes || {}, cur = votes[who.id] || [];
+    let now_;
+    if (q.multi) now_ = cur.includes(o.id) ? cur.filter(x => x !== o.id) : [...cur, o.id];
+    else now_ = [o.id];
+    if (now_.length) votes[who.id] = now_; else delete votes[who.id];
+    const rec = D().users[who.id] = { ...(D().users[who.id] || {}), id: who.id, username: who.username || (D().users[who.id] || {}).username, inGuild: true };
+    if (!rec.name) rec.name = (it.member && it.member.nick) || who.global_name || who.username;
+    store.save(); refreshPollPosts(q);
+    const picked = q.options.filter(x => now_.includes(x.id)).map(x => '**' + x.text + '**');
+    let text = !now_.length ? 'Your vote was removed.' : `✅ Your vote: ${picked.join(', ')}.${q.multi ? ' Tap an option again to remove it.' : ' Tap another option to change it.'}`;
+    if (q.results !== 'closed' && now_.length) { const t = tallyOf(q), tot = Object.values(t).reduce((a, b) => a + b, 0);
+      text += '\n\n**Results so far**\n' + q.options.map((x, i) => `${NUM[i] || '•'} ${x.text}: ${t[x.id]} (${tot ? Math.round(t[x.id] / tot * 100) : 0}%)`).join('\n'); }
+    return answer(it, text);
+  }
+
+  on('GET', '/api/admin/polls', async req => { const u = needAdmin(req); return { polls: list('polls').slice().reverse().map(q => ({ ...pubPoll(q, u), closed: !!q.closed, posts: (q.posts || []).map(ps => ({ channel: ps.channel, link: `https://discord.com/channels/${cfg.guild}/${ps.channelId}/${ps.messageId}` })) })) }; });
   on('POST', '/api/admin/polls', async req => { const u = needAdmin(req); const q = { id: id(), ...cleanPoll(await readBody(req)), votes: {}, closed: false, createdAt: now(), by: u.name }; list('polls').push(q); store.save(); return { ok: true, poll: pubPoll(q, u) }; });
   on('PUT', '/api/admin/polls/:id', async (req, res, p) => {
     const u = needAdmin(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
     const b = await readBody(req);
     if (b.closed !== undefined && Object.keys(b).length === 1) q.closed = !!b.closed;
     else { const c = cleanPoll(b), keep = new Set(c.options.map(o => o.id)); Object.assign(q, c); for (const k of Object.keys(q.votes || {})) { q.votes[k] = q.votes[k].filter(o => keep.has(o)); if (!q.votes[k].length) delete q.votes[k]; } if (b.closed !== undefined) q.closed = !!b.closed; }
-    store.save(); return { ok: true, poll: pubPoll(q, u) };
+    q.shownOpen = pollOpen(q); store.save(); refreshPollPosts(q); return { ok: true, poll: pubPoll(q, u) };
   });
-  on('DELETE', '/api/admin/polls/:id', async (req, res, p) => { needAdmin(req); D().polls = list('polls').filter(q => q.id !== p.id); store.save(); return { ok: true }; });
+  on('DELETE', '/api/admin/polls/:id', async (req, res, p) => {
+    needAdmin(req); const q = list('polls').find(z => z.id === p.id);
+    for (const ps of (q && q.posts) || []) discord.edit(ps.channelId, ps.messageId, { embeds: [{ title: q.question, description: 'This poll was removed.', color: 0x5c5c5c }], components: [] }).catch(() => {});
+    D().polls = list('polls').filter(z => z.id !== p.id); store.save(); return { ok: true };
+  });
   on('POST', '/api/admin/polls/:id/discord', async (req, res, p) => {
     needAdmin(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
     const b = await readBody(req), chs = await discord.channels(), ch = chs.find(c => c.id === String(b.channelId || '')); if (!ch) throw err(400, 'Pick a channel.');
-    const letters = '🇦 🇧 🇨 🇩 🇪 🇫 🇬 🇭 🇮 🇯 🇰 🇱'.split(' ');
-    await discord.send(ch.id, { content: b.ping ? '@everyone' : undefined, allowed_mentions: { parse: b.ping ? ['everyone'] : [] },
-      embeds: [{ title: '🗳️ ' + q.question, description: (q.note ? q.note + '\n\n' : '') + q.options.map((o, i) => `${letters[i]} ${o.text}`).join('\n') + (q.endsAt ? `\n\nVoting closes <t:${Math.floor(new Date(q.endsAt) / 1000)}:R>.` : ''), color: 0xF7931E, footer: { text: 'Vote on the MTC website · one vote per member' } }],
-      components: linkRow([{ label: 'Vote now', url: site() + '/community.html#poll-' + q.id, emoji: '🗳️' }]) });
-    return { ok: true };
+    const roles = (Array.isArray(b.roles) ? b.roles : []).map(String).filter(r => /^\d{15,}$/.test(r)).slice(0, 5);
+    const ping = [b.ping ? '@everyone' : '', ...roles.map(r => `<@&${r}>`)].filter(Boolean).join(' ');
+    const sent = await discord.send(ch.id, { ...pollMessage(q), ...(ping ? { content: ping } : {}), allowed_mentions: { parse: b.ping ? ['everyone'] : [], roles } });
+    (q.posts = q.posts || []).push({ channelId: ch.id, channel: ch.name, messageId: sent.id, at: now() }); q.shownOpen = pollOpen(q); store.save();
+    return { ok: true, link: `https://discord.com/channels/${cfg.guild}/${ch.id}/${sent.id}` };
   });
 
   // ================================================================ event suggestions from members and creators
@@ -692,5 +763,5 @@ module.exports = function install(x) {
   });
 
   const liveList = () => [...live.values()].map(l => ({ name: l.creator.name, title: l.title, url: 'https://www.youtube.com/watch?v=' + l.videoId, since: l.since }));
-  return { liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
+  return { onPollButton, liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
 };
