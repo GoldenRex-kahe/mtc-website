@@ -264,54 +264,64 @@ module.exports = function install(x) {
   // ================================================================ polls ("what should the next event be?", "which schedule?")
   // Members vote on the website (Community page) or with the buttons on the Discord post; both use their Discord account,
   // so it is one vote per member wherever they vote, and they can change it until the poll closes.
-  const pollOpen = q => !q.closed && (!q.endsAt || new Date(q.endsAt).getTime() > Date.now());
+  // A poll can open later (startsAt): before that nobody can vote, and its Discord post can be sent automatically when it opens.
+  const pollSoon = q => !q.closed && !!q.startsAt && new Date(q.startsAt).getTime() > Date.now();
+  const pollOpen = q => !q.closed && !pollSoon(q) && (!q.endsAt || new Date(q.endsAt).getTime() > Date.now());
+  const pollState = q => pollSoon(q) ? 'soon' : pollOpen(q) ? 'open' : 'closed';
+  const unmd = t => String(t || '').replace(/\*\*|__|~~|`/g, '').replace(/^#{1,6}\s+/, '').trim();   // Discord bold/heading marks do not belong in titles and buttons
   const tallyOf = q => { const t = Object.fromEntries(q.options.map(o => [o.id, 0])); for (const v of Object.values(q.votes || {})) for (const o of v) if (o in t) t[o]++; return t; };
   function pubPoll(q, u) {
     const mine = u ? (q.votes || {})[u.uid] || [] : [], total = Object.keys(q.votes || {}).length;
-    const show = q.results === 'always' || (q.results !== 'closed' && mine.length) || !pollOpen(q) || (u && u.adm);
+    const show = q.results === 'always' || (q.results !== 'closed' && mine.length) || pollState(q) === 'closed' || (u && u.adm);
     const tally = tallyOf(q);
-    return { id: q.id, question: q.question, note: q.note || '', outro: q.outro || '', multi: !!q.multi, endsAt: q.endsAt, open: pollOpen(q), results: q.results, voters: total, mine,
-      options: q.options.map(o => ({ id: o.id, text: o.text, details: o.details || '', votes: show ? tally[o.id] : null })), createdAt: q.createdAt, onDiscord: (q.posts || []).length > 0 };
+    return { id: q.id, question: unmd(q.question), note: q.note || '', outro: q.outro || '', multi: !!q.multi, startsAt: q.startsAt || null, endsAt: q.endsAt, open: pollOpen(q), soon: pollSoon(q), results: q.results, voters: total, mine,
+      options: q.options.map(o => ({ id: o.id, text: unmd(o.text), details: o.details || '', votes: show ? tally[o.id] : null })), createdAt: q.createdAt, onDiscord: (q.posts || []).length > 0 };
   }
   on('GET', '/api/polls', async req => {
     const u = session(req), qs = list('polls').slice().reverse();
-    return { polls: [...qs.filter(pollOpen), ...qs.filter(q => !pollOpen(q)).slice(0, 6)].map(q => pubPoll(q, u)), canVote: isMember(u) };
+    return { polls: [...qs.filter(pollOpen), ...qs.filter(pollSoon), ...qs.filter(q => pollState(q) === 'closed').slice(0, 6)].map(q => pubPoll(q, u)), canVote: isMember(u) };
   });
+  const opensText = q => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(q.startsAt));
   on('POST', '/api/polls/:id/vote', async (req, res, p) => {
     const u = needMember(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
+    if (pollSoon(q)) throw err(400, `Voting opens on ${opensText(q)}.`);
     if (!pollOpen(q)) throw err(400, 'This poll has closed.');
     const b = await readBody(req), ids = [...new Set((Array.isArray(b.options) ? b.options : [b.options]).map(String))].filter(o => q.options.some(x => x.id === o));
     if (!ids.length) throw err(400, 'Pick an option.'); if (!q.multi && ids.length > 1) throw err(400, 'Pick one option.');
     (q.votes = q.votes || {})[u.uid] = ids; store.save(); refreshPollPosts(q); return { poll: pubPoll(q, u) };
   });
   const cleanPoll = b => {
-    const question = str(b.question, 200); if (!question) throw err(400, 'Write the question.');
+    const question = unmd(str(b.question, 200)); if (!question) throw err(400, 'Write the question.');
     const opts = (Array.isArray(b.options) ? b.options : []).map(o => typeof o === 'string' ? { text: o } : o || {})
-      .map(o => ({ id: str(o.id, 20) || id(), text: str(o.text, 80), details: str(o.details, 700) })).filter(o => o.text).slice(0, 12);
+      .map(o => ({ id: str(o.id, 20) || id(), text: unmd(str(o.text, 80)), details: str(o.details, 700) })).filter(o => o.text).slice(0, 12);
     if (opts.length < 2) throw err(400, 'Add at least 2 options.');
-    return { question, note: str(b.note, 1500), outro: str(b.outro, 400), options: opts, multi: !!b.multi, endsAt: isoOrNull(b.endsAt), results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
+    const startsAt = isoOrNull(b.startsAt), endsAt = isoOrNull(b.endsAt);
+    if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) throw err(400, 'The closing time must be after the opening time.');
+    return { question, note: str(b.note, 1500), outro: str(b.outro, 400), options: opts, multi: !!b.multi, startsAt, endsAt, results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
   };
 
   // ---- the Discord post: the poll as an embed with a vote button per option; it is kept up to date as votes come in
   const NUM = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '🅰️', '🅱️'];
   const bar = (n, total) => { const k = total ? Math.round(n / total * 12) : 0; return '🟧'.repeat(k) + '⬛'.repeat(12 - k); };
+  const unix = iso => Math.floor(new Date(iso).getTime() / 1000);
   function pollMessage(q) {
-    const open = pollOpen(q), tally = tallyOf(q), voters = Object.keys(q.votes || {}).length, totalPicks = Object.values(tally).reduce((a, b) => a + b, 0);
-    const showCounts = q.results === 'always' || !open;   // "after they vote" polls show counts privately to each voter (their button reply)
+    const st = pollState(q), open = st === 'open', tally = tallyOf(q), voters = Object.keys(q.votes || {}).length, totalPicks = Object.values(tally).reduce((a, b) => a + b, 0);
+    const showCounts = st === 'closed' || (open && q.results === 'always');   // "after they vote" polls show counts privately to each voter
     const best = Math.max(0, ...Object.values(tally)), winners = q.options.filter(o => best > 0 && tally[o.id] === best);
-    const fields = q.options.map((o, i) => ({ name: `${NUM[i] || '•'} ${o.text}`.slice(0, 256),
+    const fields = q.options.map((o, i) => ({ name: `${NUM[i] || '•'} ${unmd(o.text)}`.slice(0, 256),
       value: ((o.details ? o.details.split('\n').map(l => l.replace(/^\s*[*-]\s+/, '• ')).join('\n') : '') +
         (showCounts ? `\n${bar(tally[o.id], totalPicks)} **${tally[o.id]}** vote${tally[o.id] === 1 ? '' : 's'}${totalPicks ? ` · ${Math.round(tally[o.id] / totalPicks * 100)}%` : ''}` : '')).trim().slice(0, 1024) || '​' }));
-    if (!open && winners.length) fields.push({ name: winners.length > 1 ? '🤝 Tie' : '🏆 Result', value: winners.length > 1 ? `Tied: ${winners.map(o => '**' + o.text + '**').join(' and ')} (${best} votes each)` : `**${winners[0].text}** wins with ${best} vote${best === 1 ? '' : 's'}.` });
+    if (st === 'closed' && winners.length) fields.push({ name: winners.length > 1 ? '🤝 Tie' : '🏆 Result', value: winners.length > 1 ? `Tied: ${winners.map(o => '**' + unmd(o.text) + '**').join(' and ')} (${best} votes each)` : `**${unmd(winners[0].text)}** wins with ${best} vote${best === 1 ? '' : 's'}.` });
     if (q.outro) fields.push({ name: '​', value: q.outro.slice(0, 1024) });   // closing text under the options
-    const status = open ? `${voters} vote${voters === 1 ? '' : 's'} so far${q.endsAt ? ` · closes <t:${Math.floor(new Date(q.endsAt) / 1000)}:R>` : ''}${q.results === 'closed' ? ' · results show when it closes' : q.results === 'voted' ? ' · vote to see the results' : ''}`
+    const status = st === 'soon' ? `⏳ Voting opens <t:${unix(q.startsAt)}:F> (<t:${unix(q.startsAt)}:R>)${q.endsAt ? ` · closes <t:${unix(q.endsAt)}:F>` : ''}`
+      : open ? `${voters} vote${voters === 1 ? '' : 's'} so far${q.endsAt ? ` · closes <t:${unix(q.endsAt)}:R>` : ''}${q.results === 'closed' ? ' · results show when it closes' : q.results === 'voted' ? ' · vote to see the results' : ''}`
       : `🔒 Voting closed · ${voters} vote${voters === 1 ? '' : 's'}`;
     const rows = [];
-    const btns = q.options.map((o, i) => ({ type: 2, style: 2, custom_id: `poll:${q.id}:${o.id}`, label: o.text.slice(0, 80), emoji: { name: NUM[i] || '🗳️' }, disabled: !open }));
+    const btns = q.options.map((o, i) => ({ type: 2, style: open ? 1 : 2, custom_id: `poll:${q.id}:${o.id}`, label: unmd(o.text).slice(0, 80), emoji: { name: NUM[i] || '🗳️' }, disabled: !open }));
     for (let i = 0; i < btns.length; i += 5) rows.push({ type: 1, components: btns.slice(i, i + 5) });
     rows.push({ type: 1, components: [{ type: 2, style: 5, label: 'Open on the website', url: site() + '/community.html#poll-' + q.id, emoji: { name: '🌐' } }] });
-    return { embeds: [{ title: (open ? '' : '🔒 ') + q.question, description: ((q.note ? q.note + '\n\n' : '') + status).trim().slice(0, 4000), color: open ? 0xF7931E : 0x5c5c5c, fields,
-      footer: { text: q.multi ? 'Pick as many as you like · tap again to remove · one vote per member, here or on the website' : 'Tap a button to vote · tap another to change · one vote per member, here or on the website' } }],
+    return { embeds: [{ title: (st === 'closed' ? '🔒 ' : '') + unmd(q.question), description: ((q.note ? q.note + '\n\n' : '') + status).trim().slice(0, 4000), color: open ? 0xF7931E : st === 'soon' ? 0x3a78b8 : 0x5c5c5c, fields,
+      footer: { text: st === 'soon' ? 'The vote buttons unlock when voting opens' : q.multi ? 'Pick as many as you like · tap again to remove · one vote per member, here or on the website' : 'Tap a button to vote · tap another to change · one vote per member, here or on the website' } }],
       components: rows };
   }
   // edit every Discord post of the poll (at most once every 3 seconds while votes pour in)
@@ -325,57 +335,83 @@ module.exports = function install(x) {
       if ((live.posts || []).some(ps => ps.gone)) { live.posts = live.posts.filter(ps => !ps.gone); store.save(); }
     }, 3000));
   }
-  // polls that reached their closing time: lock the Discord buttons and show the result
-  setInterval(() => { for (const q of list('polls')) { const open = pollOpen(q); if ((q.posts || []).length && !!q.shownOpen !== open) { q.shownOpen = open; store.save(); refreshPollPosts(q); } } }, 60e3).unref();
+  async function postPoll(q, { channelId, ping, roles }) {
+    const chs = await discord.channels(), ch = chs.find(c => c.id === String(channelId || '')); if (!ch) throw err(400, 'Pick a channel.');
+    roles = (Array.isArray(roles) ? roles : []).map(String).filter(r => /^\d{15,}$/.test(r)).slice(0, 5);
+    const pingTxt = [ping ? '@everyone' : '', ...roles.map(r => `<@&${r}>`)].filter(Boolean).join(' ');
+    const sent = await discord.send(ch.id, { ...pollMessage(q), ...(pingTxt ? { content: pingTxt } : {}), allowed_mentions: { parse: ping ? ['everyone'] : [], roles } });
+    (q.posts = q.posts || []).push({ channelId: ch.id, channel: ch.name, messageId: sent.id, at: now() }); q.shownState = pollState(q); store.save();
+    return `https://discord.com/channels/${cfg.guild}/${ch.id}/${sent.id}`;
+  }
+  // every 30 seconds: a poll that opened sends its scheduled Discord post; posts are updated when a poll opens or closes
+  setInterval(async () => {
+    for (const q of list('polls')) {
+      const st = pollState(q);
+      if (q.autoPost && st !== 'soon') { const a = q.autoPost; delete q.autoPost; store.save();
+        if (st === 'open') await postPoll(q, a).catch(e => logErr('scheduled poll post', e)); }
+      if ((q.posts || []).length && q.shownState !== st) { q.shownState = st; store.save(); refreshPollPosts(q); }
+    }
+  }, 30e3).unref();
 
-  // a vote button on Discord. Answered privately (only the voter sees the reply).
-  const answer = (it, text, extra = {}) => fetch(`https://discord.com/api/v10/interactions/${it.id}/${it.token}/callback`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 4, data: { content: text, flags: 64, allowed_mentions: { parse: [] }, ...extra } }) }).catch(e => console.warn('poll reply', e.message));
+  // vote buttons on Discord. The public post has one button per option; a click is answered privately (only the voter
+  // sees it) with their own copy of the buttons, their choice shown in green, so they can see and change their vote there.
+  const respond = (it, type, data) => fetch(`https://discord.com/api/v10/interactions/${it.id}/${it.token}/callback`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, data: { flags: 64, allowed_mentions: { parse: [] }, ...data } }) }).catch(e => console.warn('poll reply', e.message));
+  const answer = (it, text) => respond(it, 4, { content: text, components: [] });
+  function myButtons(q, mine) {
+    const rows = [], btns = q.options.map((o, i) => ({ type: 2, style: mine.includes(o.id) ? 3 : 2, custom_id: `pollme:${q.id}:${o.id}`, label: (mine.includes(o.id) ? '✓ ' : '') + unmd(o.text).slice(0, 78), emoji: { name: NUM[i] || '🗳️' } }));
+    for (let i = 0; i < btns.length; i += 5) rows.push({ type: 1, components: btns.slice(i, i + 5) });
+    return rows;
+  }
   async function onPollButton(it) {
-    const [, pid, oid] = String((it.data || {}).custom_id || '').split(':');
+    const [kind, pid, oid] = String((it.data || {}).custom_id || '').split(':');
+    const fromMine = kind === 'pollme';   // a click on their private copy: update that message instead of sending a new one
+    const say = (text, comps = []) => respond(it, fromMine ? 7 : 4, { content: text, components: comps });
     const q = list('polls').find(z => z.id === pid), who = (it.member && it.member.user) || it.user || {};
-    if (!q) return answer(it, 'This poll no longer exists.');
-    if (!pollOpen(q)) { refreshPollPosts(q); return answer(it, '🔒 This poll has closed.'); }
-    if (!it.member) return answer(it, 'Vote from the MTC Discord server.');
-    if (userRec(who.id).blocked) return answer(it, 'Your account is blocked from voting. Message an admin.');
-    const o = q.options.find(x => x.id === oid); if (!o) return answer(it, 'That option is no longer in the poll.');
+    if (!q) return say('This poll no longer exists.');
+    if (pollSoon(q)) return say(`⏳ Voting has not started yet. It opens <t:${unix(q.startsAt)}:F> (<t:${unix(q.startsAt)}:R>).`);
+    if (!pollOpen(q)) { refreshPollPosts(q); return say('🔒 This poll has closed.'); }
+    if (!it.member) return say('Vote from the MTC Discord server.');
+    if (userRec(who.id).blocked) return say('Your account is blocked from voting. Message an admin.');
+    const o = q.options.find(x => x.id === oid); if (!o) return say('That option is no longer in the poll.');
     const votes = q.votes = q.votes || {}, cur = votes[who.id] || [];
-    let now_;
-    if (q.multi) now_ = cur.includes(o.id) ? cur.filter(x => x !== o.id) : [...cur, o.id];
-    else now_ = [o.id];
-    if (now_.length) votes[who.id] = now_; else delete votes[who.id];
+    const next = q.multi ? (cur.includes(o.id) ? cur.filter(x => x !== o.id) : [...cur, o.id]) : [o.id];
+    if (next.length) votes[who.id] = next; else delete votes[who.id];
     const rec = D().users[who.id] = { ...(D().users[who.id] || {}), id: who.id, username: who.username || (D().users[who.id] || {}).username, inGuild: true };
     if (!rec.name) rec.name = (it.member && it.member.nick) || who.global_name || who.username;
     store.save(); refreshPollPosts(q);
-    const picked = q.options.filter(x => now_.includes(x.id)).map(x => '**' + x.text + '**');
-    let text = !now_.length ? 'Your vote was removed.' : `✅ Your vote: ${picked.join(', ')}.${q.multi ? ' Tap an option again to remove it.' : ' Tap another option to change it.'}`;
-    if (q.results !== 'closed' && now_.length) { const t = tallyOf(q), tot = Object.values(t).reduce((a, b) => a + b, 0);
-      text += '\n\n**Results so far**\n' + q.options.map((x, i) => `${NUM[i] || '•'} ${x.text}: ${t[x.id]} (${tot ? Math.round(t[x.id] / tot * 100) : 0}%)`).join('\n'); }
-    return answer(it, text);
+    const picked = q.options.filter(x => next.includes(x.id)).map(x => '**' + unmd(x.text) + '**');
+    let text = !next.length ? 'Your vote was removed. Tap an option to vote again.' : `✅ Your vote: ${picked.join(', ')}.${q.multi ? ' Tap an option again to remove it.' : ' Tap another option below to change it.'}`;
+    if (q.results !== 'closed' && next.length) { const t = tallyOf(q), tot = Object.values(t).reduce((a, b) => a + b, 0);
+      text += '\n\n**Results so far**\n' + q.options.map((x, i) => `${NUM[i] || '•'} ${unmd(x.text)}: ${t[x.id]} (${tot ? Math.round(t[x.id] / tot * 100) : 0}%)`).join('\n'); }
+    return say(text, myButtons(q, next));
   }
 
-  on('GET', '/api/admin/polls', async req => { const u = needAdmin(req); return { polls: list('polls').slice().reverse().map(q => ({ ...pubPoll(q, u), closed: !!q.closed, posts: (q.posts || []).map(ps => ({ channel: ps.channel, link: `https://discord.com/channels/${cfg.guild}/${ps.channelId}/${ps.messageId}` })) })) }; });
+  on('GET', '/api/admin/polls', async req => { const u = needAdmin(req); return { polls: list('polls').slice().reverse().map(q => ({ ...pubPoll(q, u), closed: !!q.closed,
+    autoPost: q.autoPost ? { channel: q.autoPost.channel } : null,
+    posts: (q.posts || []).map(ps => ({ channel: ps.channel, link: `https://discord.com/channels/${cfg.guild}/${ps.channelId}/${ps.messageId}` })) })) }; });
   on('POST', '/api/admin/polls', async req => { const u = needAdmin(req); const q = { id: id(), ...cleanPoll(await readBody(req)), votes: {}, closed: false, createdAt: now(), by: u.name }; list('polls').push(q); store.save(); return { ok: true, poll: pubPoll(q, u) }; });
   on('PUT', '/api/admin/polls/:id', async (req, res, p) => {
     const u = needAdmin(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
     const b = await readBody(req);
-    if (b.closed !== undefined && Object.keys(b).length === 1) q.closed = !!b.closed;
+    if (b.openNow) { q.startsAt = null; q.closed = false; }
+    else if (b.closed !== undefined && Object.keys(b).length === 1) q.closed = !!b.closed;
     else { const c = cleanPoll(b), keep = new Set(c.options.map(o => o.id)); Object.assign(q, c); for (const k of Object.keys(q.votes || {})) { q.votes[k] = q.votes[k].filter(o => keep.has(o)); if (!q.votes[k].length) delete q.votes[k]; } if (b.closed !== undefined) q.closed = !!b.closed; }
-    q.shownOpen = pollOpen(q); store.save(); refreshPollPosts(q); return { ok: true, poll: pubPoll(q, u) };
+    store.save(); refreshPollPosts(q); return { ok: true, poll: pubPoll(q, u) };
   });
   on('DELETE', '/api/admin/polls/:id', async (req, res, p) => {
     needAdmin(req); const q = list('polls').find(z => z.id === p.id);
-    for (const ps of (q && q.posts) || []) discord.edit(ps.channelId, ps.messageId, { embeds: [{ title: q.question, description: 'This poll was removed.', color: 0x5c5c5c }], components: [] }).catch(() => {});
+    for (const ps of (q && q.posts) || []) discord.edit(ps.channelId, ps.messageId, { embeds: [{ title: unmd(q.question), description: 'This poll was removed.', color: 0x5c5c5c }], components: [] }).catch(() => {});
     D().polls = list('polls').filter(z => z.id !== p.id); store.save(); return { ok: true };
   });
+  // post to Discord now, or (when: 'open') automatically when voting opens
   on('POST', '/api/admin/polls/:id/discord', async (req, res, p) => {
     needAdmin(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
-    const b = await readBody(req), chs = await discord.channels(), ch = chs.find(c => c.id === String(b.channelId || '')); if (!ch) throw err(400, 'Pick a channel.');
-    const roles = (Array.isArray(b.roles) ? b.roles : []).map(String).filter(r => /^\d{15,}$/.test(r)).slice(0, 5);
-    const ping = [b.ping ? '@everyone' : '', ...roles.map(r => `<@&${r}>`)].filter(Boolean).join(' ');
-    const sent = await discord.send(ch.id, { ...pollMessage(q), ...(ping ? { content: ping } : {}), allowed_mentions: { parse: b.ping ? ['everyone'] : [], roles } });
-    (q.posts = q.posts || []).push({ channelId: ch.id, channel: ch.name, messageId: sent.id, at: now() }); q.shownOpen = pollOpen(q); store.save();
-    return { ok: true, link: `https://discord.com/channels/${cfg.guild}/${ch.id}/${sent.id}` };
+    const b = await readBody(req);
+    if (b.when === 'cancel') { delete q.autoPost; store.save(); return { ok: true }; }
+    const chs = await discord.channels(), ch = chs.find(c => c.id === String(b.channelId || '')); if (!ch) throw err(400, 'Pick a channel.');
+    if (b.when === 'open' && pollSoon(q)) { q.autoPost = { channelId: ch.id, channel: ch.name, ping: !!b.ping, roles: Array.isArray(b.roles) ? b.roles.map(String).slice(0, 5) : [] }; store.save(); return { ok: true, scheduled: true, at: q.startsAt }; }
+    return { ok: true, link: await postPoll(q, { channelId: ch.id, ping: !!b.ping, roles: b.roles }) };
   });
 
   // ================================================================ event suggestions from members and creators

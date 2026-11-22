@@ -61,14 +61,18 @@ const needLogin = can => can ? '' : `<p class="msg info">${who.user ? 'Only MTC 
 
 const NUMS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '🅰️', '🅱️'];
 // text with line breaks; "* " / "- " lines become bullets
-const lines = t => esc(t).split('\n').map(l => l.replace(/^\s*[*-]\s+/, '• ')).join('<br>');
+// Discord-style formatting, so text written for Discord looks the same here: **bold**, __underline__, *italic*, ~~strike~~
+const fmtMd = h => h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/__(.+?)__/g, '<u>$1</u>').replace(/~~(.+?)~~/g, '<s>$1</s>')
+  .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\w)/g, '$1<i>$2</i>').replace(/(^|\s)_(?!\s)([^_]+?)_(?=\s|$)/g, '$1<i>$2</i>');
+const lines = t => esc(t).split('\n').map(l => fmtMd(l.replace(/^\s*[*-]\s+/, '• ').replace(/^#{1,6}\s+/, '').replace(/^&gt;\s?/, ''))).join('<br>');
 async function polls() {
   const d = await api('/api/polls'); const box = $('#cp');
   const draw = () => {
     box.innerHTML = needLogin(d.canVote) + (d.polls.length ? d.polls.map(q => { const total = q.options.reduce((a, o) => a + (o.votes || 0), 0), shown = q.options.some(o => o.votes !== null);
-      return `<article class="card poll" id="poll-${q.id}" data-p="${q.id}"><div class="row"><h2 style="flex:1">${esc(q.question)}</h2><span class="badge ${q.open ? 'live' : 'withdrawn'}">${q.open ? 'OPEN' : 'CLOSED'}</span></div>
+      return `<article class="card poll" id="poll-${q.id}" data-p="${q.id}"><div class="row"><h2 style="flex:1">${esc(q.question)}</h2><span class="badge ${q.open ? 'live' : q.soon ? 'pending' : 'withdrawn'}">${q.open ? 'OPEN' : q.soon ? 'OPENS SOON' : 'CLOSED'}</span></div>
         ${q.note ? `<p class="soft pnote">${lines(q.note)}</p>` : ''}
         <p class="soft small">${q.voters} voter${q.voters === 1 ? '' : 's'}${q.multi ? ' · pick as many as you like' : ' · pick one'}</p>
+        ${q.soon ? `<div style="margin:6px 0 10px">${MTC.countdown(q.startsAt, 'Voting opens in')}</div><p class="soft small">You can read the options now. Voting unlocks when the timer ends.</p>` : ''}
         ${q.endsAt && q.open ? `<div style="margin:6px 0 10px">${MTC.countdown(q.endsAt, 'Closes in')}</div>` : ''}
         ${q.options.map((o, k) => { const pct = shown && total ? Math.round(o.votes / total * 100) : 0, mine = q.mine.includes(o.id);
           return `<button type="button" class="popt${o.details ? ' has-d' : ''}" data-o="${o.id}" aria-pressed="${mine}"${!q.open || !d.canVote ? ' disabled' : ''}>${shown ? `<i style="width:${pct}%"></i>` : ''}<span class="tick" aria-hidden="true">${mine ? '✓' : ''}</span><span class="pt"><span class="pnum">${NUMS[k] || ''}</span>${esc(o.text)}${o.details ? `<small class="pd">${lines(o.details)}</small>` : ''}</span>${shown ? `<em>${o.votes}</em><b>${pct}%</b>` : ''}</button>`; }).join('')}
@@ -87,6 +91,9 @@ async function polls() {
       const s = card.querySelector('[data-send]'); if (s) s.onclick = () => vote([...card.querySelectorAll('.popt[aria-pressed=true]')].map(b => b.dataset.o));
     });
     const h = location.hash.match(/^#poll-(\w+)/); if (h) { const el = document.getElementById('poll-' + h[1]); if (el) el.scrollIntoView(); }
+    // a poll that opens later: unlock it on this page when its timer ends
+    const next = Math.min(...d.polls.filter(x => x.soon && x.startsAt).map(x => Date.parse(x.startsAt)));
+    clearTimeout(polls.t); if (isFinite(next) && next - Date.now() < 864e5) polls.t = setTimeout(() => { if (tab === 'polls') polls(); }, Math.max(1000, next - Date.now() + 1500));
   };
   draw();
 }
