@@ -271,12 +271,25 @@ module.exports = function install(x) {
   const unmd = t => String(t || '').replace(/\*\*|__|~~|`/g, '').replace(/^#{1,6}\s+/, '').trim();   // Discord bold/heading marks do not belong in titles and buttons
   // where and when each member last voted (for the admin VOTERS list)
   const markVote = (q, uid, src, removed) => { const m = q.voteMeta = q.voteMeta || {}; if (removed) delete m[uid]; else m[uid] = { src, at: now() }; };
-  const tallyOf = q => { const t = Object.fromEntries(q.options.map(o => [o.id, 0])); for (const v of Object.values(q.votes || {})) for (const o of v) if (o in t) t[o]++; return t; };
+  // ---- who can vote: everyone in the MTC Discord (default), creators only, or the approved players of one event
+  const rule = q => q.who && q.who.type ? q.who : { type: 'members' };
+  function mayVote(q, uid) {
+    const w = rule(q); if (w.type === 'members' || uid === 'admin') return { ok: true };
+    if (w.type === 'creators') { const m = discord.cachedMember(uid); return (m ? m.creator : userRec(uid).creator) ? { ok: true } : { ok: false, why: 'Only MTC creators (with the Creator role) can vote in this poll.' }; }
+    if (w.type === 'event') { const e = evById(w.eventId);
+      return D().registrations.some(r => r.eventId === w.eventId && r.userId === uid && r.status === 'approved') ? { ok: true } : { ok: false, why: `Only the approved players of ${e ? e.title : 'the event'} can vote in this poll.` }; }
+    return { ok: true };
+  }
+  const whoText = q => { const w = rule(q); if (w.type === 'creators') return '⭐ Only MTC creators can vote.'; if (w.type === 'event') { const e = evById(w.eventId); return `🎟️ Only the approved players of **${e ? e.title : 'the event'}** can vote.`; } return ''; };
+  // votes that count: members allowed by the rule (a Discord poll cannot stop others from tapping it, so they are left out here)
+  const counted = q => Object.entries(q.votes || {}).filter(([uid]) => mayVote(q, uid).ok);
+  const tallyOf = q => { const t = Object.fromEntries(q.options.map(o => [o.id, 0])); for (const [, v] of counted(q)) for (const o of v) if (o in t) t[o]++; return t; };
   function pubPoll(q, u) {
-    const mine = u ? (q.votes || {})[u.uid] || [] : [], total = Object.keys(q.votes || {}).length;
+    const mine = u ? (q.votes || {})[u.uid] || [] : [], total = counted(q).length;
     const show = q.results === 'always' || (q.results !== 'closed' && mine.length) || pollState(q) === 'closed' || (u && u.adm);
-    const tally = tallyOf(q);
+    const tally = tallyOf(q), may = u ? mayVote(q, u.uid) : null;
     return { id: q.id, question: unmd(q.question), note: q.note || '', outro: q.outro || '', multi: !!q.multi, startsAt: q.startsAt || null, endsAt: q.endsAt, open: pollOpen(q), soon: pollSoon(q), results: q.results, voters: total, mine,
+      who: rule(q).type, whoEvent: rule(q).eventId || '', whoText: whoText(q).replace(/\*\*/g, ''), allowed: may ? may.ok : null, notAllowed: may && !may.ok ? may.why : '',
       options: q.options.map(o => ({ id: o.id, text: unmd(o.text), details: o.details || '', votes: show ? tally[o.id] : null })), createdAt: q.createdAt, onDiscord: (q.posts || []).length > 0 };
   }
   on('GET', '/api/polls', async req => {
@@ -288,6 +301,7 @@ module.exports = function install(x) {
     const u = needMember(req); const q = list('polls').find(z => z.id === p.id); if (!q) throw err(404, 'Poll not found.');
     if (pollSoon(q)) throw err(400, `Voting opens on ${opensText(q)}.`);
     if (!pollOpen(q)) throw err(400, 'This poll has closed.');
+    const may = mayVote(q, u.uid); if (!may.ok) throw err(403, may.why);
     const b = await readBody(req), ids = [...new Set((Array.isArray(b.options) ? b.options : [b.options]).map(String))].filter(o => q.options.some(x => x.id === o));
     if (!ids.length) throw err(400, 'Pick an option.'); if (!q.multi && ids.length > 1) throw err(400, 'Pick one option.');
     (q.votes = q.votes || {})[u.uid] = ids; markVote(q, u.uid, 'website'); store.save(); refreshPollPosts(q); return { poll: pubPoll(q, u) };
@@ -299,7 +313,10 @@ module.exports = function install(x) {
     if (opts.length < 2) throw err(400, 'Add at least 2 options.');
     const startsAt = isoOrNull(b.startsAt), endsAt = isoOrNull(b.endsAt);
     if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) throw err(400, 'The closing time must be after the opening time.');
-    return { question, note: str(b.note, 1500), outro: str(b.outro, 400), options: opts, multi: !!b.multi, startsAt, endsAt, results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
+    const wt = ['members', 'creators', 'event'].includes(b.who) ? b.who : 'members';
+    if (wt === 'event' && !evById(String(b.whoEvent || ''))) throw err(400, 'Pick the event whose players can vote.');
+    const who = wt === 'event' ? { type: 'event', eventId: String(b.whoEvent) } : { type: wt };
+    return { question, note: str(b.note, 1500), outro: str(b.outro, 400), options: opts, multi: !!b.multi, startsAt, endsAt, who, results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
   };
 
   // ---- the Discord post: the poll as an embed with a vote button per option; it is kept up to date as votes come in
@@ -307,7 +324,7 @@ module.exports = function install(x) {
   const bar = (n, total) => { const k = total ? Math.round(n / total * 12) : 0; return '🟧'.repeat(k) + '⬛'.repeat(12 - k); };
   const unix = iso => Math.floor(new Date(iso).getTime() / 1000);
   function pollMessage(q) {
-    const st = pollState(q), open = st === 'open', tally = tallyOf(q), voters = Object.keys(q.votes || {}).length, totalPicks = Object.values(tally).reduce((a, b) => a + b, 0);
+    const st = pollState(q), open = st === 'open', tally = tallyOf(q), voters = counted(q).length, totalPicks = Object.values(tally).reduce((a, b) => a + b, 0);
     const showCounts = st === 'closed' || (open && q.results === 'always');   // "after they vote" polls show counts privately to each voter
     const best = Math.max(0, ...Object.values(tally)), winners = q.options.filter(o => best > 0 && tally[o.id] === best);
     const fields = q.options.map((o, i) => ({ name: `${NUM[i] || '•'} ${unmd(o.text)}`.slice(0, 256),
@@ -318,6 +335,7 @@ module.exports = function install(x) {
     const status = st === 'soon' ? `⏳ Voting opens <t:${unix(q.startsAt)}:F> (<t:${unix(q.startsAt)}:R>)${q.endsAt ? ` · closes <t:${unix(q.endsAt)}:F>` : ''}`
       : open ? `${voters} vote${voters === 1 ? '' : 's'} so far${q.endsAt ? ` · closes <t:${unix(q.endsAt)}:R>` : ''}${q.results === 'closed' ? ' · results show when it closes' : q.results === 'voted' ? ' · vote to see the results' : ''}`
       : `🔒 Voting closed · ${voters} vote${voters === 1 ? '' : 's'}`;
+    const rule_ = whoText(q); if (rule_) fields.unshift({ name: '​', value: rule_ });   // who can vote, above the options
     const rows = [];
     const btns = q.options.map((o, i) => ({ type: 2, style: open ? 1 : 2, custom_id: `poll:${q.id}:${o.id}`, label: unmd(o.text).slice(0, 80), emoji: { name: NUM[i] || '🗳️' }, disabled: !open }));
     for (let i = 0; i < btns.length; i += 5) rows.push({ type: 1, components: btns.slice(i, i + 5) });
@@ -351,10 +369,12 @@ module.exports = function install(x) {
   const NATIVE_MAX = 10;
   function nativeText(q, ping) {
     const st = pollState(q);
+    const rule_ = whoText(q);
     const parts = [ping || '', `## ${unmd(q.question)}`, q.note || '',
       ...q.options.map((o, i) => o.details ? `**${NUM[i] || '•'} ${unmd(o.text)}**\n${o.details.split('\n').map(l => l.replace(/^\s*[*-]\s+/, '• ')).join('\n')}` : ''),
       q.outro || '',
-      st === 'closed' ? '🔒 **Voting is closed.**' : `-# Vote in the poll below or on the website: <${site()}/community.html#poll-${q.id}> · one vote per member, your latest vote counts`];
+      st === 'closed' ? '🔒 **Voting is closed.**'
+        : `${rule_ ? rule_ + ' Other votes are not counted.\n' : ''}-# Vote below or [on the website](<${site()}/community.html#poll-${q.id}>) · one vote per member · your latest vote counts`];
     let t = parts.filter(Boolean).join('\n\n');
     if (t.length > 2000) t = t.slice(0, 1990) + '…';
     return t;
@@ -441,6 +461,7 @@ module.exports = function install(x) {
     if (!pollOpen(q)) { refreshPollPosts(q); return say('🔒 This poll has closed.'); }
     if (!it.member) return say('Vote from the MTC Discord server.');
     if (userRec(who.id).blocked) return say('Your account is blocked from voting. Message an admin.');
+    { const may = mayVote(q, who.id); if (!may.ok) return say('🚫 ' + may.why); }
     const o = q.options.find(x => x.id === oid); if (!o) return say('That option is no longer in the poll.');
     const votes = q.votes = q.votes || {}, cur = votes[who.id] || [];
     const next = q.multi ? (cur.includes(o.id) ? cur.filter(x => x !== o.id) : [...cur, o.id]) : [o.id];
@@ -470,7 +491,8 @@ module.exports = function install(x) {
   });
   on('DELETE', '/api/admin/polls/:id', async (req, res, p) => {
     needAdmin(req); const q = list('polls').find(z => z.id === p.id);
-    for (const ps of (q && q.posts) || []) discord.edit(ps.channelId, ps.messageId, { embeds: [{ title: unmd(q.question), description: 'This poll was removed.', color: 0x5c5c5c }], components: [] }).catch(() => {});
+    // its Discord posts go too (if a post cannot be deleted, it is at least marked as removed)
+    for (const ps of (q && q.posts) || []) discord.deleteMessage(ps.channelId, ps.messageId).catch(e => { if (e.status !== 404) discord.edit(ps.channelId, ps.messageId, { content: '🗑️ This poll was removed.', embeds: [], components: [] }).catch(() => {}); });
     D().polls = list('polls').filter(z => z.id !== p.id); store.save(); return { ok: true };
   });
   // who voted for what, and where (website, Discord poll, Discord buttons), for admins, also while the poll is running
@@ -479,8 +501,11 @@ module.exports = function install(x) {
     await discord.allMembers().catch(() => null);
     const who = uid => { const g = discord.cachedMember(uid) || {}, r = userRec(uid), m = (q.voteMeta || {})[uid] || {};
       return { id: uid, name: g.name || r.name || r.username || uid, username: g.username || r.username || '', avatar: g.avatar || r.avatar || '', src: m.src || '', at: m.at || '' }; };
-    const options = q.options.map(o => ({ id: o.id, text: unmd(o.text), voters: Object.entries(q.votes || {}).filter(([, v]) => v.includes(o.id)).map(([uid]) => who(uid)).sort((a, b) => String(b.at).localeCompare(String(a.at))) }));
-    return { question: unmd(q.question), total: Object.keys(q.votes || {}).length, options };
+    const ok = new Set(counted(q).map(([uid]) => uid)), newest = (a, b) => String(b.at).localeCompare(String(a.at));
+    const options = q.options.map(o => ({ id: o.id, text: unmd(o.text), voters: Object.entries(q.votes || {}).filter(([uid, v]) => ok.has(uid) && v.includes(o.id)).map(([uid]) => who(uid)).sort(newest) }));
+    // people outside the "who can vote" rule who tapped the Discord poll anyway: shown, not counted
+    const notCounted = Object.entries(q.votes || {}).filter(([uid]) => !ok.has(uid)).map(([uid, v]) => ({ ...who(uid), picked: v.map(x => unmd((q.options.find(o => o.id === x) || {}).text || '?')).join(', '), why: mayVote(q, uid).why })).sort(newest);
+    return { question: unmd(q.question), total: ok.size, rule: whoText(q).replace(/\*\*/g, ''), options, notCounted };
   });
   // post to Discord now, or (when: 'open') automatically when voting opens
   on('POST', '/api/admin/polls/:id/discord', async (req, res, p) => {

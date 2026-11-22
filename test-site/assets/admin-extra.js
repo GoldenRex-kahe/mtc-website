@@ -67,6 +67,7 @@
   }
   async function polls(p) {
     const d = await api('/api/admin/polls');
+    const evs = (await api('/api/events').catch(() => ({ events: [] }))).events || [];
     let editId = null;   // the poll being edited (null = making a new one)
     const optRow = (o = {}) => `<div class="popt-ed" data-oid="${esc(o.id || '')}" style="border:2px solid #000;background:#140d07;padding:10px;margin-bottom:8px">
         <div class="row" style="gap:8px"><input type="text" class="po-t" maxlength="80" placeholder="Option, e.g. Option 1 — 8 Days" value="${esc(o.text || '')}" style="flex:1"><button type="button" class="btn red sm po-x" aria-label="Remove option">✕</button></div>
@@ -82,12 +83,14 @@
       <div class="fields" style="margin-top:12px"><div class="full"><label for="pout">Closing text <span class="soft">(optional, shown under the options)</span></label><textarea id="pout" rows="2" maxlength="400" placeholder="🗳️ The final schedule is decided by the majority vote. Your vote matters!"></textarea></div>
         <div><label for="ps">Voting opens <span class="soft">(optional; empty = right away)</span></label><input type="datetime-local" id="ps"></div>
         <div><label for="pe">Closes <span class="soft">(optional)</span></label><input type="datetime-local" id="pe"></div>
+        <div><label for="pwho">Who can vote</label><select id="pwho"><option value="members">Everyone in the MTC Discord</option><option value="creators">Creators only (Creator role)</option><option value="event">Approved players of an event</option></select></div>
+        <div id="pwhoev" hidden><label for="pwhoe">Event</label><select id="pwhoe">${evs.map(e => `<option value="${esc(e.id)}">${esc(e.title)}${e.status ? ' (' + esc(e.status) + ')' : ''}</option>`).join('') || '<option value="">No events yet</option>'}</select></div>
         <div><label for="pr">Show results</label><select id="pr"><option value="always">Always (live bars on Discord too)</option><option value="voted" selected>After they vote</option><option value="closed">Only when the poll closes</option></select></div></div>
       <label class="check"><input type="checkbox" id="pm"> Members can pick more than one option</label>
       <div class="row" style="margin-top:12px"><button class="btn" id="padd" type="button">START POLL</button><button class="btn ghost" id="pcancel" type="button" hidden>CANCEL EDITING</button></div></div>
       <div class="list">${d.polls.map(q => { const max = Math.max(1, ...q.options.map(o => o.votes || 0));
         return `<div class="card" data-poll="${q.id}" style="margin-bottom:14px"><div class="row"><h3 style="margin:0;flex:1">${esc(q.question)}</h3><span class="badge ${q.open ? 'live' : q.soon ? 'pending' : 'withdrawn'}">${q.open ? 'OPEN' : q.soon ? 'NOT OPEN YET' : 'CLOSED'}</span></div>
-          <p class="soft small">${q.soon ? '⏳ voting opens ' + esc(fmt(q.startsAt)) + ' · ' : ''}${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}${q.autoPost ? ` · <b>posts to #${esc(q.autoPost.channel)} by itself when voting opens</b> <button type="button" class="btn ghost sm" data-unsched>CANCEL</button>` : ''}</p>
+          ${q.whoText ? `<p class="small" style="margin:4px 0">${esc(q.whoText)}</p>` : ''}<p class="soft small">${q.soon ? '⏳ voting opens ' + esc(fmt(q.startsAt)) + ' · ' : ''}${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}${q.autoPost ? ` · <b>posts to #${esc(q.autoPost.channel)} by itself when voting opens</b> <button type="button" class="btn ghost sm" data-unsched>CANCEL</button>` : ''}</p>
           ${q.options.map(o => `<div class="pbar" title="${esc(o.text)}: ${o.votes} vote${o.votes === 1 ? '' : 's'}"><span>${esc(o.text)}</span><i style="width:${Math.round((o.votes || 0) / max * 100)}%"></i><b>${o.votes || 0}</b></div>`).join('')}
           <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn sm" data-pedit>✎ EDIT</button><button class="btn grey sm" data-pvoters>👥 VOTERS (${q.voters})</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
     const bindRows = () => p.querySelectorAll('.po-x').forEach(b => b.onclick = () => { if (p.querySelectorAll('.popt-ed').length > 2) b.closest('.popt-ed').remove(); else toast('A poll needs at least 2 options.', true); });
@@ -105,6 +108,7 @@
       editId = q.id;
       $('#pq').value = q.question; $('#pn').value = q.note || ''; $('#pout').value = q.outro || '';
       $('#ps').value = q.soon ? localVal(q.startsAt) : ''; $('#pe').value = localVal(q.endsAt); $('#pr').value = q.results || 'voted'; $('#pm').checked = !!q.multi;
+      $('#pwho').value = q.who || 'members'; if (q.whoEvent) $('#pwhoe').value = q.whoEvent; $('#pwhoev').hidden = $('#pwho').value !== 'event';
       $('#popts').innerHTML = q.options.map(optRow).join(''); bindRows();
       $('#pformh').textContent = 'EDIT POLL'; $('#padd').textContent = 'SAVE CHANGES'; $('#pcancel').hidden = false;
       const e = $('#pedit'); e.hidden = false;
@@ -112,9 +116,10 @@
       $('#pform').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     $('#pcancel').onclick = () => polls(p);
+    $('#pwho').onchange = () => { $('#pwhoev').hidden = $('#pwho').value !== 'event'; };
     $('#padd').onclick = async () => {
       const options = [...p.querySelectorAll('.popt-ed')].map(r => ({ id: r.dataset.oid || undefined, text: r.querySelector('.po-t').value.trim(), details: r.querySelector('.po-d').value.trim() })).filter(o => o.text);
-      const body = { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked };
+      const body = { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked, who: $('#pwho').value, whoEvent: $('#pwhoe').value };
       if (editId) {
         const was = d.polls.find(x => x.id === editId), gone = was ? was.options.filter(o => !options.some(n => n.id === o.id) && o.votes) : [];
         if (gone.length && !confirm(`Removing ${gone.map(o => '"' + o.text + '"').join(', ')} also removes ${gone.reduce((a, o) => a + o.votes, 0)} vote(s). Save anyway?`)) return;
@@ -139,7 +144,9 @@
             <b>${esc(o.text)}</b> <span class="soft small">· ${o.voters.length} vote${o.voters.length === 1 ? '' : 's'}</span>
             ${o.voters.length ? `<div style="display:grid;gap:6px;margin-top:8px;max-height:320px;overflow:auto">${o.voters.map(v => `<div class="row" style="gap:8px;flex-wrap:nowrap;align-items:center">${v.avatar ? `<img src="${esc(v.avatar)}" alt="" style="width:26px;height:26px;border:2px solid #000">` : '<span style="width:26px;height:26px;border:2px solid #000;display:inline-block"></span>'}
               <span style="min-width:0;flex:1"><b style="font-size:13px">${esc(v.name)}</b>${v.username ? ` <span class="soft small">@${esc(v.username)}</span>` : ''}<br><span class="soft small">${esc(SRC[v.src] || 'earlier vote')}${v.at ? ' · ' + esc(fmt(v.at)) : ''}</span></span></div>`).join('')}</div>` : '<p class="soft small" style="margin:6px 0 0">No votes yet.</p>'}</div>`).join('')}</div>
-          <p class="soft small" style="margin:8px 0 0">${r.total} member${r.total === 1 ? '' : 's'} voted. Open this again to refresh.</p>`;
+          ${r.notCounted.length ? `<div style="margin-top:10px;border:2px solid #000;background:#2a1410;padding:10px"><b>🚫 Not counted (${r.notCounted.length})</b> <span class="soft small">tapped the Discord poll but are not allowed by the rule${r.rule ? ': ' + esc(r.rule) : ''}</span>
+            <div style="display:grid;gap:4px;margin-top:6px">${r.notCounted.map(v => `<span class="small">${esc(v.name)}${v.username ? ` <span class="soft">@${esc(v.username)}</span>` : ''} · picked ${esc(v.picked)}${v.at ? ' · ' + esc(fmt(v.at)) : ''}</span>`).join('')}</div></div>` : ''}
+          <p class="soft small" style="margin:8px 0 0">${r.total} member${r.total === 1 ? '' : 's'} voted${r.rule ? ' (' + esc(r.rule) + ')' : ''}. Open this again to refresh.</p>`;
       };
       const op = card.querySelector('[data-open]'); if (op) op.onclick = () => { if (confirm('Open voting now (before the planned time)?')) api('/api/admin/polls/' + id, { method: 'PUT', body: { openNow: true } }).then(() => { toast('Voting is open. The Discord post updates in a few seconds.'); polls(p); }).catch(x => toast(x.message, true)); };
       const un = card.querySelector('[data-unsched]'); if (un) un.onclick = () => api('/api/admin/polls/' + id + '/discord', { method: 'POST', body: { when: 'cancel' } }).then(() => { toast('The scheduled Discord post is cancelled.'); polls(p); }).catch(x => toast(x.message, true));
@@ -147,18 +154,18 @@
       card.querySelector('[data-pd]').onclick = async () => {
         const box = card.querySelector('.pdc'); if (box.innerHTML && box.dataset.v !== '1') { box.innerHTML = ''; return; } box.dataset.v = '';
         let meta; try { meta = await api('/api/admin/discord/meta'); } catch (x) { return toast(x.message, true); }
-        const tooMany = q.options.length > 10;
+        const tooMany = q.options.length > 10, ruled = q.who && q.who !== 'members', btnFirst = tooMany || ruled;
         box.innerHTML = `<div style="margin-top:12px">
           <label>Style</label><div class="row" style="gap:14px;margin:4px 0 10px">
-            <label class="check" style="margin:0"><input type="radio" name="pst-${id}" class="pstyle" value="native"${tooMany ? ' disabled' : ' checked'}> <b>Discord poll</b> <span class="soft small">(Discord's own poll: each member sees their vote ticked and the bars)</span></label>
-            <label class="check" style="margin:0"><input type="radio" name="pst-${id}" class="pstyle" value="buttons"${tooMany ? ' checked' : ''}> <b>Buttons</b> <span class="soft small">(can be edited later, details under each option)</span></label></div>
+            <label class="check" style="margin:0"><input type="radio" name="pst-${id}" class="pstyle" value="native"${tooMany ? ' disabled' : btnFirst ? '' : ' checked'}> <b>Discord poll</b> <span class="soft small">(Discord's own poll: each member sees their vote ticked and the bars)</span></label>
+            <label class="check" style="margin:0"><input type="radio" name="pst-${id}" class="pstyle" value="buttons"${btnFirst ? ' checked' : ''}> <b>Buttons</b> <span class="soft small">(can be edited later, details under each option)</span></label></div>
           <div class="row" style="gap:8px"><select class="pch" style="max-width:300px">${meta.channels.map(c => `<option value="${c.id}"${c.id === meta.defaultChannel ? ' selected' : ''}>${c.news ? '📢' : '#'} ${esc(c.name)}</option>`).join('')}</select>${q.soon ? `<select class="pwhen" style="max-width:280px"><option value="open">Post when voting opens (${esc(fmt(q.startsAt))})</option><option value="now">Post now (buttons style only: locked until it opens)</option></select>` : ''}<button class="btn sm" type="button" data-go>POST</button></div>
           <div class="row" style="gap:6px;margin-top:8px"><label class="check" style="margin:0"><input type="checkbox" class="pping"> @everyone</label>${meta.roles.slice(0, 20).map(r => `<label class="check" style="margin:0"><input type="checkbox" class="prole" value="${r.id}"> @${esc(r.name)}</label>`).join('')}</div>
           <p class="soft small pnote" style="margin:6px 0 0"></p></div>`;
         const note = () => { const s = (box.querySelector('.pstyle:checked') || {}).value;
           box.querySelector('.pnote').textContent = s === 'native'
-            ? `Discord shows it as a real poll: members tap an answer, see their own vote ticked and the result bars. The details of each option go in the message text above it. Votes count on the website too. Discord does not allow changing a poll's options after posting (the text above still updates). ${q.endsAt ? 'It ends when this poll closes.' : 'With no closing time it runs for 7 days on Discord.'}${q.soon ? ' It is posted when voting opens.' : ''}`
-            : 'A message with a vote button for each option. Each voter gets a private reply with their choice in green. It updates itself as votes come in and can be edited later; when the poll closes, the buttons lock and the result shows.'; };
+            ? `${ruled ? `⚠️ ${q.whoText} A Discord poll cannot stop other people from tapping it: their votes are not counted here (you see them under VOTERS), but Discord's own bars include them. The Buttons style blocks them instead. ` : ''}Discord shows it as a real poll: members tap an answer, see their own vote ticked and the result bars. The details of each option go in the message text above it. Votes count on the website too. Discord does not allow changing a poll's options after posting (the text above still updates). ${q.endsAt ? 'It ends when this poll closes.' : 'With no closing time it runs for 7 days on Discord.'}${q.soon ? ' It is posted when voting opens.' : ''}`
+            : (ruled ? `${q.whoText} Anyone else who taps a button is told they cannot vote. ` : '') + 'A message with a vote button for each option. Each voter gets a private reply with their choice in green. It updates itself as votes come in and can be edited later; when the poll closes, the buttons lock and the result shows.'; };
         box.querySelectorAll('.pstyle').forEach(r => r.onchange = note); note();
         box.querySelector('[data-go]').onclick = () => api('/api/admin/polls/' + id + '/discord', { method: 'POST', body: { channelId: box.querySelector('.pch').value, style: (box.querySelector('.pstyle:checked') || {}).value || 'native', when: (box.querySelector('.pwhen') || {}).value || 'now', ping: box.querySelector('.pping').checked, roles: [...box.querySelectorAll('.prole:checked')].map(c => c.value) } })
           .then(r => { toast(r.scheduled ? 'Scheduled: it posts to Discord by itself when voting opens.' : 'Posted to Discord.'); polls(p); if (r.link) window.open(r.link, '_blank', 'noopener'); }).catch(x => toast(x.message, true));

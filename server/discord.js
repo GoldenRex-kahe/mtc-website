@@ -55,6 +55,7 @@ async function creatorMembers(force) {
 
 // native Discord polls: end one early, and read who picked an answer (answer ids start at 1; 100 voters per page)
 const expirePoll = (channelId, messageId) => call(`/channels/${channelId}/polls/${messageId}/expire`, { method: 'POST' });
+const deleteMessage = (channelId, messageId) => call(`/channels/${channelId}/messages/${messageId}`, { method: 'DELETE' });
 async function pollVoters(channelId, messageId, answerId) {
   const out = []; let after = '';
   for (let i = 0; i < 50; i++) {
@@ -223,4 +224,4 @@ async function dmSend(userId, payload, files) {
 
 // last fetched member list, without waiting (used for player pictures)
 const cachedMember = id => all ? all.members.find(m => m.id === id) : null;
-module.exports = { expirePoll, pollVoters, forget, edit, followup, channels, roles, send, dmSend, addMember, refreshToken, makeInvite, deleteInvite, dm, addRole, cachedMember, ready, allMembers, creatorMembers, memberInfo, searchMembers, announce, postEmbed, loginReady, authorizeUrl, exchange, redirectUri };
+module.exports = { deleteMessage, expirePoll, pollVoters, forget, edit, followup, channels, roles, send, dmSend, addMember, refreshToken, makeInvite, deleteInvite, dm, addRole, cachedMember, ready, allMembers, creatorMembers, memberInfo, searchMembers, announce, postEmbed, loginReady, authorizeUrl, exchange, redirectUri };

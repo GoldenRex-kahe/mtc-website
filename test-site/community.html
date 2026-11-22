@@ -71,14 +71,16 @@ async function polls() {
     box.innerHTML = needLogin(d.canVote) + (d.polls.length ? d.polls.map(q => { const total = q.options.reduce((a, o) => a + (o.votes || 0), 0), shown = q.options.some(o => o.votes !== null);
       return `<article class="card poll" id="poll-${q.id}" data-p="${q.id}"><div class="row"><h2 style="flex:1">${esc(q.question)}</h2><span class="badge ${q.open ? 'live' : q.soon ? 'pending' : 'withdrawn'}">${q.open ? 'OPEN' : q.soon ? 'OPENS SOON' : 'CLOSED'}</span></div>
         ${q.note ? `<p class="soft pnote">${lines(q.note)}</p>` : ''}
+        ${q.whoText ? `<p class="small" style="margin:6px 0">${esc(q.whoText)}</p>` : ''}
+        ${q.allowed === false && d.canVote && q.open ? `<p class="msg info small">${esc(q.notAllowed)}</p>` : ''}
         <p class="soft small">${q.voters} voter${q.voters === 1 ? '' : 's'}${q.multi ? ' · pick as many as you like' : ' · pick one'}</p>
         ${q.soon ? `<div style="margin:6px 0 10px">${MTC.countdown(q.startsAt, 'Voting opens in')}</div><p class="soft small">You can read the options now. Voting unlocks when the timer ends.</p>` : ''}
         ${q.endsAt && q.open ? `<div style="margin:6px 0 10px">${MTC.countdown(q.endsAt, 'Closes in')}</div>` : ''}
         ${q.options.map((o, k) => { const pct = shown && total ? Math.round(o.votes / total * 100) : 0, mine = q.mine.includes(o.id);
-          return `<button type="button" class="popt${o.details ? ' has-d' : ''}" data-o="${o.id}" aria-pressed="${mine}"${!q.open || !d.canVote ? ' disabled' : ''}>${shown ? `<i style="width:${pct}%"></i>` : ''}<span class="tick" aria-hidden="true">${mine ? '✓' : ''}</span><span class="pt"><span class="pnum">${NUMS[k] || ''}</span>${esc(o.text)}${o.details ? `<small class="pd">${lines(o.details)}</small>` : ''}</span>${shown ? `<em>${o.votes}</em><b>${pct}%</b>` : ''}</button>`; }).join('')}
+          return `<button type="button" class="popt${o.details ? ' has-d' : ''}" data-o="${o.id}" aria-pressed="${mine}"${!q.open || !d.canVote || q.allowed === false ? ' disabled' : ''}>${shown ? `<i style="width:${pct}%"></i>` : ''}<span class="tick" aria-hidden="true">${mine ? '✓' : ''}</span><span class="pt"><span class="pnum">${NUMS[k] || ''}</span>${esc(o.text)}${o.details ? `<small class="pd">${lines(o.details)}</small>` : ''}</span>${shown ? `<em>${o.votes}</em><b>${pct}%</b>` : ''}</button>`; }).join('')}
         ${q.outro ? `<p class="soft small pnote" style="margin-top:10px">${lines(q.outro)}</p>` : ''}
         ${q.onDiscord && q.open ? '<p class="soft small" style="margin:6px 0 0">You can also vote with the buttons on the Discord post. One vote per member either way.</p>' : ''}
-        ${q.open && d.canVote && q.multi ? `<button class="btn sm" type="button" data-send>${q.mine.length ? 'CHANGE VOTE' : 'VOTE'}</button>` : ''}
+        ${q.open && d.canVote && q.allowed !== false && q.multi ? `<button class="btn sm" type="button" data-send>${q.mine.length ? 'CHANGE VOTE' : 'VOTE'}</button>` : ''}
         ${q.open && !shown && q.results === 'closed' ? '<p class="soft small">Results show when the poll closes.</p>' : q.open && !shown ? '<p class="soft small">Vote to see the results.</p>' : ''}</article>`; }).join('')
       : '<div class="card"><p class="soft">No polls right now.</p></div>');
     box.querySelectorAll('[data-p]').forEach(card => {
