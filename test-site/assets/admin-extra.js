@@ -67,10 +67,11 @@
   }
   async function polls(p) {
     const d = await api('/api/admin/polls');
-    const optRow = (o = {}) => `<div class="popt-ed" style="border:2px solid #000;background:#140d07;padding:10px;margin-bottom:8px">
+    let editId = null;   // the poll being edited (null = making a new one)
+    const optRow = (o = {}) => `<div class="popt-ed" data-oid="${esc(o.id || '')}" style="border:2px solid #000;background:#140d07;padding:10px;margin-bottom:8px">
         <div class="row" style="gap:8px"><input type="text" class="po-t" maxlength="80" placeholder="Option, e.g. Option 1 — 8 Days" value="${esc(o.text || '')}" style="flex:1"><button type="button" class="btn red sm po-x" aria-label="Remove option">✕</button></div>
         <textarea class="po-d" rows="3" maxlength="700" placeholder="Details (optional), one per line, e.g.&#10;📅 22–30 December&#10;⏰ 3 PM – 9 PM (6 hours/day)" style="margin-top:6px">${esc(o.details || '')}</textarea></div>`;
-    p.innerHTML = `<div class="card accent"><h2>NEW POLL</h2><p class="soft small">Members vote on the website (Community page) or with buttons on the Discord post. It is one vote per member wherever they vote, and they can change it until the poll closes.</p>
+    p.innerHTML = `<div class="card accent" id="pform"><h2 id="pformh">NEW POLL</h2><p class="msg info small" id="pedit" hidden></p><p class="soft small">Members vote on the website (Community page) or with buttons on the Discord post. It is one vote per member wherever they vote, and they can change it until the poll closes.</p>
       <details style="margin:8px 0 12px"><summary><b>📋 FILL FROM TEXT</b> <span class="soft small">paste an announcement and it is split into question, description, options and details</span></summary>
         <textarea id="pfill" rows="7" placeholder="📢 Event Schedule Poll&#10;We have 2 possible schedules...&#10;Option 1️⃣ — 8 Days&#10;* 📅 22–30 December&#10;...&#10;🗳️ Vote for the schedule you prefer!" style="margin-top:8px"></textarea>
         <button class="btn grey sm" id="pfillgo" type="button" style="margin-top:6px">FILL THE FORM</button></details>
@@ -83,12 +84,12 @@
         <div><label for="pe">Closes <span class="soft">(optional)</span></label><input type="datetime-local" id="pe"></div>
         <div><label for="pr">Show results</label><select id="pr"><option value="always">Always (live bars on Discord too)</option><option value="voted" selected>After they vote</option><option value="closed">Only when the poll closes</option></select></div></div>
       <label class="check"><input type="checkbox" id="pm"> Members can pick more than one option</label>
-      <div style="margin-top:12px"><button class="btn" id="padd" type="button">START POLL</button></div></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="padd" type="button">START POLL</button><button class="btn ghost" id="pcancel" type="button" hidden>CANCEL EDITING</button></div></div>
       <div class="list">${d.polls.map(q => { const max = Math.max(1, ...q.options.map(o => o.votes || 0));
         return `<div class="card" data-poll="${q.id}" style="margin-bottom:14px"><div class="row"><h3 style="margin:0;flex:1">${esc(q.question)}</h3><span class="badge ${q.open ? 'live' : q.soon ? 'pending' : 'withdrawn'}">${q.open ? 'OPEN' : q.soon ? 'NOT OPEN YET' : 'CLOSED'}</span></div>
           <p class="soft small">${q.soon ? '⏳ voting opens ' + esc(fmt(q.startsAt)) + ' · ' : ''}${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}${q.autoPost ? ` · <b>posts to #${esc(q.autoPost.channel)} by itself when voting opens</b> <button type="button" class="btn ghost sm" data-unsched>CANCEL</button>` : ''}</p>
           ${q.options.map(o => `<div class="pbar" title="${esc(o.text)}: ${o.votes} vote${o.votes === 1 ? '' : 's'}"><span>${esc(o.text)}</span><i style="width:${Math.round((o.votes || 0) / max * 100)}%"></i><b>${o.votes || 0}</b></div>`).join('')}
-          <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
+          <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn sm" data-pedit>✎ EDIT</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
     const bindRows = () => p.querySelectorAll('.po-x').forEach(b => b.onclick = () => { if (p.querySelectorAll('.popt-ed').length > 2) b.closest('.popt-ed').remove(); else toast('A poll needs at least 2 options.', true); });
     bindRows();
     $('#paddopt').onclick = () => { if (p.querySelectorAll('.popt-ed').length >= 12) return toast('12 options at most.', true); $('#popts').insertAdjacentHTML('beforeend', optRow()); bindRows(); };
@@ -98,15 +99,36 @@
       $('#pq').value = f.question; $('#pn').value = f.note; $('#pout').value = f.outro;
       $('#popts').innerHTML = f.options.slice(0, 12).map(optRow).join(''); bindRows();
       toast(`Filled: ${f.options.length} options. Check it, then press START POLL.`); };
+    // ISO time -> the value a datetime-local box wants (in the admin's own time zone)
+    const localVal = iso => iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '';
+    function startEdit(q) {
+      editId = q.id;
+      $('#pq').value = q.question; $('#pn').value = q.note || ''; $('#pout').value = q.outro || '';
+      $('#ps').value = q.soon ? localVal(q.startsAt) : ''; $('#pe').value = localVal(q.endsAt); $('#pr').value = q.results || 'voted'; $('#pm').checked = !!q.multi;
+      $('#popts').innerHTML = q.options.map(optRow).join(''); bindRows();
+      $('#pformh').textContent = 'EDIT POLL'; $('#padd').textContent = 'SAVE CHANGES'; $('#pcancel').hidden = false;
+      const e = $('#pedit'); e.hidden = false;
+      e.innerHTML = `Editing <b>${esc(q.question)}</b>. Votes stay with their options, even if you rename them; removing an option removes its votes.${q.posts.length ? ' The Discord post updates by itself a few seconds after you save.' : ''}`;
+      $('#pform').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    $('#pcancel').onclick = () => polls(p);
     $('#padd').onclick = async () => {
-      const options = [...p.querySelectorAll('.popt-ed')].map(r => ({ text: r.querySelector('.po-t').value.trim(), details: r.querySelector('.po-d').value.trim() })).filter(o => o.text);
-      try { await api('/api/admin/polls', { method: 'POST', body: { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked } });
+      const options = [...p.querySelectorAll('.popt-ed')].map(r => ({ id: r.dataset.oid || undefined, text: r.querySelector('.po-t').value.trim(), details: r.querySelector('.po-d').value.trim() })).filter(o => o.text);
+      const body = { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked };
+      if (editId) {
+        const was = d.polls.find(x => x.id === editId), gone = was ? was.options.filter(o => !options.some(n => n.id === o.id) && o.votes) : [];
+        if (gone.length && !confirm(`Removing ${gone.map(o => '"' + o.text + '"').join(', ')} also removes ${gone.reduce((a, o) => a + o.votes, 0)} vote(s). Save anyway?`)) return;
+        try { await api('/api/admin/polls/' + editId, { method: 'PUT', body }); toast('Poll saved.' + (was && was.posts.length ? ' The Discord post updates in a few seconds.' : '')); polls(p); } catch (x) { toast(x.message, true); }
+        return;
+      }
+      try { await api('/api/admin/polls', { method: 'POST', body });
         toast($('#ps').value ? 'Poll saved. Voting opens at the time you set. Press POST TO DISCORD to post it now or when it opens.' : 'Poll started. Press POST TO DISCORD to put it in Discord too.'); polls(p); }
       catch (x) { toast(x.message, true); } };
     p.querySelectorAll('[data-poll]').forEach(card => {
       const id = card.dataset.poll;
       card.querySelector('[data-pc]').onclick = e => api('/api/admin/polls/' + id, { method: 'PUT', body: { closed: e.target.dataset.pc === '1' } }).then(() => { toast('Saved. The Discord post updates in a few seconds.'); polls(p); }).catch(x => toast(x.message, true));
       const q = d.polls.find(x => x.id === id);
+      card.querySelector('[data-pedit]').onclick = () => startEdit(q);
       const op = card.querySelector('[data-open]'); if (op) op.onclick = () => { if (confirm('Open voting now (before the planned time)?')) api('/api/admin/polls/' + id, { method: 'PUT', body: { openNow: true } }).then(() => { toast('Voting is open. The Discord post updates in a few seconds.'); polls(p); }).catch(x => toast(x.message, true)); };
       const un = card.querySelector('[data-unsched]'); if (un) un.onclick = () => api('/api/admin/polls/' + id + '/discord', { method: 'POST', body: { when: 'cancel' } }).then(() => { toast('The scheduled Discord post is cancelled.'); polls(p); }).catch(x => toast(x.message, true));
       card.querySelector('[data-px]').onclick = () => { if (confirm('Delete this poll and its votes?')) api('/api/admin/polls/' + id, { method: 'DELETE' }).then(() => polls(p)).catch(x => toast(x.message, true)); };
