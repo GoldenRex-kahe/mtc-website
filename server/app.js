@@ -2080,6 +2080,7 @@ small{display:block;margin-top:26px;color:#9c8b74}a.s{background:none;border:0;c
 on('PUT', '/api/admin/maintenance', async req => {
   needAdmin(req); const b = await readBody(req);
   D().settings.maintenance = { on: !!b.on, message: str(b.message, 300), since: b.on ? store.now() : '' }; store.save();
+  if (typeof updateBotStatus === 'function') updateBotStatus();   // the bot goes Do Not Disturb while the site is admin-only
   return { ok: true, maintenance: D().settings.maintenance };
 });
 
@@ -2341,13 +2342,36 @@ async function presenceOptions() {
   out.push({ type: 2, name: '/help' });
   return out;
 }
+// The bot's dot: 🔴 Do Not Disturb while the website is admin-only, 🌙 Idle when every admin is offline on Discord
+// (needs the Presence Intent), 🟢 Online otherwise.
+const adminPresence = new Map();   // admin's Discord id -> 'online' | 'idle' | 'dnd' | 'offline'
+let adminIdSet = new Set(cfg.adminIds);
+async function refreshAdminIds() {
+  const r = await discord.allMembers().catch(() => null); if (!r) return;
+  adminIdSet = new Set([...cfg.adminIds, ...r.members.filter(m => (m.roles || []).some(x => cfg.adminRoleIds.includes(x))).map(m => m.id)]);
+}
+function botStatus() {
+  if (D().settings.maintenance && D().settings.maintenance.on) return 'dnd';
+  if (!gateway.state.presencesIntent || !adminIdSet.size) return 'online';   // cannot see who is online: stay online
+  const anyAdmin = [...adminIdSet].some(id => id !== gateway.state.userId && ['online', 'idle', 'dnd'].includes(adminPresence.get(id)));
+  return anyAdmin ? 'online' : 'idle';
+}
+let lastBotStatus = '';
+function updateBotStatus() { const s = botStatus(); if (s !== lastBotStatus) { lastBotStatus = s; gateway.setPresence(null, s); } }
+function notePresence(p) { const id = p && p.user && p.user.id; if (!id) return; adminPresence.set(id, p.status || 'offline'); if (adminIdSet.has(id)) updateBotStatus(); }
 async function rotatePresence() {
-  try { const opts = await presenceOptions(); gateway.setPresence(opts[presenceStep++ % opts.length]); }
+  try { const opts = await presenceOptions(); lastBotStatus = botStatus(); gateway.setPresence(opts[presenceStep++ % opts.length], lastBotStatus); }
   catch (e) { logErr('presence', e); }
 }
 if (discord.ready() && !process.env.MTC_NO_BOT) {
   gateway.start({
+    // who is online (Presence Intent): the server's online members arrive with GUILD_CREATE, changes with PRESENCE_UPDATE
+    GUILD_CREATE: g => { if (g.id !== cfg.guild) return; adminPresence.clear(); for (const p of g.presences || []) notePresence(p);
+      for (const m of g.members || []) if ((m.roles || []).some(x => cfg.adminRoleIds.includes(x)) && m.user) adminIdSet.add(m.user.id);
+      updateBotStatus(); },
+    PRESENCE_UPDATE: p => { if (p.guild_id === cfg.guild) notePresence(p); },
     READY: async () => {
+      await refreshAdminIds();
       rotatePresence();
       if (cfg.clientId) { const r = await fetch(`https://discord.com/api/v10/applications/${cfg.clientId}/guilds/${cfg.guild}/commands`, { method: 'PUT', headers: { Authorization: 'Bot ' + cfg.token, 'Content-Type': 'application/json' }, body: JSON.stringify(COMMANDS) });
         console.log(r.ok ? `Slash commands ready (${COMMANDS.length})` : 'Could not register slash commands: ' + r.status + ' ' + (await r.text()).slice(0, 200)); }
@@ -2364,6 +2388,7 @@ if (discord.ready() && !process.env.MTC_NO_BOT) {
     GUILD_MEMBER_ADD: m => { if (m.guild_id !== cfg.guild) return; discord.forget(); const id = m.user && m.user.id; if (id && D().applications.some(a => a.userId === id && a.status === 'approved' && !a.joinedAt)) joinCheck(id).catch(() => {}); },
   });
   setInterval(rotatePresence, 30e3).unref();
+  setInterval(() => refreshAdminIds().then(updateBotStatus), 10 * 60e3).unref();   // admins added or removed in Discord
 }
 
 syncSlugs();   // event addresses follow the event names

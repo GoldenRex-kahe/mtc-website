@@ -36,6 +36,19 @@
 .ev-strip>*{margin-bottom:0}
 .ev-strip .winner{margin:0}
 .winner .soft{display:block;margin-top:6px}
+.glance h3{font-size:12px;margin:0 0 12px;letter-spacing:.06em}
+.g-count{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px}
+.g-count div{background:#0005;border:2px solid #000;padding:10px 8px;text-align:center}
+.g-count b{display:block;font-family:var(--display);font-size:18px;color:var(--accent);margin-bottom:4px}
+.g-count span{color:var(--soft);font-size:12px}
+.g-bar{height:10px;background:#0006;border:2px solid #000;margin-top:10px}.g-bar i{display:block;height:100%;background:var(--accent)}
+.g-list{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+.g-list li{display:grid;grid-template-columns:22px 64px 1fr;gap:8px;align-items:baseline;font-size:14px;border-bottom:1px dashed #ffffff14;padding-bottom:7px}
+.g-list li:last-child{border-bottom:0}.g-list .gk{color:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.g-list .gv{font-weight:600}
+.g-who{margin-top:12px}.g-faces{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.g-faces img{width:32px;height:32px;border:2px solid #000;image-rendering:pixelated;background:#0006}
+.g-letter{display:grid;place-items:center;width:32px;height:32px;border:2px solid #000;background:#3a2a1c;color:var(--accent);font-family:var(--display);font-size:11px}
+.g-more{display:grid;place-items:center;min-width:32px;height:32px;padding:0 6px;border:2px solid #000;background:#0006;font-size:12px;font-weight:700}
 .stats{display:flex;gap:10px;align-items:stretch}
 .stats div{flex:1;background:#0005;border:2px solid #000;padding:12px;text-align:center}
 .stats b{display:block;font-family:var(--display);font-size:20px;color:var(--accent);margin-bottom:6px}
@@ -152,6 +165,31 @@ const {$, esc, api, badge, when, toast, imageToDataUrl, tile, bindGallery, me} =
 MTC.nav('events');
 const slug = new URLSearchParams(location.search).get('slug') || '';
 const TYPES = {survival:'Survival', minigame:'Minigame', build:'Build', pvp:'PvP', other:'Event'};
+// "AT A GLANCE" card next to the registration form: counters, slots bar, the key facts, and who has joined
+function glance(e, d) {
+  const ps = e.participants || [], play = e.teamPlay || (e.teamSize > 1 ? 'teams' : 'solo');
+  const teams = new Set(ps.map(p => (p.team || '').trim().toLowerCase()).filter(Boolean)).size;
+  const left = e.slots ? Math.max(0, e.slots - (e.taken || 0)) : 0, pct = e.slots ? Math.min(100, Math.round((e.taken || 0) / e.slots * 100)) : 0;
+  const hm = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); if (!m) return ''; const h = +m[1]; return (h % 12 || 12) + (m[2] !== '00' ? ':' + m[2] : '') + (h >= 12 ? ' PM' : ' AM'); };
+  const row = (ic, k, v) => v ? `<li><span class="gi" aria-hidden="true">${ic}</span><span class="gk">${k}</span><span class="gv">${v}</span></li>` : '';
+  const eds = [(e.editions || []).join(' + '), e.mcVersion].filter(Boolean).join(' · ');
+  return `<div class="card glance"><h3>AT A GLANCE</h3>
+    <div class="g-count"><div><b>${ps.length}</b><span>confirmed</span></div>${e.slots ? `<div><b>${left}</b><span>slots left</span></div>` : ''}${play !== 'solo' ? `<div><b>${teams}</b><span>teams</span></div>` : ''}<div><b>${d.media.length}</b><span>showcase</span></div></div>
+    ${e.slots ? `<div class="g-bar" title="${e.taken || 0} of ${e.slots} slots taken"><i style="width:${pct}%"></i></div>` : ''}
+    <ul class="g-list">
+      ${row('📅', 'When', esc(e.start ? when(e) : (e.dateLabel || 'To be announced')))}
+      ${row(play === 'solo' ? '👤' : '👥', 'Play', esc(e.teamLabel || (play === 'solo' ? 'Solo' : 'Teams of ' + e.teamSize)))}
+      ${row('🎮', 'Mode', esc(TYPES[e.type] || 'Event'))}
+      ${e.days ? row('⏱', 'Length', `${e.days} day${e.days > 1 ? 's' : ''}${e.hoursFrom && e.hoursTo ? ` · ${esc(hm(e.hoursFrom))} – ${esc(hm(e.hoursTo))} daily` : ''}`) : e.hoursFrom && e.hoursTo ? row('🕑', 'Hours', `${esc(hm(e.hoursFrom))} – ${esc(hm(e.hoursTo))} daily`) : ''}
+      ${row('🧱', 'Server', esc(eds))}
+      ${row('🏆', 'Prize', esc(e.prize || ''))}
+    </ul>
+    ${ps.length ? `<div class="g-who"><span class="soft small">Who's in</span><div class="g-faces">${ps.slice(0, 12).map(p => { const head = 'https://mc-heads.net/avatar/' + encodeURIComponent(p.name) + '/40';
+      // Discord picture, else their Minecraft head, else their first letter
+      return `<img src="${esc(p.avatar || head)}" data-head="${esc(head)}" alt="${esc(p.name)}" title="${esc(p.name)}${p.team ? ' · ' + esc(p.team) : ''}" onerror="if(this.dataset.head&&this.src!==this.dataset.head){this.src=this.dataset.head}else{this.replaceWith(Object.assign(document.createElement('b'),{className:'g-letter',textContent:(this.alt||'?')[0].toUpperCase(),title:this.title}))}">`; }).join('')}${ps.length > 12 ? `<span class="g-more">+${ps.length - 12}</span>` : ''}</div></div>`
+      : `<p class="soft small" style="margin:12px 0 0">Nobody has joined yet. Be the first!</p>`}
+  </div>`;
+}
 
 async function load() {
   let d, who;
@@ -193,7 +231,7 @@ async function load() {
     <div class="ev-strip">
       <div class="card accent" id="reg"></div>
       ${win ? `<div class="winner"><span class="crown" aria-hidden="true">🏆</span><div><b>WINNER</b><strong>${esc(win.name)}</strong>${win.points ? `<span class="soft small">${esc(win.points)} pts</span>` : ''}</div></div>`
-        : `<div class="card stats"><div><b>${e.participants.length}</b><span>confirmed players</span></div>${e.slots ? `<div><b>${Math.max(0, e.slots - e.taken)}</b><span>slots left</span></div>` : ''}<div><b>${d.media.length}</b><span>showcase items</span></div></div>`}
+        : glance(e, d)}
     </div>
     <nav class="ev-jump" aria-label="On this page">${jump.map(([id, l]) => `<a href="#${id}">${l}</a>`).join('')}</nav>
 
