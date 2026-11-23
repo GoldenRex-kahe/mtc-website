@@ -109,11 +109,17 @@ function playerCard(r) {
   const gm = discord.cachedMember(r.userId);
   return { name: m.mc || r.mc || r.username || r.name, edition: m.mc ? m.edition : edOf(r.mcEdition), team: r.team || '', skin: m.skin || skinUrl(r.mc, r.mcEdition), avatar: u.avatar || (gm && gm.avatar) || '' };
 }
+// "Solo", "Duos · players make their own teams", "Teams of 5 · admins pick the teams"...
+const TEAM_NAMES = { 2: 'Duos', 3: 'Trios', 4: 'Squads of 4' };
+const TEAM_FORM = { choose: 'players make their own teams', admins: 'admins pick the teams', random: 'random teams' };
+function teamText(e, short) { const n = e.teamSize || 1; if (n <= 1) return 'Solo, every player for themself';
+  const size = TEAM_NAMES[n] || `Teams of ${n}`; return short ? size : `${size} · ${TEAM_FORM[e.teamForm] || TEAM_FORM.choose}`; }
 function pubEvent(e) {
   const regs = D().registrations.filter(r => r.eventId === e.id);
   // server address is only public while the event is live
   return { ...e, files: (e.files || []).map(pubFile), serverInfo: e.status === 'live' ? e.serverInfo || '' : '', statusAddr: undefined, hasStatus: !!(e.statusAddr || e.serverJava || e.serverBedrock),
     editions: [e.serverJava ? 'Java' : '', e.serverBedrock ? 'Bedrock' : ''].filter(Boolean),   // which editions can join (the addresses stay hidden until live)
+    teamLabel: teamText(e), teamShort: teamText(e, true), teamForm: e.teamForm || 'choose',
     ...(e.status === 'live' ? {} : { serverJava: '', serverBedrock: '', serverBedrockPort: '', serverExtra: [] }), serverPost: undefined, reminded: undefined, remindedFor: undefined, taken: regs.filter(r => r.status === 'pending' || r.status === 'approved').length,
     participants: regs.filter(r => r.status === 'approved').map(r => playerCard(r)) };
 }
@@ -349,6 +355,8 @@ function eventFields(b, prev = {}) {
     end: b.end !== undefined ? isoOrNull(b.end) : (prev.end || null),
     days: int(b.days, 0, 365, prev.days || 0), daysPlayed: int(b.daysPlayed, 0, 365, prev.daysPlayed || 0),
     slots: int(b.slots, 0, 1000, prev.slots || 0), teamSize: int(b.teamSize, 1, 20, prev.teamSize || 1),
+    // team events: how teams are made (players form their own / admins put players in teams / random draw)
+    teamForm: ['choose', 'admins', 'random'].includes(b.teamForm) ? b.teamForm : (prev.teamForm || 'choose'),
     prize: str(b.prize, 120, prev.prize || ''), summary: str(b.summary, 600, prev.summary || ''),
     rules: str(b.rules, 8000, prev.rules || ''), notes: str(b.notes, 1500, prev.notes || ''),
     serverInfo: str(b.serverInfo, 300, prev.serverInfo || ''),
@@ -404,7 +412,7 @@ function eventCard(e) {
   fields.push({ name: '📅 When', value: when, inline: false });
   // the game, three short columns
   fields.push({ name: `${TYPE_ICON[e.type] || '🎮'} Mode`, value: TYPE_NAME[e.type] || 'Other', inline: true });
-  fields.push({ name: '👥 Format', value: e.teamSize > 1 ? `Teams of ${e.teamSize}` : 'Solo', inline: true });
+  fields.push({ name: e.teamSize > 1 ? '👥 Teams' : '👤 Solo', value: teamText(e), inline: true });
   fields.push({ name: '🗓️ Length', value: e.days ? `${e.days} day${e.days > 1 ? 's' : ''}` : 'One session', inline: true });
   if (e.slots) fields.push({ name: '🎟️ Slots', value: `${bar(pe.taken, e.slots)}  **${pe.taken} / ${e.slots}**${pe.taken >= e.slots ? ' · **FULL**' : ''}`, inline: false });
   else fields.push({ name: '🎟️ Registered', value: `**${pe.taken}** player${pe.taken === 1 ? '' : 's'}`, inline: true });
@@ -618,7 +626,7 @@ async function postServer(e, opt = {}) {
     color: ST_COLOR[e.status] || 0xF7931E,
     description: ('**Join the server**\n```\n' + lines.join('\n') + '\n```' + (e.status === 'live' ? '\n🔴 **The event is live now.** See you in game!' : '')).slice(0, 4000),
     fields: [e.start && { name: '📅 Starts', value: `<t:${Math.floor(new Date(e.start) / 1000)}:F>\n<t:${Math.floor(new Date(e.start) / 1000)}:R>`, inline: true },
-      { name: '👥 Players', value: e.teamSize > 1 ? `Teams of ${e.teamSize}` : 'Solo', inline: true }].filter(Boolean),
+      { name: e.teamSize > 1 ? '👥 Teams' : '👤 Solo', value: teamText(e), inline: true }].filter(Boolean),
     thumbnail: { url: cfg.publicUrl + '/assets/logo.png' },
     footer: { text: 'Only registered players may join · MC Thamizh Creators', icon_url: cfg.publicUrl + '/assets/logo.png' }, timestamp: new Date().toISOString() };
   const btns = [{ label: 'Event page', url, emoji: '🔗' }, e.rules && { label: 'Rules', url: url + '#rules', emoji: '📜' }];

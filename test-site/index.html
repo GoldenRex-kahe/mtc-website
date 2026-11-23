@@ -769,7 +769,7 @@ function evCard(e){const [cls,label]=TAGS[e.status]||['good',e.status.toUpperCas
     <a class="evc-img ${e.banner?'':'t-'+(e.type||'other')}" href="${url}" tabindex="-1" aria-hidden="true" ${e.banner?`style="background-image:url('${escH(e.banner)}');background-position:${escH(e.bannerPos||'50% 50%')};background-size:${e.bannerFit==='contain'?'contain':'cover'}"`:''}>${e.banner?'':`<span class="evc-ico">${TYPE_ICON[e.type]||'⭐'}</span>`}<span class="tag ${cls}">${label}</span></a>
     <div class="evc-body">
       <h3><a href="${url}">${escH(e.title)}</a></h3>
-      <div class="evc-meta"><span>📅 ${escH(evWhen(e))}</span>${players?`<span>👥 ${players} players</span>`:''}${dayTxt?`<span>⏱ ${escH(dayTxt)}</span>`:''}</div>
+      <div class="evc-meta"><span>📅 ${escH(evWhen(e))}</span><span>${(e.teamSize||1)>1?'👥 '+escH(e.teamShort||'Teams of '+e.teamSize):'👤 Solo'}</span>${players?`<span>🎮 ${players} players</span>`:''}${dayTxt?`<span>⏱ ${escH(dayTxt)}</span>`:''}</div>
       ${win?`<div class="win">🏆 WINNER: ${escH(win.name)}</div>`:''}
       <p class="evc-sum">${MTCmd.mdLine(e.summary)}</p>
       <a class="evc-btn" href="${url}">VIEW EVENT →</a>
@@ -796,7 +796,7 @@ function nextCard2(e){
   const left=e.slots?Math.max(0,e.slots-(e.taken||0)):0, pct=e.slots?Math.min(100,Math.round((e.taken||0)/e.slots*100)):0;
   const eds=(e.editions||[e.serverJava?'Java':'',e.serverBedrock?'Bedrock':'']).filter(Boolean).join(' + ');
   const chips=[
-    `<span>${(e.teamSize||1)>1?'👥 Teams of '+e.teamSize:'👤 Solo'}</span>`,
+    `<span title="${escH(e.teamLabel||'')}">${(e.teamSize||1)>1?'👥 '+escH(e.teamShort||'Teams of '+e.teamSize)+(e.teamForm==='admins'?' · admins pick':e.teamForm==='random'?' · random':''):'👤 Solo'}</span>`,
     e.days?`<span>⏱ ${e.days} day${e.days>1?'s':''}</span>`:'',
     e.hoursFrom&&e.hoursTo?`<span>🕑 ${escH(hm12(e.hoursFrom))} – ${escH(hm12(e.hoursTo))} daily</span>`:'',
     eds||e.mcVersion?`<span>🧱 ${escH([eds,e.mcVersion].filter(Boolean).join(' · '))}</span>`:'',

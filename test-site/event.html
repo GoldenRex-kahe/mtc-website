@@ -171,7 +171,7 @@ async function load() {
         <h1 style="margin-top:12px">${esc(e.title)}</h1>
         <div class="facts">
           <span>${esc(when(e))}</span><span>${esc(TYPES[e.type] || 'Event')}</span>
-          <span>${e.teamSize > 1 ? 'Teams of ' + e.teamSize : 'Solo'}</span>
+          <span title="${esc(e.teamLabel || '')}">${e.teamSize > 1 ? '👥 ' + esc(e.teamLabel || 'Teams of ' + e.teamSize) : '👤 Solo'}</span>
           ${slots ? `<span>${esc(slots)}</span>` : ''}${e.prize ? `<span>Prize: ${esc(e.prize)}</span>` : ''}
         </div>
         ${days}
@@ -182,7 +182,7 @@ async function load() {
       /* ---- organised layout: summary strip, jump bar, then one section per topic ---- */
       const res = (e.results || []).slice().sort((x, y) => x.place - y.place);
       const hasArc = (e.files || []).length || e.recreateNotes || e.mcVersion || e.software;
-      const tf = ['open', 'soon'].includes(e.status) && e.teamSize > 1;
+      const tf = ['open', 'soon'].includes(e.status) && e.teamSize > 1 && (e.teamForm || 'choose') === 'choose';   // team finder: only when players make their own teams
       const win = res[0];
       const groups = {};
       for (const p of e.participants) { const k = (p.team || '').trim() || (e.teamSize > 1 ? 'No team yet' : 'Players'); (groups[k] = groups[k] || []).push(p); }
@@ -414,7 +414,9 @@ function regBox(e, mine, u, who) {
     ${full ? '<p class="msg info">All slots are taken.</p>' : `
     <form id="regForm">
       ${MTCForms.render(e.form, 'rq')}
-      ${e.teamSize > 1 ? '<label for="team">Team name <span class="soft">(optional, admins can assign teams)</span></label><input type="text" id="team" maxlength="40">' : ''}
+      ${e.teamSize <= 1 ? '<p class="soft small" style="margin:10px 0 0">👤 This is a solo event: every player for themself.</p>'
+        : (e.teamForm || 'choose') === 'choose' ? `<label for="team">Team name <span class="soft">(${esc(e.teamShort || 'teams of ' + e.teamSize)}; everyone in your team types the same name. No team yet? Leave it empty or use Find a team below)</span></label><input type="text" id="team" maxlength="40">`
+        : `<p class="msg info small" style="margin-top:10px">👥 ${esc(e.teamShort || 'Teams of ' + e.teamSize)}: ${e.teamForm === 'random' ? 'teams are drawn at random' : 'admins put players into teams'} before the event. You don't need a team.</p>`}
       <label for="note">Anything admins should know? <span class="soft">(optional)</span></label>
       <input type="text" id="note" maxlength="300">
       <div style="margin-top:18px"><button class="btn" type="submit">REGISTER</button></div>

@@ -556,7 +556,7 @@ module.exports = function install(x) {
   });
 
   // ================================================================ team finder (per event, for team events that are open)
-  const lfgOpen = e => e && (e.status === 'open' || e.status === 'soon') && (e.teamSize || 1) > 1;
+  const lfgOpen = e => e && (e.status === 'open' || e.status === 'soon') && (e.teamSize || 1) > 1 && (e.teamForm || 'choose') === 'choose';   // only when players make their own teams
   const pubLfg = (l, u) => ({ id: l.id, kind: l.kind, team: l.team, need: l.need, note: l.note, name: l.name, discordName: l.discordName, avatar: l.avatar, skin: l.skin, edition: l.edition,
     contact: /^\d{15,}$/.test(l.userId) ? 'https://discord.com/users/' + l.userId : '', mine: !!(u && u.uid === l.userId), createdAt: l.createdAt });
   on('GET', '/api/events/:slug/lfg', async (req, res, p) => {
