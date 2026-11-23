@@ -530,6 +530,41 @@ html,body{max-width:100%;overflow-x:clip}
   .ev-bn{position:relative;inset:auto;display:block;width:auto;margin:0 -22px 18px;aspect-ratio:16/7;background-position:center!important;-webkit-mask-image:linear-gradient(180deg,#000 55%,transparent);mask-image:linear-gradient(180deg,#000 55%,transparent)}
   .ev.next.has-bn::after{display:none}.ev.next.has-bn .ev-in{max-width:none}}
 @media(prefers-reduced-motion:reduce){.ev-bn{transition:none}.ev.next .tag .lv{animation:none}}
+/* featured next event (nextCard2): the banner across the top at its own 16:7 shape (nothing cut off), then the story on
+   the left and the facts, countdown and buttons in a panel on the right */
+.ev.next.nx{padding:0;display:block;background:#241307}
+.nx-artlink{position:relative;display:block;overflow:hidden;border-bottom:4px solid #000}
+.nx-art{aspect-ratio:16/7;max-height:420px;width:100%;background-size:cover;background-repeat:no-repeat;transition:transform 1.2s ease-out}
+.nx-artlink::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(0deg,#241307cc,#24130700 40%),linear-gradient(180deg,#00000066,#0000 30%)}
+.ev.next.nx:hover .nx-art{transform:scale(1.03)}
+.nx-noart{aspect-ratio:16/5;display:grid;place-items:center;background:radial-gradient(circle at 60% 40%,#5a3415,#241307 70%)}.nx-noart span{font-size:80px;filter:drop-shadow(0 8px 0 #000)}
+.nx .tag{margin:0}
+.nx-top{position:absolute;left:20px;top:18px;z-index:1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.nx-body{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:28px;padding:24px 30px 30px;align-items:start}
+.nx-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.nx-side{display:flex;flex-direction:column;gap:14px;background:#1a0f05;border:3px solid #000;padding:18px;min-width:0}
+.ev.next.nx h3 a{color:inherit;text-decoration:none}.ev.next.nx h3 a:hover{color:var(--accent)}
+.nx-type{font:9px var(--display);padding:7px 9px;border:2px solid #000;background:#1a0f05;color:var(--soft)}
+.ev.next.nx h3{font-size:clamp(18px,2.3vw,26px);line-height:1.35;margin:2px 0 0;text-shadow:3px 3px 0 #000}
+.nx-when{display:inline-flex;align-self:flex-start;align-items:center;gap:8px;font-weight:800;color:var(--accent);background:#F7931E1a;border:2px solid #F7931E66;padding:7px 11px}
+.nx-when.vote{border-style:dashed;animation:nxPulse 2.4s ease-in-out infinite}
+@keyframes nxPulse{50%{background:#F7931E33;border-color:var(--accent)}}
+.nx-tagline{color:var(--ink);font-weight:700;font-size:17px;line-height:1.4;margin:2px 0 0}
+.nx-sum{color:var(--soft);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.6}
+.nx-sum.open{display:block}.nx-sum p{margin:0 0 8px}
+.nx-more{align-self:flex-start;background:none;border:0;color:var(--accent);font:800 14px Archivo,sans-serif;cursor:pointer;padding:0;margin-top:-6px}
+.nx-more:hover{text-decoration:underline}
+.nx-chips{display:flex;flex-wrap:wrap;gap:6px}
+.nx-chips span{background:#2a1a0d;border:2px solid #000;padding:6px 9px;font-size:13px;font-weight:600;color:var(--ink)}
+.nx-chips .pz{border-color:#D4AF37;color:#F5D36B}
+.nx-slots{display:grid;gap:4px;max-width:340px}.nx-bar{height:10px;background:#1a0f05;border:2px solid #000}.nx-bar i{display:block;height:100%;background:var(--accent)}
+.nx-slots small{color:var(--soft)}.nx-slots b{color:var(--ink)}
+.nx .count{margin:2px 0 0}
+.nx-cta{display:flex;flex-direction:column;gap:10px}.ev.next.nx .btn{margin:0;text-align:center}
+.nx-bar{background:#2a1a0d}
+@media(max-width:900px){.nx-body{grid-template-columns:1fr;gap:18px;padding:18px 18px 22px}}
+@media(max-width:760px){.nx-top{left:12px;top:12px}.nx-side{padding:14px}}
+@media(prefers-reduced-motion:reduce){.nx-when.vote{animation:none}.nx-art{transition:none}}
 </style>
 <link rel="stylesheet" href="/assets/nav.css">
 <script src="/assets/px.js"></script>
@@ -739,24 +774,65 @@ function evCard(e){const [cls,label]=TAGS[e.status]||['good',e.status.toUpperCas
       <p class="evc-sum">${MTCmd.mdLine(e.summary)}</p>
       <a class="evc-btn" href="${url}">VIEW EVENT →</a>
     </div></article>`}
+// "14:00" -> "2 PM", "22:30" -> "10:30 PM"
+const hm12=t=>{const m=/^(\d{1,2}):(\d{2})/.exec(t||'');if(!m)return '';const h=+m[1],ap=h>=12?'PM':'AM',h12=h%12||12;return h12+(m[2]!=='00'?':'+m[2]:'')+' '+ap};
+const TYPE_NAME={survival:'SURVIVAL',minigame:'MINIGAME',build:'BUILD',pvp:'PVP',other:'EVENT'};
+// the featured next event: banner on the right, quick facts as chips, countdown, register / vote buttons
 function nextCard(e){
+  if(e)return nextCard2(e);
   if(!e)return `<article class="ev next reveal"><span class="tag next">NEXT UP</span><h3>NEXT EVENT</h3><div class="date">ANNOUNCED SOON</div><p>The next event is announced in our Discord first. Join so you don't miss registration.</p><a class="btn join-link" href="/apply.html">APPLY TO JOIN</a></article>`;
   const future=e.start&&new Date(e.start)>Date.now();countdownTo=future?new Date(e.start).getTime():0;
   const bn=e.banner?`<div class="ev-bn" aria-hidden="true" style="background-image:url('${escH(e.banner)}');background-position:${escH(e.bannerPos||'50% 50%')}"></div>`:'';
   return `<article class="ev next reveal${e.banner?' has-bn':''}${e.status==='live'?' is-live':''}">${bn}<div class="ev-in"><span class="tag next">${e.status==='live'?'<i class="lv" aria-hidden="true"></i>LIVE NOW':e.status==='soon'?'COMING SOON':'NEXT UP · REGISTRATION OPEN'}</span><h3>${escH(e.title.toUpperCase())}</h3><div class="date">${escH(evWhen(e).toUpperCase())}${e.slots?' · '+(e.slots-e.taken)+' OF '+e.slots+' SLOTS LEFT':''}</div><div class="md">${MTCmd.md(e.summary)}</div>
     ${future?'<div class="count" id="count"><div><b id="d">00</b><small>days</small></div><div><b id="h">00</b><small>hours</small></div><div><b id="m">00</b><small>min</small></div><div><b id="s">00</b><small>sec</small></div></div>':''}
     <a class="btn" href="/event.html?slug=${encodeURIComponent(e.slug)}">${e.status==='open'?'REGISTER':'VIEW EVENT'}</a></div></article>`}
+function nextCard2(e){
+  const url='/event.html?slug='+encodeURIComponent(e.slug), future=e.start&&new Date(e.start)>Date.now();countdownTo=future?new Date(e.start).getTime():0;
+  const live=e.status==='live', tag=live?'<i class="lv" aria-hidden="true"></i>LIVE NOW':e.status==='soon'?'COMING SOON':e.status==='open'?'REGISTRATION OPEN':'NEXT UP';
+  const voteDate=!e.start&&/vote|poll/i.test(e.dateLabel||'');
+  // summary: a short first paragraph becomes the tagline, the rest is shortened with "Read more"
+  const paras=String(e.summary||'').split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+  const tagline=paras.length>1&&paras[0].length<140?paras.shift():'', rest=paras.join('\n\n');
+  const left=e.slots?Math.max(0,e.slots-(e.taken||0)):0, pct=e.slots?Math.min(100,Math.round((e.taken||0)/e.slots*100)):0;
+  const eds=(e.editions||[e.serverJava?'Java':'',e.serverBedrock?'Bedrock':'']).filter(Boolean).join(' + ');
+  const chips=[
+    `<span>${(e.teamSize||1)>1?'👥 Teams of '+e.teamSize:'👤 Solo'}</span>`,
+    e.days?`<span>⏱ ${e.days} day${e.days>1?'s':''}</span>`:'',
+    e.hoursFrom&&e.hoursTo?`<span>🕑 ${escH(hm12(e.hoursFrom))} – ${escH(hm12(e.hoursTo))} daily</span>`:'',
+    eds||e.mcVersion?`<span>🧱 ${escH([eds,e.mcVersion].filter(Boolean).join(' · '))}</span>`:'',
+    e.prize?`<span class="pz">🏆 ${escH(e.prize)}</span>`:''].filter(Boolean).join('');
+  const art=e.banner?`<div class="nx-art" aria-hidden="true" style="background-image:url('${escH(e.banner)}');background-position:${escH(e.bannerPos||'50% 50%')}"></div>`
+    :`<div class="nx-art nx-noart t-${escH(e.type||'other')}" aria-hidden="true"><span>${TYPE_ICON[e.type]||'⭐'}</span></div>`;
+  return `<article class="ev next nx reveal${live?' is-live':''}"><a class="nx-artlink" href="${url}" tabindex="-1">${art}
+    <div class="nx-top"><span class="tag next">${tag}</span><span class="nx-type">${TYPE_ICON[e.type]||'⭐'} ${TYPE_NAME[e.type]||'EVENT'}</span></div></a>
+    <div class="nx-body"><div class="nx-main">
+      <h3><a href="${url}">${escH(e.title.toUpperCase())}</a></h3>
+      <div class="nx-when${voteDate?' vote':''}">${voteDate?'🗳️':'📅'} ${escH(e.start?evWhen(e):(e.dateLabel||'Date to be announced'))}</div>
+      ${tagline?`<p class="nx-tagline">${MTCmd.mdLine(tagline)}</p>`:''}
+      ${rest?`<div class="nx-sum md" id="nxSum">${MTCmd.md(rest)}</div><button type="button" class="nx-more" id="nxMore" hidden>Read more</button>`:''}
+    </div><div class="nx-side">
+      ${chips?`<div class="nx-chips">${chips}</div>`:''}
+      ${e.slots?`<div class="nx-slots"><div class="nx-bar"><i style="width:${pct}%"></i></div><small><b>${left}</b> of ${e.slots} slots left</small></div>`:''}
+      ${future?'<div class="count" id="count"><div><b id="d">00</b><small>days</small></div><div><b id="h">00</b><small>hours</small></div><div><b id="m">00</b><small>min</small></div><div><b id="s">00</b><small>sec</small></div></div>':''}
+      <div class="nx-cta"><a class="btn" href="${url}">${e.status==='open'?'REGISTER NOW':live?'WATCH / JOIN':'VIEW EVENT'}</a><a class="btn ghost" id="nxVote" hidden href="/community.html#polls">🗳️ ${voteDate?'VOTE FOR THE DATE':'VOTE IN THE POLL'}</a></div>
+    </div></div></article>`}
+// after the card is on the page: show "Read more" only when the text is cut off
+function nextCardReady(){const s=document.getElementById('nxSum'),b=document.getElementById('nxMore');if(!s||!b)return;
+  requestAnimationFrame(()=>{if(s.scrollHeight>s.clientHeight+4){b.hidden=false;b.onclick=()=>{const o=s.classList.toggle('open');b.textContent=o?'Show less':'Read more'}}})}
 /* creators streaming Minecraft right now, and an open poll */
 const liveNow=()=>fetch('/api/live').then(r=>r.ok?r.json():null).then(d=>{const box=$('#liveNow');
   if(d&&typeof creators!=='undefined'&&creators.length){const on=new Map(d.live.map(l=>[l.creator.id,l]));let ch=false;for(const c of creators){const l=on.get(c.id)||null;if((!!l)!==(!!c.live)||(l&&c.live&&l.videoId!==c.live.videoId)){c.live=l?{url:l.url,title:l.title,videoId:l.videoId}:null;ch=true}}if(ch)renderCreators()}
   if(!d||!d.live.length){box.hidden=true;return}box.hidden=false;
   box.innerHTML=`<span class="ln-tag"><i aria-hidden="true"></i>ON AIR</span><div class="ln-list">${d.live.map(l=>`<a class="ln" href="${escH(l.url)}" target="_blank" rel="noopener"><img src="${escH(l.thumb)}" alt="" loading="lazy"><span><b>${escH(l.creator.name)}</b><small>${escH(l.title)}</small></span><em>WATCH</em></a>`).join('')}</div>`}).catch(()=>{});
 liveNow();setInterval(liveNow,60e3);
-fetch('/api/polls').then(r=>r.ok?r.json():null).then(d=>{const q=d&&d.polls.find(p=>p.open);if(!q)return;const a=$('#pollCta');a.hidden=false;a.href='/community.html#poll-'+q.id;
+// an open poll also gets a button on the next-event card (whichever of the two loads last links them)
+let openPoll=null;const linkPollToCard=()=>{const v=document.getElementById('nxVote');if(v&&openPoll){v.hidden=false;v.href='/community.html#poll-'+openPoll.id;v.title=openPoll.question}};
+fetch('/api/polls').then(r=>r.ok?r.json():null).then(d=>{const q=d&&d.polls.find(p=>p.open);if(!q)return;openPoll=q;linkPollToCard();const a=$('#pollCta');a.hidden=false;a.href='/community.html#poll-'+q.id;
   a.innerHTML=`<span class="pc-ico" aria-hidden="true">🗳️</span><span><small>VOTE NOW</small><b>${escH(q.question)}</b></span><em>${q.voters} voted →</em>`}).catch(()=>{});
 fetch('/api/events').then(r=>r.ok?r.json():Promise.reject()).then(d=>{
   const next=d.events.find(e=>e.status==='live')||d.events.find(e=>e.status==='open')||d.events.find(e=>e.status==='soon'),past=d.events.filter(e=>e!==next&&e.status!=='draft').slice(0,9);
   $('#evList').innerHTML=nextCard(next)+(past.length?`<h3 class="evgrid-h">PAST EVENTS</h3><div class="evgrid">${past.map(evCard).join('')}</div>`:'');
+  nextCardReady();linkPollToCard();
   document.querySelectorAll('#evList .reveal').forEach(el=>io.observe(el));
 }).catch(()=>{$('#evList').innerHTML='<p class="soft">Events could not be loaded. Start the MTC server (node server.js).</p>'});
 fetch('/api/announcements').then(r=>r.ok?r.json():null).then(async d=>{const a=d&&d.announcements[0];if(!a)return;const n=$('#news');n.innerHTML=`<b>${escH(a.title)}</b>${a.body?`<div class="md">${MTCmd.md(a.body)}</div>`:''}`;n.hidden=false;

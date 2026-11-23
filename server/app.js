@@ -113,6 +113,7 @@ function pubEvent(e) {
   const regs = D().registrations.filter(r => r.eventId === e.id);
   // server address is only public while the event is live
   return { ...e, files: (e.files || []).map(pubFile), serverInfo: e.status === 'live' ? e.serverInfo || '' : '', statusAddr: undefined, hasStatus: !!(e.statusAddr || e.serverJava || e.serverBedrock),
+    editions: [e.serverJava ? 'Java' : '', e.serverBedrock ? 'Bedrock' : ''].filter(Boolean),   // which editions can join (the addresses stay hidden until live)
     ...(e.status === 'live' ? {} : { serverJava: '', serverBedrock: '', serverBedrockPort: '', serverExtra: [] }), serverPost: undefined, reminded: undefined, remindedFor: undefined, taken: regs.filter(r => r.status === 'pending' || r.status === 'approved').length,
     participants: regs.filter(r => r.status === 'approved').map(r => playerCard(r)) };
 }
