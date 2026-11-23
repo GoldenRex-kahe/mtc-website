@@ -1,5 +1,6 @@
 package cloud.kovaihost.mtc;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -16,10 +17,15 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.ServerListPingEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -32,6 +38,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -60,6 +67,12 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
     private volatile String lastError;
     private boolean warnedNoKey;
 
+    // teams from the website: player name (lower case) -> scoreboard team id, and the chat prefix for that player
+    private static final String TEAM_ID = "mtc";   // our scoreboard teams are called mtc0, mtc1, ... and mtcsolo
+    private final Map<String, String> teamOf = new ConcurrentHashMap<>();
+    private final Map<String, String> prefixOf = new ConcurrentHashMap<>();
+    private volatile String tabHeader = "", tabFooter = "";
+
     // closing warnings already sent for the current closing time
     private final Set<Integer> warned = new HashSet<>();
     private long warnedFor, refreshedFor;
@@ -82,6 +95,8 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
         if (tickTask != null) tickTask.cancel();
         if (backupTask != null) backupTask.cancel();
         if (bar != null) bar.removeAll();
+        applyTeams(null);   // take our team colours and prefixes away again
+        for (Player p : Bukkit.getOnlinePlayers()) try { p.setPlayerListHeaderFooter("", ""); } catch (Throwable ignored) {}
     }
 
     private String site() { return getConfig().getString("site", "https://mtc.kovaihost.cloud").replaceAll("/+$", ""); }
@@ -143,6 +158,11 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
         eventTitle = ev != null && ev.isJsonObject() ? str(ev.getAsJsonObject(), "title") : "";
         closesAt = time(j, "closesAt"); opensAt = time(j, "opensAt");
         known = true; lastOk = System.currentTimeMillis(); lastError = null;
+        applyTeams(managed && j.has("teams") && j.get("teams").isJsonObject() ? j.getAsJsonObject("teams") : null);
+        JsonElement tb = j.get("tab");
+        tabHeader = managed && tb != null && tb.isJsonObject() ? str(tb.getAsJsonObject(), "header") : "";
+        tabFooter = managed && tb != null && tb.isJsonObject() ? str(tb.getAsJsonObject(), "footer") : "";
+        updateTab();
 
         if (managed && !open) {
             if (wasOpen) {
@@ -161,6 +181,83 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
             Bukkit.broadcastMessage(P + ChatColor.GREEN + "The server is open for players now!" + (closesAt > 0 ? ChatColor.GRAY + " (until " + CLOCK.format(Instant.ofEpochMilli(closesAt)) + ")" : ""));
             for (Player p : Bukkit.getOnlinePlayers()) p.sendTitle(ChatColor.GREEN + "" + ChatColor.BOLD + "SERVER OPEN", ChatColor.YELLOW + eventTitle, 10, 60, 20);
         }
+    }
+
+    // ------------------------------------------------------------------ teams: colours and [Team] prefixes in the tab list and chat
+    /** The name the website knows: lower case, without the Bedrock (Floodgate) prefix. */
+    private String norm(String name) {
+        String n = name == null ? "" : name.trim();
+        String bp = getConfig().getString("teams.bedrock-prefix", ".");
+        if (bp != null && !bp.isEmpty() && n.startsWith(bp)) n = n.substring(bp.length());
+        return n.toLowerCase(Locale.ROOT);
+    }
+    private static ChatColor color(String c) { try { return ChatColor.valueOf(c); } catch (Exception e) { return ChatColor.WHITE; } }
+
+    /** Make the scoreboard teams match the website (null = remove ours). Runs on the main thread. */
+    private void applyTeams(JsonObject t) {
+        Scoreboard sb = Bukkit.getScoreboardManager() == null ? null : Bukkit.getScoreboardManager().getMainScoreboard();
+        if (sb == null) return;
+        Map<String, String> want = new HashMap<>(), pre = new HashMap<>();
+        Set<String> ids = new HashSet<>();
+        if (t != null && getConfig().getBoolean("teams.enabled", true)) {
+            String play = str(t, "play");
+            JsonElement le = t.get("list");
+            if (le != null && le.isJsonArray()) for (JsonElement x : le.getAsJsonArray()) {
+                JsonObject o = x.getAsJsonObject();
+                String id = str(o, "id"), name = str(o, "name");
+                if (id.isEmpty() || !id.startsWith(TEAM_ID)) continue;
+                ChatColor cc = color(str(o, "color"));
+                String prefix = cc + "[" + name + "] ";
+                Team team = sb.getTeam(id); if (team == null) team = sb.registerNewTeam(id);
+                team.setPrefix(prefix.length() > 64 ? prefix.substring(0, 63) + " " : prefix);
+                try { team.setColor(cc); } catch (Throwable ignored) {}   // name colour in the tab list
+                team.setAllowFriendlyFire(false); team.setCanSeeFriendlyInvisibles(true);
+                ids.add(id);
+                JsonElement pl = o.get("players");
+                if (pl != null && pl.isJsonArray()) for (JsonElement n : pl.getAsJsonArray()) { want.put(norm(n.getAsString()), id); pre.put(norm(n.getAsString()), prefix); }
+            }
+            // events where players can also play alone: they get a grey [Solo]
+            JsonElement so = t.get("solo");
+            if ("both".equals(play) && so != null && so.isJsonArray() && so.getAsJsonArray().size() > 0) {
+                String id = TEAM_ID + "solo", prefix = ChatColor.GRAY + "[Solo] ";
+                Team team = sb.getTeam(id); if (team == null) team = sb.registerNewTeam(id);
+                team.setPrefix(prefix); try { team.setColor(ChatColor.GRAY); } catch (Throwable ignored) {}
+                ids.add(id);
+                for (JsonElement n : so.getAsJsonArray()) { want.put(norm(n.getAsString()), id); pre.put(norm(n.getAsString()), prefix); }
+            }
+        }
+        // our teams the website no longer has: remove them
+        for (Team old : new ArrayList<>(sb.getTeams())) if (old.getName().startsWith(TEAM_ID) && !ids.contains(old.getName())) try { old.unregister(); } catch (Exception ignored) {}
+        teamOf.clear(); teamOf.putAll(want);
+        prefixOf.clear(); prefixOf.putAll(pre);
+        for (Player p : Bukkit.getOnlinePlayers()) placeInTeam(p);
+    }
+    /** Put one player into their website team (and out of any other of ours). */
+    private void placeInTeam(Player p) {
+        Scoreboard sb = Bukkit.getScoreboardManager() == null ? null : Bukkit.getScoreboardManager().getMainScoreboard();
+        if (sb == null) return;
+        String id = teamOf.get(norm(p.getName()));
+        for (Team team : sb.getTeams()) if (team.getName().startsWith(TEAM_ID) && !team.getName().equals(id) && team.hasEntry(p.getName())) team.removeEntry(p.getName());
+        if (id != null) { Team team = sb.getTeam(id); if (team != null && !team.hasEntry(p.getName())) team.addEntry(p.getName()); }
+    }
+    /** The event title and day at the top of the tab list, players online at the bottom. */
+    private void updateTab() {
+        boolean on = getConfig().getBoolean("teams.tab-header", true) && !tabHeader.isEmpty();
+        String footer = tabFooter.replace("{online}", String.valueOf(Bukkit.getOnlinePlayers().size()));
+        for (Player p : Bukkit.getOnlinePlayers()) try { p.setPlayerListHeaderFooter(on ? tabHeader : "", on ? footer : ""); } catch (Throwable ignored) {}
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) { placeInTeam(e.getPlayer()); Bukkit.getScheduler().runTask(this, this::updateTab); }
+    @EventHandler
+    public void onQuit(PlayerQuitEvent e) { Bukkit.getScheduler().runTask(this, this::updateTab); }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onChat(AsyncPlayerChatEvent e) {
+        if (!getConfig().getBoolean("teams.enabled", true) || !getConfig().getBoolean("teams.chat-prefix", true)) return;
+        String pre = prefixOf.get(norm(e.getPlayer().getName()));
+        if (pre == null) return;
+        e.setFormat(pre.replace("%", "%%") + ChatColor.RESET + "%1$s" + ChatColor.DARK_GRAY + " » " + ChatColor.RESET + "%2$s");
     }
 
     // ------------------------------------------------------------------ every second: warnings before closing
@@ -264,6 +361,8 @@ public final class MTCServerControl extends JavaPlugin implements Listener, TabC
                 if (!managed) { s.sendMessage(ChatColor.GRAY + " No live or upcoming event: the server is left open."); return true; }
                 s.sendMessage(ChatColor.GRAY + " Event: " + ChatColor.YELLOW + eventTitle + (hours.isEmpty() ? "" : ChatColor.GRAY + "  hours " + ChatColor.WHITE + hours));
                 s.sendMessage(ChatColor.GRAY + " State: " + (open ? ChatColor.GREEN + "OPEN" : ChatColor.RED + "CLOSED") + ChatColor.GRAY + " (" + why + ")");
+                s.sendMessage(ChatColor.GRAY + " Teams: " + ChatColor.WHITE + new HashSet<>(teamOf.values()).size() + ChatColor.GRAY + " teams, "
+                        + ChatColor.WHITE + teamOf.size() + ChatColor.GRAY + " players from the website" + (getConfig().getBoolean("teams.enabled", true) ? "" : ChatColor.RED + " (off in config.yml)"));
                 if (open && closesAt > 0) s.sendMessage(ChatColor.GRAY + " Closes at " + ChatColor.WHITE + CLOCK.format(Instant.ofEpochMilli(closesAt)));
                 if (!open && opensAt > 0) s.sendMessage(ChatColor.GRAY + " Opens at " + ChatColor.WHITE + CLOCK.format(Instant.ofEpochMilli(opensAt)));
                 return true;

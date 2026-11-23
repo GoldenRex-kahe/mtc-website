@@ -36,6 +36,17 @@ bossbar-minutes: 10
 # Play a "ding" with each warning
 warn-sound: true
 
+# Teams from the website (Admin > Registrations): coloured names and a [Team] prefix in the tab list and chat,
+# and the event title at the top of the tab list. Players are matched by the Minecraft name they gave on the website.
+teams:
+  enabled: true
+  # [Team] prefix in front of names in chat
+  chat-prefix: true
+  # The event title and day at the top of the tab list, players online at the bottom
+  tab-header: true
+  # Bedrock players joining through Geyser/Floodgate get this in front of their name (usually ".")
+  bedrock-prefix: "."
+
 # World backups to Google Drive (see the README for the 5-minute setup)
 backup:
   enabled: false

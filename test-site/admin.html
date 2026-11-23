@@ -319,10 +319,10 @@ function eventForm(e) {
       <div><label for="f_prize">Prize <span class="soft">(optional)</span></label><input type="text" id="f_prize" maxlength="120" value="${esc(v.prize || '')}"></div>
       <div><label for="f_slots">Slots <span class="soft">(0 = no limit)</span></label><input type="number" id="f_slots" min="0" max="1000" value="${v.slots || 0}"></div>
       <div class="full"><label>Play style</label><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
-        <div class="seg" role="radiogroup" aria-label="Solo or teams" style="display:inline-flex;border:3px solid #000">
-          <label style="margin:0;padding:8px 14px;cursor:pointer;background:${(v.teamSize || 1) > 1 ? '#2a1d12' : 'var(--accent)'};color:${(v.teamSize || 1) > 1 ? 'var(--ink)' : 'var(--accent-ink)'};font-weight:700"><input type="radio" name="f_mode" value="solo" style="display:none"${(v.teamSize || 1) > 1 ? '' : ' checked'}>👤 SOLO</label>
-          <label style="margin:0;padding:8px 14px;cursor:pointer;background:${(v.teamSize || 1) > 1 ? 'var(--accent)' : '#2a1d12'};color:${(v.teamSize || 1) > 1 ? 'var(--accent-ink)' : 'var(--ink)'};font-weight:700"><input type="radio" name="f_mode" value="teams" style="display:none"${(v.teamSize || 1) > 1 ? ' checked' : ''}>👥 TEAMS</label></div>
-        <span id="f_teamBox" class="row" style="gap:8px;align-items:center"${(v.teamSize || 1) > 1 ? '' : ' hidden'}>
+        ${(() => { const play = v.teamPlay || ((v.teamSize || 1) > 1 ? 'teams' : 'solo');
+          return `<div class="seg" role="radiogroup" aria-label="Solo, teams or both" style="display:inline-flex;border:3px solid #000">${[['solo', '👤 SOLO'], ['teams', '👥 TEAMS'], ['both', '🔀 BOTH']].map(([k, l]) =>
+            `<label style="margin:0;padding:8px 14px;cursor:pointer;background:${play === k ? 'var(--accent)' : '#2a1d12'};color:${play === k ? 'var(--accent-ink)' : 'var(--ink)'};font-weight:700" title="${k === 'both' ? 'Players can join alone or in a team' : ''}"><input type="radio" name="f_mode" value="${k}" style="display:none"${play === k ? ' checked' : ''}>${l}</label>`).join('')}</div>`; })()}
+        <span id="f_teamBox" class="row" style="gap:8px;align-items:center"${(v.teamPlay || ((v.teamSize || 1) > 1 ? 'teams' : 'solo')) === 'solo' ? ' hidden' : ''}>
           <select id="f_teamPick" aria-label="Players per team" style="max-width:160px">${[[2, 'Duos (2)'], [3, 'Trios (3)'], [4, 'Squads (4)'], [5, '5 per team'], [0, 'Other size...']].map(([n, l]) => `<option value="${n}"${(v.teamSize === n) || (n === 0 && v.teamSize > 5) ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <input type="number" id="f_teamSize" min="1" max="20" value="${v.teamSize || 1}" aria-label="Players per team" style="width:80px"${v.teamSize > 5 ? '' : ' hidden'}>
           <select id="f_teamForm" aria-label="How teams are made" style="max-width:240px">${[['choose', 'Players make their own teams'], ['admins', 'Admins pick the teams'], ['random', 'Random teams']].map(([k, l]) => `<option value="${k}"${(v.teamForm || 'choose') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></span></div></div>
@@ -390,10 +390,16 @@ function eventForm(e) {
   if (e) $('#saveTpl').onclick = () => MTCX.saveTemplate(e.id, e.title);
   // play style: Solo / Teams switch; team size from the list (or typed for "Other size")
   const teamSizeOf = () => { if (document.querySelector('input[name=f_mode]:checked').value === 'solo') return 1; const p = +$('#f_teamPick').value; return p || Math.max(2, +$('#f_teamSize').value || 2); };
+  const playOf = () => document.querySelector('input[name=f_mode]:checked').value;
+  const syncPlay = () => { const pl = playOf(), teams = pl !== 'solo'; $('#f_teamBox').hidden = !teams;
+    $('#f_teamForm').hidden = pl === 'both';   // with "both", players make their own teams or play alone
+    $('#f_teamPick').title = pl === 'both' ? 'Biggest team allowed' : 'Players per team'; };
   document.querySelectorAll('input[name=f_mode]').forEach(r => r.onchange = () => {
-    const teams = r.value === 'teams'; $('#f_teamBox').hidden = !teams;
+    const teams = r.value !== 'solo';
     document.querySelectorAll('input[name=f_mode]').forEach(x => { const on = x.checked; x.parentElement.style.background = on ? 'var(--accent)' : '#2a1d12'; x.parentElement.style.color = on ? 'var(--accent-ink)' : 'var(--ink)'; });
-    if (teams && +$('#f_teamSize').value < 2) { $('#f_teamSize').value = 2; $('#f_teamPick').value = '2'; } });
+    if (teams && +$('#f_teamSize').value < 2) { $('#f_teamSize').value = 2; $('#f_teamPick').value = '2'; }
+    syncPlay(); });
+  syncPlay();
   $('#f_teamPick').onchange = () => { const other = $('#f_teamPick').value === '0'; $('#f_teamSize').hidden = !other; if (other && +$('#f_teamSize').value <= 5) $('#f_teamSize').value = 6; };
   if (e) $('#del').onclick = () => { const t = prompt(`Type DELETE to delete "${e.title}" with all its registrations and showcase items. A backup is taken first.`); if (t === 'DELETE') act(() => api('/api/admin/events/' + e.id, {method: 'DELETE'}), 'Event deleted.').then(() => { editing = null; render(); }); };
   $('#ef').onsubmit = async ev => {
@@ -401,7 +407,7 @@ function eventForm(e) {
     try {
       const g = id => $('#f_' + id).value;
       const body = {title: g('title'), status: g('status'), type: g('type'), start: readDt('f_start', 'Starts'), end: readDt('f_end', 'Ends'), dateLabel: g('dateLabel'), prize: g('prize'),
-        slots: g('slots'), teamSize: teamSizeOf(), teamForm: g('teamForm'), days: g('days'), daysPlayed: g('daysPlayed'), summary: g('summary'), rules: g('rules'), serverInfo: g('serverInfo'), serverJava: g('serverJava'), serverBedrock: g('serverBedrock'), serverBedrockPort: g('serverBedrockPort'), hoursFrom: readTm('f_hoursFrom'), hoursTo: readTm('f_hoursTo'),
+        slots: g('slots'), teamSize: teamSizeOf(), teamForm: playOf() === 'both' ? 'choose' : g('teamForm'), teamPlay: playOf(), days: g('days'), daysPlayed: g('daysPlayed'), summary: g('summary'), rules: g('rules'), serverInfo: g('serverInfo'), serverJava: g('serverJava'), serverBedrock: g('serverBedrock'), serverBedrockPort: g('serverBedrockPort'), hoursFrom: readTm('f_hoursFrom'), hoursTo: readTm('f_hoursTo'),
         serverExtra: [...document.querySelectorAll('#srvExtra .sx')].map(r => ({label: r.querySelector('.sxl').value, value: r.querySelector('.sxv').value})), statusAddr: '', notes: g('notes'),
         results: [...resBox.children].map(d => { const i = d.querySelectorAll('input'); return {place: i[0].value, name: i[1].value, points: i[2].value, note: i[3].value}; }), postDiscord: $('#f_post').checked, ...($('#f_post').checked && evDc ? evDc.get() : {}), form: evForm.get(), ...(e ? MTCArchive.read() : {})};
       if (body.start && body.end && body.end < body.start) throw new Error('The end time is before the start time.');
@@ -453,6 +459,7 @@ function regsTab() {
   const pend = list.filter(r => r.status === 'pending');
   $('#pane').innerHTML = `<div class="row" style="margin-bottom:16px"><label for="rf" class="sr">Event</label><select id="rf" style="max-width:360px"><option value="all">All events</option>${D.events.map(e => `<option value="${e.id}"${regFilter === e.id ? ' selected' : ''}>${esc(e.title)}</option>`).join('')}</select>
       ${pend.length ? `<button class="btn green sm" id="okAll">APPROVE ALL ${pend.length} WAITING</button>` : ''}
+      ${regFilter !== 'all' && ((D.events.find(x => x.id === regFilter) || {}).teamPlay || (((D.events.find(x => x.id === regFilter) || {}).teamSize || 1) > 1 ? 'teams' : 'solo')) === 'teams' ? `<button class="btn grey sm" id="tmBtn" title="Give every confirmed player without a team a team (random events: draw all teams again). The Minecraft plugin shows the teams in tab and chat.">👥 AUTO-PICK TEAMS</button>` : ''}
       ${regFilter !== 'all' ? `<button class="btn grey sm" id="wlBtn">WHITELIST</button><button class="btn grey sm" id="ciAll" title="Mark every confirmed player who is not checked yet as present">CHECK IN EVERYONE</button>` : ''}</div>
     <div id="wlBox"></div>
     ${list.length ? `<div class="tablewrap"><table><thead><tr><th>PLAYER</th>${regFilter === 'all' ? '<th>EVENT</th>' : ''}<th>TEAM</th><th>NOTE</th><th>STATUS</th><th title="Check-in: ✓ was there, ✗ no-show">CHECK-IN</th><th></th></tr></thead><tbody>${list.map(r => `
@@ -483,6 +490,9 @@ function regsTab() {
   document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { if (confirm('Remove this player from the event?')) act(() => api('/api/admin/registrations/' + b.dataset.rm, {method: 'PUT', body: {status: 'withdrawn'}}), 'Removed.'); });
   $('#rf').onchange = e => { regFilter = e.target.value; render(); };
   MTCX.bindCheck($('#pane'), list);
+  if ($('#tmBtn')) $('#tmBtn').onclick = () => { const ev = D.events.find(x => x.id === regFilter) || {}, random = ev.teamForm === 'random';
+    if (!confirm(random ? 'Draw random teams for every confirmed player? Teams already drawn are mixed again.' : 'Give every confirmed player without a team a team? Players are added to teams that still have room, then to new teams.')) return;
+    act(() => api('/api/admin/events/' + regFilter + '/draw-teams', {method: 'POST', body: {redraw: random}}), r => `Done: ${r.changed} player${r.changed === 1 ? '' : 's'} got a team, ${r.teams.list.length} teams in all. The Minecraft plugin picks this up within 15 seconds.${r.teams.noMc.length ? ` ${r.teams.noMc.length} player${r.teams.noMc.length === 1 ? ' has' : 's have'} no Minecraft name, so the plugin cannot find them in game: ${r.teams.noMc.slice(0, 5).join(', ')}${r.teams.noMc.length > 5 ? '…' : ''}` : ''}`); };
   if ($('#wlBtn')) { const ev = D.events.find(x => x.id === regFilter) || {}; $('#wlBtn').onclick = () => MTCX.whitelist($('#wlBox'), {...ev, teams: list.map(r => r.team)}); }
   if ($('#ciAll')) $('#ciAll').onclick = () => act(() => api('/api/admin/events/' + regFilter + '/checkin-all', {method: 'POST', body: {attended: true}}), r => `Checked in ${r.changed} player${r.changed === 1 ? '' : 's'}.`);
   if ($('#okAll')) $('#okAll').onclick = () => act(async () => { for (const r of pend) await api('/api/admin/registrations/' + r.id, {method: 'PUT', body: {status: 'approved'}}); }, 'All approved.');

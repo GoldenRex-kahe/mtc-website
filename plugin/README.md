@@ -18,6 +18,20 @@ OPEN NOW / CLOSE NOW buttons in **Admin > Events > Server control**).
 3. Run `mtcserver reload` in the console. The admin card shows PLUGIN CONNECTED.
 4. Geyser (Bedrock): `passthrough-motd: true` in Geyser's config so Bedrock players see the same MOTD.
 
+## Teams in the tab list and chat (1.2.0)
+
+The event's teams come from the website (Admin > Registrations). The plugin:
+- puts every player into their team when they join (matched by the Minecraft name on their website account;
+  Bedrock players' `.` prefix from Floodgate is ignored),
+- colours names and adds a `[Team]` prefix in the tab list, and a `[Team]` prefix in chat (`[Solo]` for players
+  who play alone in a "Both" event),
+- shows the event title and day at the top of the tab list, and players online at the bottom.
+
+Teams are picked automatically when the event goes live (players without a team are added to teams with room,
+or random teams are drawn), and admins can press AUTO-PICK TEAMS or change a player's team any time; the server
+follows within one check (15 s). Turn parts off in `config.yml` under `teams:`. `/mtcserver status` shows the
+team count.
+
 ## Google Drive backups (one-time setup, about 5 minutes)
 The plugin signs in with Google's "TV" sign-in (a short code you type at google.com/device) and asks only for
 **drive.file**: it can see and change only the files it makes itself (its "MTC Backups" folder), nothing else in the Drive.

@@ -112,14 +112,57 @@ function playerCard(r) {
 // "Solo", "Duos · players make their own teams", "Teams of 5 · admins pick the teams"...
 const TEAM_NAMES = { 2: 'Duos', 3: 'Trios', 4: 'Squads of 4' };
 const TEAM_FORM = { choose: 'players make their own teams', admins: 'admins pick the teams', random: 'random teams' };
-function teamText(e, short) { const n = e.teamSize || 1; if (n <= 1) return 'Solo, every player for themself';
+const playOf = e => e.teamPlay || ((e.teamSize || 1) > 1 ? 'teams' : 'solo');
+function teamText(e, short) { const n = Math.max(2, e.teamSize || 2), play = playOf(e); if (play === 'solo' || (e.teamSize || 1) <= 1) return short ? 'Solo' : 'Solo, every player for themself';
+  if (play === 'both') return short ? `Solo or teams of ${n}` : `Solo or teams of up to ${n} · play alone or make a team`;
   const size = TEAM_NAMES[n] || `Teams of ${n}`; return short ? size : `${size} · ${TEAM_FORM[e.teamForm] || TEAM_FORM.choose}`; }
+// ---- teams of an event: auto-pick (fill players without a team, or draw random teams) and the list the plugin uses
+const TEAM_COLORS = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'AQUA', 'LIGHT_PURPLE', 'GOLD', 'DARK_AQUA', 'DARK_GREEN', 'DARK_PURPLE', 'DARK_RED', 'DARK_BLUE', 'WHITE', 'GRAY'];
+// players without a team get one: random = everyone redrawn; teams = filled into teams with room, then new "Team N";
+// both = players without a team stay solo (nothing to pick)
+function drawTeams(e, redraw) {
+  const play = playOf(e), size = Math.max(2, e.teamSize || 2);
+  if (play === 'solo' || play === 'both') { e.teamsDrawnAt = store.now(); store.save(); return { changed: 0 }; }
+  const regs = D().registrations.filter(r => r.eventId === e.id && r.status === 'approved').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  let changed = 0;
+  const setTeam = (r, t) => { if (r.team !== t) { r.team = t; r.teamAuto = true; changed++; } };
+  if ((e.teamForm === 'random' && (redraw || !e.teamsDrawnAt))) {
+    const pool = regs.slice(); for (let i = pool.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    const n = Math.max(1, Math.ceil(pool.length / size));
+    pool.forEach((r, i) => setTeam(r, `Team ${(i % n) + 1}`));
+  } else {
+    const count = new Map(); for (const r of regs) { const t = String(r.team || '').trim(); if (t) count.set(t.toLowerCase(), (count.get(t.toLowerCase()) || 0) + 1); }
+    let next = 1;
+    for (const r of regs.filter(r => !String(r.team || '').trim())) {
+      let t = [...count.entries()].find(([, c]) => c < size);
+      let name = t ? regs.find(x => String(x.team || '').trim().toLowerCase() === t[0]).team.trim() : '';
+      if (!name) { while (count.has(('team ' + next).toLowerCase())) next++; name = 'Team ' + next; }
+      setTeam(r, name); count.set(name.toLowerCase(), (count.get(name.toLowerCase()) || 0) + 1);
+    }
+  }
+  e.teamsDrawnAt = store.now(); store.save();
+  return { changed };
+}
+// teams with their players' Minecraft names (for the plugin's tab list and chat prefixes)
+function teamsOf(e) {
+  const play = playOf(e), regs = D().registrations.filter(r => r.eventId === e.id && r.status === 'approved');
+  const teams = new Map(), solo = [], noMc = [];
+  for (const r of regs) {
+    const mc = (r.mc || mcOf(r.userId, r.username).mc || '').trim(); if (!mc) { noMc.push(r.name || r.username || '?'); continue; }   // the plugin can only match Minecraft names
+    const t = play === 'solo' ? '' : String(r.team || '').trim();
+    if (!t) { solo.push(mc); continue; }
+    const k = t.toLowerCase(); if (!teams.has(k)) teams.set(k, { name: t.replace(/§/g, '').slice(0, 24), players: [] });
+    teams.get(k).players.push(mc);
+  }
+  const list = [...teams.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((t, i) => ({ id: 'mtc' + i, color: TEAM_COLORS[i % TEAM_COLORS.length], ...t }));
+  return { play, list, solo, noMc };
+}
 function pubEvent(e) {
   const regs = D().registrations.filter(r => r.eventId === e.id);
   // server address is only public while the event is live
   return { ...e, files: (e.files || []).map(pubFile), serverInfo: e.status === 'live' ? e.serverInfo || '' : '', statusAddr: undefined, hasStatus: !!(e.statusAddr || e.serverJava || e.serverBedrock),
     editions: [e.serverJava ? 'Java' : '', e.serverBedrock ? 'Bedrock' : ''].filter(Boolean),   // which editions can join (the addresses stay hidden until live)
-    teamLabel: teamText(e), teamShort: teamText(e, true), teamForm: e.teamForm || 'choose',
+    teamLabel: teamText(e), teamShort: teamText(e, true), teamForm: e.teamForm || 'choose', teamPlay: playOf(e),
     ...(e.status === 'live' ? {} : { serverJava: '', serverBedrock: '', serverBedrockPort: '', serverExtra: [] }), serverPost: undefined, reminded: undefined, remindedFor: undefined, taken: regs.filter(r => r.status === 'pending' || r.status === 'approved').length,
     participants: regs.filter(r => r.status === 'approved').map(r => playerCard(r)) };
 }
@@ -357,6 +400,8 @@ function eventFields(b, prev = {}) {
     slots: int(b.slots, 0, 1000, prev.slots || 0), teamSize: int(b.teamSize, 1, 20, prev.teamSize || 1),
     // team events: how teams are made (players form their own / admins put players in teams / random draw)
     teamForm: ['choose', 'admins', 'random'].includes(b.teamForm) ? b.teamForm : (prev.teamForm || 'choose'),
+    // play style: solo, teams, or both (players may join alone or in a team of up to teamSize)
+    teamPlay: ['solo', 'teams', 'both'].includes(b.teamPlay) ? b.teamPlay : (prev.teamPlay || ((b.teamSize !== undefined ? +b.teamSize : prev.teamSize || 1) > 1 ? 'teams' : 'solo')),
     prize: str(b.prize, 120, prev.prize || ''), summary: str(b.summary, 600, prev.summary || ''),
     rules: str(b.rules, 8000, prev.rules || ''), notes: str(b.notes, 1500, prev.notes || ''),
     serverInfo: str(b.serverInfo, 300, prev.serverInfo || ''),
@@ -1044,7 +1089,9 @@ on('POST', '/api/events/:slug/register', async (req, res, p) => {
   if (e.slots && regs.length >= e.slots) throw err(409, 'All slots are taken.');
   const b = await readBody(req);
   const answers = checkAnswers(e.form, b.answers);
-  const r = { id: store.id(), eventId: e.id, userId: u.uid, username: u.un, name: u.name, team: str(b.team, 40), note: str(b.note, 300), answers, status: 'pending', createdAt: store.now() };
+  const team = playOf(e) === 'solo' || (playOf(e) === 'teams' && (e.teamForm || 'choose') !== 'choose') ? '' : str(b.team, 40).replace(/§/g, '');
+  if (team && regs.filter(r => String(r.team || '').trim().toLowerCase() === team.trim().toLowerCase()).length >= (e.teamSize || 2)) throw err(409, `Team "${team}" is full (${e.teamSize} players). Pick another team name or leave it empty.`);
+  const r = { id: store.id(), eventId: e.id, userId: u.uid, username: u.un, name: u.name, team, note: str(b.note, 300), answers, status: 'pending', createdAt: store.now() };
   D().registrations.push(r); store.save();
   alertStaff('registration', { title: `📝 New registration: ${e.title}`, text: `**${u.name}** (@${u.un}) registered.`, tab: 'regs',
     fields: [{ name: 'Minecraft', value: mcOf(u.uid, u.un).mc, inline: true }, { name: 'Team', value: r.team, inline: true }, { name: 'Note', value: r.note }] });
@@ -1447,6 +1494,12 @@ on('POST', '/api/admin/events/:id/registrations', async (req, res, p) => {
   D().registrations.push(r); store.save();
   alertUser(userId, 'registration', { title: `✅ You were added to ${e.title}`, color: 'ok', text: `An admin added you to **${e.title}**${r.team ? ` in team **${r.team}**` : ''}.`, buttons: [evLink(e)] });
   return { ok: true };
+});
+// AUTO-PICK TEAMS (Admin > Registrations): players without a team get one; random events are drawn again
+on('POST', '/api/admin/events/:id/draw-teams', async (req, res, p) => {
+  needAdmin(req); const e = evById(p.id); if (!e) throw err(404, 'Event not found.');
+  const b = await readBody(req); const r = drawTeams(e, !!b.redraw);
+  return { ok: true, changed: r.changed, teams: teamsOf(e) };
 });
 on('PUT', '/api/admin/registrations/:id', async (req, res, p) => {
   needAdmin(req); const r = D().registrations.find(x => x.id === p.id); if (!r) throw err(404, 'Not found.');
@@ -2035,7 +2088,7 @@ const community = require('./community')({ on, routes, D, store, cfg, err, str, 
   evById, evBy, mcOf, edOf, yt, sortEvents, publicCreators, MC_WORDS, isMcText, isMcStream, logErr, esc, playerCard, saveImage, serverStatusOf, sessionOf });
 community.NO_LOG.forEach(k => NO_LOG.add(k));
 // the Minecraft plugin that opens and closes the event server (server/plugin.js)
-const serverPlugin = require('./plugin')({ on, D, store, cfg, err, readBody, needAdmin, evById, evBy, sessionOf });
+const serverPlugin = require('./plugin')({ on, D, store, cfg, err, readBody, needAdmin, evById, evBy, sessionOf, teamsOf, drawTeams });
 serverPlugin.NO_LOG.forEach(k => NO_LOG.add(k));
 // the bot's own avatar and banner (server/botprofile.js)
 require('./botprofile')({ on, cfg, err, readBody, needAdmin });

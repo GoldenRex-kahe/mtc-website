@@ -414,7 +414,8 @@ function regBox(e, mine, u, who) {
     ${full ? '<p class="msg info">All slots are taken.</p>' : `
     <form id="regForm">
       ${MTCForms.render(e.form, 'rq')}
-      ${e.teamSize <= 1 ? '<p class="soft small" style="margin:10px 0 0">👤 This is a solo event: every player for themself.</p>'
+      ${(e.teamPlay || (e.teamSize > 1 ? 'teams' : 'solo')) === 'solo' ? '<p class="soft small" style="margin:10px 0 0">👤 This is a solo event: every player for themself.</p>'
+        : e.teamPlay === 'both' ? `<label for="team">Team name <span class="soft">(optional: play alone by leaving it empty, or make a team of up to ${e.teamSize}. Everyone in your team types the same name)</span></label><input type="text" id="team" maxlength="40" placeholder="Leave empty to play solo">`
         : (e.teamForm || 'choose') === 'choose' ? `<label for="team">Team name <span class="soft">(${esc(e.teamShort || 'teams of ' + e.teamSize)}; everyone in your team types the same name. No team yet? Leave it empty or use Find a team below)</span></label><input type="text" id="team" maxlength="40">`
         : `<p class="msg info small" style="margin-top:10px">👥 ${esc(e.teamShort || 'Teams of ' + e.teamSize)}: ${e.teamForm === 'random' ? 'teams are drawn at random' : 'admins put players into teams'} before the event. You don't need a team.</p>`}
       <label for="note">Anything admins should know? <span class="soft">(optional)</span></label>

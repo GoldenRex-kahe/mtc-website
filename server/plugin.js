@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const fs = require('fs'), path = require('path');
 
 module.exports = function install(x) {
-  const { on, D, store, cfg, err, readBody, needAdmin, evById, evBy, sessionOf } = x;
+  const { on, D, store, cfg, err, readBody, needAdmin, evById, evBy, sessionOf, teamsOf, drawTeams } = x;
   const S = () => D().settings;
   const P = () => (S().plugin = S().plugin || {});
   const JAR = path.join(__dirname, '..', 'plugin', 'MTCServerControl.jar');
@@ -64,7 +64,13 @@ module.exports = function install(x) {
       kick = `§6§lMTC EVENTS\n\n§c§lSERVER CLOSED\n\n${msg}\n\n§8${(cfg.publicUrl || '').replace(/^https?:\/\//, '')}`;
       deny = kick;
     }
-    return { managed: true, open, why, control: ctl, event: { slug: e.slug, title: e.title, status: e.status },
+    // teams (picked on the website) and the tab list header: the plugin colours names, adds [Team] prefixes in tab and chat
+    if (e.status === 'live' && !e.teamsDrawnAt) drawTeams(e);   // the event started: players without a team get one
+    const tm = teamsOf(e), site = (cfg.publicUrl || '').replace(/^https?:\/\//, '');
+    const tab = { header: `\n§6§lMTC §8» §e§l${title}\n${ss ? `§7${dayTxt}${open && ctl === 'auto' && ss.closesAt ? ` §8· §7until §f${time(ss.closesAt)}` : ''}\n` : ''}`,
+      footer: `\n§7{online} players online §8· §f${site}\n` };   // {online} is filled in by the plugin
+    return { managed: true, open, why, control: ctl, event: { slug: e.slug, title: e.title, status: e.status }, tab,
+      teams: { play: tm.play, list: tm.list.map(t => ({ id: t.id, name: clean(t.name), color: t.color, players: t.players })), solo: tm.solo },
       day: ss ? ss.day : null, days: ss ? ss.days : null, opensAt: ss ? ss.opensAt : null, closesAt: ss && open && ctl === 'auto' ? ss.closesAt : null,
       hours: ss ? `${hm(ss.from)} - ${hm(ss.to)}` : '', motd, kick: kick || '', deny: deny || '',
       closedForStaff: '§eThe server is now closed for players. §7You are staff, so you can stay.', now: new Date().toISOString() };
