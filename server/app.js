@@ -642,7 +642,7 @@ on('GET', '/api/me', async req => {
   if (u && !u.ig && u.uid !== 'admin' && !rec.inGuild && D().applications.some(x => x.userId === u.uid && x.status === 'approved' && !x.joinedAt)) { await joinCheck(u.uid).catch(() => {}); rec = D().users[u.uid] || {}; }
   return { user: u ? { id: u.uid, name: u.name, avatar: u.av, admin: !!u.adm, creator: !!u.cr || !!rec.creator, inGuild: !!u.ig || !!rec.inGuild, viaPassword: u.uid === 'admin',
     verified: !!rec.verified, blocked: !!rec.blocked, skin: m.skin, mc: m.mc, mcEdition: m.edition, ownSkin: !!rec.skin, needsSetup: u.uid !== 'admin' && !m.mc } : null,
-    discordLogin: discord.loginReady(), invite: cfg.inviteUrl, maintenance: !!(u && u.adm && D().settings.maintenance && D().settings.maintenance.on) };
+    discordLogin: discord.loginReady(), invite: cfg.inviteUrl, maintenance: !!(u && u.adm && D().settings.maintenance && D().settings.maintenance.on), staffLogin: staffLogin().mode };
 });
 on('GET', '/auth/discord', async (req, res, p, url) => {
   if (!discord.loginReady()) { res.writeHead(302, { Location: '/account.html?error=' + encodeURIComponent('Discord login is not set up yet (DISCORD_CLIENT_SECRET in .env).') }); return res.end(); }
@@ -685,11 +685,34 @@ on('GET', '/auth/callback', async (req, res, p, url) => {
     res.end();
   } catch (e) { console.error(e); back(e.message || 'Discord login failed.'); }
 });
+// The staff password login: "hidden" (default) = only through the private staff link (admin.html?staff=KEY), so strangers
+// cannot even try passwords; "off" = admins log in with Discord only; "open" = the form shows on the admin page for everyone.
+function staffLogin() {
+  const s = D().settings.staffLogin = D().settings.staffLogin || {};
+  if (!['open', 'hidden', 'off'].includes(s.mode)) s.mode = 'hidden';
+  if (!s.key) { s.key = crypto.randomBytes(12).toString('hex'); store.save(); }
+  return s;
+}
+const staffKeyOk = k => { const s = staffLogin(), a = Buffer.from(String(k || '')), b = Buffer.from(s.key); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+on('GET', '/api/admin/staff-login', async req => { needAdmin(req); const s = staffLogin(); return { mode: s.mode, link: cfg.publicUrl + '/admin.html?staff=' + s.key, discordLogin: discord.loginReady() }; });
+on('PUT', '/api/admin/staff-login', async req => {
+  const u = needAdmin(req), b = await readBody(req), s = staffLogin();
+  if (b.newLink) s.key = crypto.randomBytes(12).toString('hex');
+  if (b.mode !== undefined) {
+    if (!['open', 'hidden', 'off'].includes(b.mode)) throw err(400, 'Pick open, hidden or off.');
+    if (b.mode === 'off' && !discord.loginReady()) throw err(400, 'Discord login is not set up, so turning the password off would lock every admin out.');
+    if (b.mode === 'off' && u.uid === 'admin') throw err(400, 'You are logged in with the staff password. Log in with Discord first, then turn the password off.');
+    s.mode = b.mode;
+  }
+  store.save(); return { ok: true, mode: s.mode, link: cfg.publicUrl + '/admin.html?staff=' + s.key };
+});
 on('POST', '/auth/admin', async (req, res) => {
   // through the tunnel every request comes from 127.0.0.1, so use the visitor address the tunnel passes on
   const ip = req.headers['cf-connecting-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
   if (limited(ip)) throw err(429, 'Too many tries. Wait 10 minutes.');
-  const b = await readBody(req);
+  const b = await readBody(req), sl = staffLogin();
+  if (sl.mode === 'off') throw err(403, 'Password login is turned off. Admins log in with Discord.');
+  if (sl.mode === 'hidden' && !staffKeyOk(b.staff)) throw err(404, 'Not found.');   // no staff link: not even a password check (and nothing logged)
   const a = Buffer.from(String(b.password || '')), c = Buffer.from(String(cfg.adminPassword));
   if (a.length !== c.length || !crypto.timingSafeEqual(a, c)) { audit.log({ who: { name: 'Unknown visitor' }, kind: 'security', icon: '🚨', title: 'Wrong staff password', details: [['Where', 'Staff login on the website']] }); throw err(401, 'Wrong password.'); }
   json(res, 200, { ok: true }, { 'Set-Cookie': makeSession({ uid: 'admin', un: 'admin', name: 'Admin', av: '', adm: true, cr: true, ig: true }) });
@@ -1953,6 +1976,7 @@ function describe(key, p, b, out, c) {
     case 'POST /api/admin/messages/channel': return { kind: 'discord', icon: '📢', title: 'Posted a message to Discord', details: [['Channel', `<#${b.channelId}>`], ['Message', msgSum(b.message)], ['Ping', pingText(b.ping)], ['Shown on site', b.showOnSite ? 'Yes' : '']] };
     case 'POST /api/admin/messages/dm': return { kind: 'discord', icon: '✉️', title: `Started sending DMs to ${out.job ? out.job.total : '?'} people`, details: [['Message', msgSum(b.message)], ['People picked', (b.users || []).length ? String(b.users.length) : ''], ['Roles', (b.roles || []).map(r => `<@&${r}>`).join(' ')], ['Mention each person', b.ping && b.ping.mention ? 'Yes' : '']] };
     case 'POST /api/admin/alerts/:id/retry': return { kind: 'discord', icon: '🔁', title: 'Retried a DM alert', details: [['Result', out.ok ? 'Delivered' : out.error]] };
+    case 'PUT /api/admin/staff-login': return { kind: 'security', icon: '🔐', title: b.newLink ? 'Made a new private staff login link (the old one stops working)' : `Staff password login set to: ${{ open: 'visible to everyone', hidden: 'hidden (private staff link only)', off: 'off (Discord login only)' }[b.mode] || b.mode}` };
     case 'PUT /api/admin/maintenance': return { kind: b.on ? 'security' : 'update', icon: b.on ? '🔒' : '🔓', title: b.on ? 'Turned ON admin-only mode (website closed to visitors)' : 'Turned OFF admin-only mode (website open again)', details: [['Message', b.message]] };
     case 'POST /api/admin/uploads/:id/finish': return { kind: 'create', icon: '📦', title: `Added to the archive: ${out.file ? out.file.name : ''}`, details: [['Size', out.file ? (out.file.size / 1048576).toFixed(1) + ' MB' : ''], ['Type', out.file && FILE_TYPES[out.file.type]], ['Members only', out.file && out.file.members ? 'Yes' : '']] };
     case 'PUT /api/admin/events/:id/files-order': return { kind: 'update', icon: '↕️', title: `Reordered the archive files of ${(c.event && c.event.title) || 'an event'}` };

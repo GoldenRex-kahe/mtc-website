@@ -42,7 +42,7 @@ async function load() {
         <p>Log in with Discord to register for events, add your YouTube channel to the Creators page, and share your event screenshots and videos.</p>
         <p class="soft small">We only read your Discord name and picture. We never see your password or messages.</p>
         ${d.discordLogin ? '<a class="btn discord" href="/auth/discord">LOG IN WITH DISCORD</a>' : '<p class="msg info">Discord login is being set up. Check back soon.</p>'}
-        <p class="small" style="margin-top:22px"><a href="/admin.html">Staff login</a></p>
+        ${d.staffLogin === 'open' ? '<p class="small" style="margin-top:22px"><a href="/admin.html">Staff login</a></p>' : ''}
       </div>`;
     return;
   }

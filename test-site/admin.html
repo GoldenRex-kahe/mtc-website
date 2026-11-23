@@ -119,19 +119,39 @@ async function start() {
   if (!m.user || !m.user.admin) return loginView(m);
   await reload();
 }
+// the private staff link (admin.html?staff=KEY): keep the key for the login, but take it out of the address bar
+const staffKey = new URLSearchParams(location.search).get('staff') || sessionStorage.getItem('mtcStaff') || '';
+if (new URLSearchParams(location.search).has('staff')) { sessionStorage.setItem('mtcStaff', staffKey); history.replaceState(null, '', location.pathname + location.hash); }
 function loginView(m) {
-  $('#main').innerHTML = `<h1>STAFF LOGIN</h1>
+  // the password form only shows when it is open to everyone, or through the private staff link
+  const showPw = m.staffLogin === 'open' || (m.staffLogin === 'hidden' && staffKey);
+  $('#main').innerHTML = `<h1>${m.discordLogin || showPw ? 'STAFF LOGIN' : 'ADMIN'}</h1>
     <div class="card accent" style="max-width:480px">
       ${m.user ? `<p class="msg info">You are logged in as ${esc(m.user.name)}, who is not an admin.</p>` : ''}
-      ${m.discordLogin ? '<p>Admins can log in with Discord.</p><a class="btn discord" href="/auth/discord">LOG IN WITH DISCORD</a><hr style="border:0;border-top:3px solid #000;margin:22px 0">' : ''}
-      <form id="pw"><label for="p">Admin password <span class="soft">(ADMIN_PASSWORD in the .env file)</span></label>
+      ${m.discordLogin ? `<p>Admins log in with Discord.</p><a class="btn discord" href="/auth/discord">LOG IN WITH DISCORD</a>${showPw ? '<hr style="border:0;border-top:3px solid #000;margin:22px 0">' : ''}` : ''}
+      ${showPw ? `<form id="pw"><label for="p">Staff password</label>
       <input type="password" id="p" autocomplete="current-password" required>
-      <div style="margin-top:16px"><button class="btn" type="submit">LOG IN</button></div></form>
+      <div style="margin-top:16px"><button class="btn" type="submit">LOG IN</button></div></form>` : m.discordLogin ? '' : '<p class="soft">This page is for MTC staff.</p>'}
     </div>`;
-  $('#pw').onsubmit = async e => {
+  if (showPw) $('#pw').onsubmit = async e => {
     e.preventDefault();
-    try { await api('/auth/admin', {method: 'POST', body: {password: $('#p').value}}); location.reload(); } catch (x) { toast(x.message, true); }
+    try { await api('/auth/admin', {method: 'POST', body: {password: $('#p').value, staff: staffKey}}); location.reload(); } catch (x) { toast(x.status === 404 ? 'This staff link no longer works. Ask an admin for the new one.' : x.message, true); }
   };
+}
+// Activity tab: how the staff password login is shown
+async function staffLoginCard(box) {
+  let s; try { s = await api('/api/admin/staff-login'); } catch { return; }
+  const opt = (v, t, d) => `<label class="check" style="align-items:flex-start;margin:6px 0"><input type="radio" name="slm" value="${v}"${s.mode === v ? ' checked' : ''}${v === 'off' && !s.discordLogin ? ' disabled' : ''}> <span><b>${t}</b><br><span class="soft small">${d}</span></span></label>`;
+  box.innerHTML = `<div class="card accent" style="margin-bottom:18px"><h2 style="margin-top:0">🔐 STAFF PASSWORD LOGIN</h2>
+    <p class="soft small">The password login (ADMIN_PASSWORD) on the admin page. Discord admins can always log in with Discord.</p>
+    ${opt('hidden', 'Hidden (recommended)', 'Only works through the private staff link below. Others do not see the password box and cannot try passwords.')}
+    ${opt('off', 'Off', s.discordLogin ? 'No password login at all. Admins log in with Discord only.' : 'Needs Discord login to be set up first.')}
+    ${opt('open', 'Visible to everyone', 'The password box shows on the admin page for anyone (not recommended).')}
+    <div style="margin-top:10px${s.mode === 'hidden' ? '' : ';opacity:.5'}"><label>Private staff link <span class="soft">(share only with staff who use the password)</span></label>
+      <div class="row" style="gap:8px"><input type="text" readonly value="${esc(s.link)}" id="slLink" style="flex:1;min-width:220px"><button class="btn grey sm" type="button" id="slCopy">COPY</button><button class="btn ghost sm" type="button" id="slNew">NEW LINK</button></div></div></div>`;
+  box.querySelectorAll('input[name=slm]').forEach(r => r.onchange = () => api('/api/admin/staff-login', {method: 'PUT', body: {mode: r.value}}).then(x => { toast({hidden: 'Hidden: the password box only shows through the private link.', off: 'Password login is off. Discord login only.', open: 'The password box is visible to everyone.'}[x.mode]); staffLoginCard(box); }).catch(x => { toast(x.message, true); staffLoginCard(box); }));
+  $('#slCopy').onclick = () => navigator.clipboard.writeText(s.link).then(() => toast('Link copied.'), () => { $('#slLink').select(); toast('Select the link and copy it.'); });
+  $('#slNew').onclick = () => { if (confirm('Make a new private link? The old one stops working.')) api('/api/admin/staff-login', {method: 'PUT', body: {newLink: true}}).then(() => { toast('New link made.'); staffLoginCard(box); }).catch(x => toast(x.message, true)); };
 }
 
 async function reload() {
@@ -733,13 +753,13 @@ async function activityTab() {
       ${(x.details || []).filter(([, v]) => v !== '' && v != null).length ? `<div class="small" style="margin-top:4px">${x.details.filter(([, v]) => v !== '' && v != null).map(([k, v]) => `<span class="soft">${esc(k)}:</span> ${pretty(v)}`).join(' · ')}</div>` : ''}</div></div>`).join('')
       : '<p class="soft">Nothing matches.</p>';
   };
-  $('#pane').innerHTML = `<p class="soft small" style="margin-bottom:12px">Every change made on the website, newest first. To also get it in Discord, pick a log channel in MESSAGES → ALERTS.</p>
+  $('#pane').innerHTML = `<div id="slBox"></div><p class="soft small" style="margin-bottom:12px">Every change made on the website, newest first. To also get it in Discord, pick a log channel in MESSAGES → ALERTS.</p>
     <div class="row" style="margin-bottom:12px"><input type="search" id="actQ" placeholder="Search name, event, action" value="${esc(actQ)}" style="max-width:280px">
       ${KINDS.map(([k, l]) => `<button class="btn sm ${actKind === k ? '' : 'grey'}" data-ak="${k}">${l}</button>`).join('')}</div>
     <div class="card"><div class="list" id="actList"></div></div>`;
   $('#actQ').oninput = () => { actQ = $('#actQ').value; draw(); };
   document.querySelectorAll('[data-ak]').forEach(b => b.onclick = () => { actKind = b.dataset.ak; activityTab(); });
-  draw();
+  draw(); staffLoginCard($('#slBox'));
   if (!dcMeta) api('/api/admin/discord/meta').then(m => { dcMeta = m; draw(); }).catch(() => {});
 }
 
