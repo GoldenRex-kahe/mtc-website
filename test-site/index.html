@@ -825,14 +825,16 @@ const liveNow=()=>fetch('/api/live').then(r=>r.ok?r.json():null).then(d=>{const 
   if(!d||!d.live.length){box.hidden=true;return}box.hidden=false;
   box.innerHTML=`<span class="ln-tag"><i aria-hidden="true"></i>ON AIR</span><div class="ln-list">${d.live.map(l=>`<a class="ln" href="${escH(l.url)}" target="_blank" rel="noopener"><img src="${escH(l.thumb)}" alt="" loading="lazy"><span><b>${escH(l.creator.name)}</b><small>${escH(l.title)}</small></span><em>WATCH</em></a>`).join('')}</div>`}).catch(()=>{});
 liveNow();setInterval(liveNow,60e3);
-// an open poll also gets a button on the next-event card (whichever of the two loads last links them)
-let openPoll=null;const linkPollToCard=()=>{const v=document.getElementById('nxVote');if(v&&openPoll){v.hidden=false;v.href='/community.html#poll-'+openPoll.id;v.title=openPoll.question}};
-fetch('/api/polls').then(r=>r.ok?r.json():null).then(d=>{const q=d&&d.polls.find(p=>p.open);if(!q)return;openPoll=q;linkPollToCard();const a=$('#pollCta');a.hidden=false;a.href='/community.html#poll-'+q.id;
+// the next-event card gets a vote button only for an open poll linked to that event (Admin > Community > Polls > Linked event);
+// whichever of the two loads last links them
+let openPolls=[],nextEventId='';
+const linkPollToCard=()=>{const v=document.getElementById('nxVote'),q=openPolls.find(p=>p.eventId&&p.eventId===nextEventId);if(v&&q){v.hidden=false;v.href='/community.html#poll-'+q.id;v.title=q.question}};
+fetch('/api/polls').then(r=>r.ok?r.json():null).then(d=>{openPolls=d?d.polls.filter(p=>p.open):[];linkPollToCard();const q=openPolls[0];if(!q)return;const a=$('#pollCta');a.hidden=false;a.href='/community.html#poll-'+q.id;
   a.innerHTML=`<span class="pc-ico" aria-hidden="true">🗳️</span><span><small>VOTE NOW</small><b>${escH(q.question)}</b></span><em>${q.voters} voted →</em>`}).catch(()=>{});
 fetch('/api/events').then(r=>r.ok?r.json():Promise.reject()).then(d=>{
   const next=d.events.find(e=>e.status==='live')||d.events.find(e=>e.status==='open')||d.events.find(e=>e.status==='soon'),past=d.events.filter(e=>e!==next&&e.status!=='draft').slice(0,9);
   $('#evList').innerHTML=nextCard(next)+(past.length?`<h3 class="evgrid-h">PAST EVENTS</h3><div class="evgrid">${past.map(evCard).join('')}</div>`:'');
-  nextCardReady();linkPollToCard();
+  nextEventId=next?next.id:'';nextCardReady();linkPollToCard();
   document.querySelectorAll('#evList .reveal').forEach(el=>io.observe(el));
 }).catch(()=>{$('#evList').innerHTML='<p class="soft">Events could not be loaded. Start the MTC server (node server.js).</p>'});
 fetch('/api/announcements').then(r=>r.ok?r.json():null).then(async d=>{const a=d&&d.announcements[0];if(!a)return;const n=$('#news');n.innerHTML=`<b>${escH(a.title)}</b>${a.body?`<div class="md">${MTCmd.md(a.body)}</div>`:''}`;n.hidden=false;

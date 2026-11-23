@@ -83,6 +83,7 @@
       <div class="fields" style="margin-top:12px"><div class="full"><label for="pout">Closing text <span class="soft">(optional, shown under the options)</span></label><textarea id="pout" rows="2" maxlength="400" placeholder="🗳️ The final schedule is decided by the majority vote. Your vote matters!"></textarea></div>
         <div><label for="ps">Voting opens <span class="soft">(optional; empty = right away)</span></label><input type="datetime-local" id="ps"></div>
         <div><label for="pe">Closes <span class="soft">(optional)</span></label><input type="datetime-local" id="pe"></div>
+        <div><label for="pev">Linked event <span class="soft">(its home page card gets a vote button)</span></label><select id="pev"><option value="">None</option>${evs.map(e => `<option value="${esc(e.id)}">${esc(e.title)}${e.status ? ' (' + esc(e.status) + ')' : ''}</option>`).join('')}</select></div>
         <div><label for="pwho">Who can vote</label><select id="pwho"><option value="members">Everyone in the MTC Discord</option><option value="creators">Creators only (Creator role)</option><option value="event">Approved players of an event</option></select></div>
         <div id="pwhoev" hidden><label for="pwhoe">Event</label><select id="pwhoe">${evs.map(e => `<option value="${esc(e.id)}">${esc(e.title)}${e.status ? ' (' + esc(e.status) + ')' : ''}</option>`).join('') || '<option value="">No events yet</option>'}</select></div>
         <div><label for="pr">Show results</label><select id="pr"><option value="always">Always (live bars on Discord too)</option><option value="voted" selected>After they vote</option><option value="closed">Only when the poll closes</option></select></div></div>
@@ -90,6 +91,7 @@
       <div class="row" style="margin-top:12px"><button class="btn" id="padd" type="button">START POLL</button><button class="btn ghost" id="pcancel" type="button" hidden>CANCEL EDITING</button></div></div>
       <div class="list">${d.polls.map(q => { const max = Math.max(1, ...q.options.map(o => o.votes || 0));
         return `<div class="card" data-poll="${q.id}" style="margin-bottom:14px"><div class="row"><h3 style="margin:0;flex:1">${esc(q.question)}</h3><span class="badge ${q.open ? 'live' : q.soon ? 'pending' : 'withdrawn'}">${q.open ? 'OPEN' : q.soon ? 'NOT OPEN YET' : 'CLOSED'}</span></div>
+          ${q.eventTitle ? `<p class="small" style="margin:4px 0">🔗 Linked to <b>${esc(q.eventTitle)}</b>: its home page card shows a vote button while this poll is open</p>` : ''}
           ${q.whoText ? `<p class="small" style="margin:4px 0">${esc(q.whoText)}</p>` : ''}<p class="soft small">${q.soon ? '⏳ voting opens ' + esc(fmt(q.startsAt)) + ' · ' : ''}${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}${q.autoPost ? ` · <b>posts to #${esc(q.autoPost.channel)} by itself when voting opens</b> <button type="button" class="btn ghost sm" data-unsched>CANCEL</button>` : ''}</p>
           ${q.options.map(o => `<div class="pbar" title="${esc(o.text)}: ${o.votes} vote${o.votes === 1 ? '' : 's'}"><span>${esc(o.text)}</span><i style="width:${Math.round((o.votes || 0) / max * 100)}%"></i><b>${o.votes || 0}</b></div>`).join('')}
           <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn sm" data-pedit>✎ EDIT</button><button class="btn grey sm" data-pvoters>👥 VOTERS (${q.voters})</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
@@ -108,6 +110,7 @@
       editId = q.id;
       $('#pq').value = q.question; $('#pn').value = q.note || ''; $('#pout').value = q.outro || '';
       $('#ps').value = q.soon ? localVal(q.startsAt) : ''; $('#pe').value = localVal(q.endsAt); $('#pr').value = q.results || 'voted'; $('#pm').checked = !!q.multi;
+      $('#pev').value = q.eventId || '';
       $('#pwho').value = q.who || 'members'; if (q.whoEvent) $('#pwhoe').value = q.whoEvent; $('#pwhoev').hidden = $('#pwho').value !== 'event';
       $('#popts').innerHTML = q.options.map(optRow).join(''); bindRows();
       $('#pformh').textContent = 'EDIT POLL'; $('#padd').textContent = 'SAVE CHANGES'; $('#pcancel').hidden = false;
@@ -119,7 +122,7 @@
     $('#pwho').onchange = () => { $('#pwhoev').hidden = $('#pwho').value !== 'event'; };
     $('#padd').onclick = async () => {
       const options = [...p.querySelectorAll('.popt-ed')].map(r => ({ id: r.dataset.oid || undefined, text: r.querySelector('.po-t').value.trim(), details: r.querySelector('.po-d').value.trim() })).filter(o => o.text);
-      const body = { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked, who: $('#pwho').value, whoEvent: $('#pwhoe').value };
+      const body = { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked, who: $('#pwho').value, whoEvent: $('#pwhoe').value, eventId: $('#pev').value };
       if (editId) {
         const was = d.polls.find(x => x.id === editId), gone = was ? was.options.filter(o => !options.some(n => n.id === o.id) && o.votes) : [];
         if (gone.length && !confirm(`Removing ${gone.map(o => '"' + o.text + '"').join(', ')} also removes ${gone.reduce((a, o) => a + o.votes, 0)} vote(s). Save anyway?`)) return;

@@ -289,6 +289,7 @@ module.exports = function install(x) {
     const show = q.results === 'always' || (q.results !== 'closed' && mine.length) || pollState(q) === 'closed' || (u && u.adm);
     const tally = tallyOf(q), may = u ? mayVote(q, u.uid) : null;
     return { id: q.id, question: unmd(q.question), note: q.note || '', outro: q.outro || '', multi: !!q.multi, startsAt: q.startsAt || null, endsAt: q.endsAt, open: pollOpen(q), soon: pollSoon(q), results: q.results, voters: total, mine,
+      eventId: q.eventId || '', eventTitle: q.eventId ? ((evById(q.eventId) || {}).title || '') : '',
       who: rule(q).type, whoEvent: rule(q).eventId || '', whoText: whoText(q).replace(/\*\*/g, ''), allowed: may ? may.ok : null, notAllowed: may && !may.ok ? may.why : '',
       options: q.options.map(o => ({ id: o.id, text: unmd(o.text), details: o.details || '', votes: show ? tally[o.id] : null })), createdAt: q.createdAt, onDiscord: (q.posts || []).length > 0 };
   }
@@ -316,7 +317,9 @@ module.exports = function install(x) {
     const wt = ['members', 'creators', 'event'].includes(b.who) ? b.who : 'members';
     if (wt === 'event' && !evById(String(b.whoEvent || ''))) throw err(400, 'Pick the event whose players can vote.');
     const who = wt === 'event' ? { type: 'event', eventId: String(b.whoEvent) } : { type: wt };
-    return { question, note: str(b.note, 1500), outro: str(b.outro, 400), options: opts, multi: !!b.multi, startsAt, endsAt, who, results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
+    // the event this poll is about: its card on the home page gets a vote button for this poll (and only this one)
+    const eventId = b.eventId ? String(b.eventId) : ''; if (eventId && !evById(eventId)) throw err(400, 'That event no longer exists.');
+    return { question, note: str(b.note, 1500), outro: str(b.outro, 400), options: opts, multi: !!b.multi, startsAt, endsAt, who, eventId, results: ['always', 'voted', 'closed'].includes(b.results) ? b.results : 'voted' };
   };
 
   // ---- the Discord post: the poll as an embed with a vote button per option; it is kept up to date as votes come in
