@@ -2080,7 +2080,7 @@ small{display:block;margin-top:26px;color:#9c8b74}a.s{background:none;border:0;c
 on('PUT', '/api/admin/maintenance', async req => {
   needAdmin(req); const b = await readBody(req);
   D().settings.maintenance = { on: !!b.on, message: str(b.message, 300), since: b.on ? store.now() : '' }; store.save();
-  if (typeof updateBotStatus === 'function') updateBotStatus();   // the bot goes Do Not Disturb while the site is admin-only
+  if (discord.ready() && !process.env.MTC_NO_BOT) rotatePresence();   // straight away: Do Not Disturb + "Admin only" while the site is admin-only, back to normal after
   return { ok: true, maintenance: D().settings.maintenance };
 });
 
@@ -2360,8 +2360,12 @@ let lastBotStatus = '';
 function updateBotStatus() { const s = botStatus(); if (s !== lastBotStatus) { lastBotStatus = s; gateway.setPresence(null, s); } }
 function notePresence(p) { const id = p && p.user && p.user.id; if (!id) return; adminPresence.set(id, p.status || 'offline'); if (adminIdSet.has(id)) updateBotStatus(); }
 async function rotatePresence() {
-  try { const opts = await presenceOptions(); lastBotStatus = botStatus(); gateway.setPresence(opts[presenceStep++ % opts.length], lastBotStatus); }
-  catch (e) { logErr('presence', e); }
+  try {
+    lastBotStatus = botStatus();
+    // admin-only mode: Do Not Disturb with just one line (no live creators, events or countdowns)
+    if (lastBotStatus === 'dnd') return gateway.setPresence({ type: 4, name: 'Custom Status', state: '🔒 Admin only · website under maintenance' }, 'dnd');
+    const opts = await presenceOptions(); gateway.setPresence(opts[presenceStep++ % opts.length], lastBotStatus);
+  } catch (e) { logErr('presence', e); }
 }
 if (discord.ready() && !process.env.MTC_NO_BOT) {
   gateway.start({
