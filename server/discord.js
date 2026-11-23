@@ -4,9 +4,15 @@ const cfg = require('./env');
 
 const API = 'https://discord.com/api/v10';
 const UA = 'MTC-Website (local, 1.0)';
-async function call(p, opt = {}) {
-  const r = await fetch(API + p, { ...opt, headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA, ...(opt.body ? { 'Content-Type': 'application/json' } : {}), ...(opt.headers || {}) } });
-  if (r.status === 429) { const j = await r.json().catch(() => ({})); await new Promise(s => setTimeout(s, (j.retry_after || 1) * 1000)); return call(p, opt); }
+// every Discord request gives up after 15 seconds, and "slow down" (429) answers are retried at most 3 times
+// (it used to retry forever, so one rate limit could leave logins and pages loading endlessly)
+async function call(p, opt = {}, tries = 0) {
+  const r = await fetch(API + p, { ...opt, signal: AbortSignal.timeout(15000), headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA, ...(opt.body ? { 'Content-Type': 'application/json' } : {}), ...(opt.headers || {}) } });
+  if (r.status === 429) {
+    const j = await r.json().catch(() => ({})), wait = Math.max(0.5, +j.retry_after || +r.headers.get('retry-after') || 1);
+    if (tries >= 3 || wait > 20) { const e = new Error(`Discord asked the bot to slow down (try again in ${Math.ceil(wait)}s)`); e.status = 429; throw e; }
+    await new Promise(s => setTimeout(s, wait * 1000)); return call(p, opt, tries + 1);
+  }
   if (r.status === 204) return null;
   const body = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(body.message || 'Discord ' + r.status); e.status = r.status; e.code = body.code; throw e; }
@@ -113,7 +119,7 @@ function authorizeUrl(state, join) {
   return 'https://discord.com/oauth2/authorize?' + q;
 }
 async function token(params) {
-  const r = await fetch(API + '/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+  const r = await fetch(API + '/oauth2/token', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
     body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, ...params }) });
   const tok = await r.json().catch(() => ({}));
   if (!r.ok || !tok.access_token) throw Object.assign(new Error('Discord login failed: ' + (tok.error_description || tok.error || r.status)), { status: 400 });
@@ -121,7 +127,7 @@ async function token(params) {
 }
 async function exchange(code) {
   const tok = await token({ grant_type: 'authorization_code', code, redirect_uri: redirectUri() });
-  const u = await fetch(API + '/users/@me', { headers: { Authorization: 'Bearer ' + tok.access_token, 'User-Agent': UA } });
+  const u = await fetch(API + '/users/@me', { signal: AbortSignal.timeout(15000), headers: { Authorization: 'Bearer ' + tok.access_token, 'User-Agent': UA } });
   if (!u.ok) throw Object.assign(new Error('Could not read your Discord profile'), { status: 400 });
   const me = await u.json();
   const scopes = String(tok.scope || '').split(' ');
@@ -131,7 +137,7 @@ async function exchange(code) {
 const refreshToken = refresh => token({ grant_type: 'refresh_token', refresh_token: refresh });
 // add an approved applicant to the server with their permission token; returns 'added' or 'already'
 async function addMember(userId, accessToken, roles) {
-  const r = await fetch(`${API}/guilds/${cfg.guild}/members/${userId}`, { method: 'PUT', headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA, 'Content-Type': 'application/json' },
+  const r = await fetch(`${API}/guilds/${cfg.guild}/members/${userId}`, { method: 'PUT', signal: AbortSignal.timeout(15000), headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA, 'Content-Type': 'application/json' },
     body: JSON.stringify({ access_token: accessToken, ...(roles && roles.length ? { roles } : {}) }) });
   if (r.status === 201) return 'added';
   if (r.status === 204) return 'already';
@@ -191,7 +197,7 @@ async function send(channelId, payload, files) {
   fd.append('payload_json', JSON.stringify({ ...payload, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }));
   files.forEach((f, i) => fd.append(`files[${i}]`, new Blob([f.buf], { type: f.type }), f.name));
   for (let tries = 0; ; tries++) {
-    const r = await fetch(`${API}/channels/${channelId}/messages`, { method: 'POST', headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA }, body: fd });
+    const r = await fetch(`${API}/channels/${channelId}/messages`, { method: 'POST', signal: AbortSignal.timeout(60000), headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA }, body: fd });
     if (r.status === 429 && tries < 3) { const j = await r.json().catch(() => ({})); await new Promise(s => setTimeout(s, (j.retry_after || 1) * 1000)); continue; }
     const body = await r.json().catch(() => ({}));
     if (!r.ok) { const e = new Error(body.message || 'Discord ' + r.status); e.status = r.status; e.code = body.code; throw e; }
@@ -204,7 +210,7 @@ async function multipart(method, url, payload, files) {
   fd.append('payload_json', JSON.stringify({ ...payload, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }));
   files.forEach((f, i) => fd.append(`files[${i}]`, new Blob([f.buf], { type: f.type }), f.name));
   for (let tries = 0; ; tries++) {
-    const r = await fetch(url, { method, headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA }, body: fd });
+    const r = await fetch(url, { method, signal: AbortSignal.timeout(60000), headers: { Authorization: 'Bot ' + cfg.token, 'User-Agent': UA }, body: fd });
     if (r.status === 429 && tries < 3) { const j = await r.json().catch(() => ({})); await new Promise(s => setTimeout(s, (j.retry_after || 1) * 1000)); continue; }
     const body = await r.json().catch(() => ({}));
     if (!r.ok) { const e = new Error(body.message || 'Discord ' + r.status); e.status = r.status; e.code = body.code; throw e; }

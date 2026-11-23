@@ -671,9 +671,18 @@ on('GET', '/auth/callback', async (req, res, p, url) => {
     return back('Login expired or the login cookie was blocked. Please try again in the same browser tab, and allow cookies for this site.');
   }
   if (url.searchParams.get('error')) return back('Discord login was cancelled.');
+  // never leave the browser loading: the whole login gets 25 seconds
+  const slow = setTimeout(() => { if (!res.headersSent) back('Discord is answering slowly right now. Please press LOG IN WITH DISCORD again.'); }, 25000);
+  res.on('finish', () => clearTimeout(slow));
   try {
     const me = await discord.exchange(url.searchParams.get('code') || '');
-    const info = await discord.memberInfo(me.id);
+    if (res.headersSent) return;
+    // if Discord cannot tell us right now whether they are in the server, log them in with what the site already knows
+    // (the 5-minute check and the next login correct it) instead of failing the login
+    const info = await discord.memberInfo(me.id).catch(e => { console.warn('login: member check failed, using saved info:', e.message);
+      const rec = D().users[me.id] || {}, g = discord.cachedMember(me.id) || {};
+      return { inGuild: !!(g.id || rec.inGuild), creator: !!(g.creator || rec.creator), roles: g.roles || [], nick: '' }; });
+    if (res.headersSent) return;
     const adm = cfg.adminIds.includes(me.id) || info.roles.some(r => cfg.adminRoleIds.includes(r));
     const name = info.nick || me.global_name || me.username;
     const av = me.avatar ? `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png?size=128` : '';
@@ -683,7 +692,7 @@ on('GET', '/auth/callback', async (req, res, p, url) => {
     store.save();
     res.writeHead(302, { Location: adm ? '/admin.html' : info.inGuild ? '/account.html' : '/apply.html', 'Set-Cookie': [clear, makeSession({ uid: me.id, un: me.username, name, av, adm, cr: info.creator, ig: info.inGuild })] });
     res.end();
-  } catch (e) { console.error(e); back(e.message || 'Discord login failed.'); }
+  } catch (e) { console.error(e); if (!res.headersSent) back(e.name === 'TimeoutError' ? 'Discord is answering slowly right now. Please press LOG IN WITH DISCORD again.' : e.message || 'Discord login failed.'); }
 });
 // The staff password login: "hidden" (default) = only through the private staff link (admin.html?staff=KEY), so strangers
 // cannot even try passwords; "off" = admins log in with Discord only; "open" = the form shows on the admin page for everyone.
