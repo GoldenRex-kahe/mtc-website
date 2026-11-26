@@ -88,13 +88,19 @@
         <div id="pwhoev" hidden><label for="pwhoe">Event</label><select id="pwhoe">${evs.map(e => `<option value="${esc(e.id)}">${esc(e.title)}${e.status ? ' (' + esc(e.status) + ')' : ''}</option>`).join('') || '<option value="">No events yet</option>'}</select></div>
         <div><label for="pr">Show results</label><select id="pr"><option value="always">Always (live bars on Discord too)</option><option value="voted" selected>After they vote</option><option value="closed">Only when the poll closes</option></select></div></div>
       <label class="check"><input type="checkbox" id="pm"> Members can pick more than one option</label>
+      <details style="margin-top:10px"${''}><summary><b>🏁 RESULT MESSAGE</b> <span class="soft small">posted to Discord with the results when the poll ends</span></summary>
+        <textarea id="pres" rows="4" maxlength="1500" style="margin-top:8px" placeholder="🎉 The votes are in! **{poll_win}** wins with {poll_win_votes} votes ({poll_win_percent}).&#10;{event} will be played on this schedule. See you there!"></textarea>
+        <p class="soft small" style="margin:6px 0">Placeholders: ${['{poll_win}', '{poll_win_votes}', '{poll_win_percent}', '{poll_total}', '{poll_results}', '{poll_question}', '{event}', '{poll_link}'].map(t => `<code class="ph" style="cursor:pointer" title="Add to the message">${t}</code>`).join(' ')}<br>
+          {poll_win} = the winning option (or "A and B (tie)"), {poll_total} = how many voted, {poll_results} = every option with its votes. Empty = the results card only.</p>
+        <div class="fields"><div><label for="prch">Post the result in</label><select id="prch"><option value="">The channel the poll was posted in</option></select></div></div>
+        <label class="check"><input type="checkbox" id="pauto" checked> Post the result by itself when the poll reaches its closing time</label></details>
       <div class="row" style="margin-top:12px"><button class="btn" id="padd" type="button">START POLL</button><button class="btn ghost" id="pcancel" type="button" hidden>CANCEL EDITING</button></div></div>
       <div class="list">${d.polls.map(q => { const max = Math.max(1, ...q.options.map(o => o.votes || 0));
         return `<div class="card" data-poll="${q.id}" style="margin-bottom:14px"><div class="row"><h3 style="margin:0;flex:1">${esc(q.question)}</h3><span class="badge ${q.open ? 'live' : q.soon ? 'pending' : 'withdrawn'}">${q.open ? 'OPEN' : q.soon ? 'NOT OPEN YET' : 'CLOSED'}</span></div>
           ${q.eventTitle ? `<p class="small" style="margin:4px 0">🔗 Linked to <b>${esc(q.eventTitle)}</b>: its home page card shows a vote button while this poll is open</p>` : ''}
-          ${q.whoText ? `<p class="small" style="margin:4px 0">${esc(q.whoText)}</p>` : ''}<p class="soft small">${q.soon ? '⏳ voting opens ' + esc(fmt(q.startsAt)) + ' · ' : ''}${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}${q.autoPost ? ` · <b>posts to #${esc(q.autoPost.channel)} by itself when voting opens</b> <button type="button" class="btn ghost sm" data-unsched>CANCEL</button>` : ''}</p>
+          ${q.whoText ? `<p class="small" style="margin:4px 0">${esc(q.whoText)}</p>` : ''}<p class="soft small">${q.soon ? '⏳ voting opens ' + esc(fmt(q.startsAt)) + ' · ' : ''}${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}${q.autoPost ? ` · <b>posts to #${esc(q.autoPost.channel)} by itself when voting opens</b> <button type="button" class="btn ghost sm" data-unsched>CANCEL</button>` : ''}${q.resultPost ? ` · 🏁 result posted in <a href="${esc(q.resultPost.link)}" target="_blank" rel="noopener">#${esc(q.resultPost.channel)}</a>` : q.resultError ? ` · <span style="color:#ffb4a0">⚠️ result not posted: ${esc(q.resultError)}</span>` : (q.open || q.soon) && q.endsAt && q.autoAnnounce ? ' · 🏁 result posts by itself at the closing time' : ''}</p>
           ${q.options.map(o => `<div class="pbar" title="${esc(o.text)}: ${o.votes} vote${o.votes === 1 ? '' : 's'}"><span>${esc(o.text)}</span><i style="width:${Math.round((o.votes || 0) / max * 100)}%"></i><b>${o.votes || 0}</b></div>`).join('')}
-          <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn sm" data-pedit>✎ EDIT</button><button class="btn grey sm" data-pvoters>👥 VOTERS (${q.voters})</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
+          <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn sm" data-pedit>✎ EDIT</button><button class="btn grey sm" data-pvoters>👥 VOTERS (${q.voters})</button><button class="btn sm" data-pann title="${q.open || q.soon ? 'End the poll now and post the result with your message' : 'Post the result with your message'}">${q.open || q.soon ? '🏁 END &amp; ANNOUNCE' : '📣 ANNOUNCE RESULT'}</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
     const bindRows = () => p.querySelectorAll('.po-x').forEach(b => b.onclick = () => { if (p.querySelectorAll('.popt-ed').length > 2) b.closest('.popt-ed').remove(); else toast('A poll needs at least 2 options.', true); });
     bindRows();
     $('#paddopt').onclick = () => { if (p.querySelectorAll('.popt-ed').length >= 12) return toast('12 options at most.', true); $('#popts').insertAdjacentHTML('beforeend', optRow()); bindRows(); };
@@ -111,6 +117,8 @@
       $('#pq').value = q.question; $('#pn').value = q.note || ''; $('#pout').value = q.outro || '';
       $('#ps').value = q.soon ? localVal(q.startsAt) : ''; $('#pe').value = localVal(q.endsAt); $('#pr').value = q.results || 'voted'; $('#pm').checked = !!q.multi;
       $('#pev').value = q.eventId || '';
+      $('#pres').value = q.resultMsg || ''; $('#pauto').checked = q.autoAnnounce !== false; chReady.then(() => { $('#prch').value = q.resultChannelId || ''; });
+      if (q.resultMsg) $('#pres').closest('details').open = true;
       $('#pwho').value = q.who || 'members'; if (q.whoEvent) $('#pwhoe').value = q.whoEvent; $('#pwhoev').hidden = $('#pwho').value !== 'event';
       $('#popts').innerHTML = q.options.map(optRow).join(''); bindRows();
       $('#pformh').textContent = 'EDIT POLL'; $('#padd').textContent = 'SAVE CHANGES'; $('#pcancel').hidden = false;
@@ -119,10 +127,14 @@
       $('#pform').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     $('#pcancel').onclick = () => polls(p);
+    // result channel list, and click-to-add placeholders
+    const chReady = api('/api/admin/discord/meta').then(m => { $('#prch').insertAdjacentHTML('beforeend', m.channels.map(c => `<option value="${c.id}">${c.news ? '📢' : '#'} ${esc(c.name)}</option>`).join('')); return m; }).catch(() => null);
+    p.querySelectorAll('#pform .ph').forEach(c => c.onclick = () => { const t = $('#pres'), s = t.selectionStart ?? t.value.length; t.value = t.value.slice(0, s) + c.textContent + t.value.slice(t.selectionEnd ?? s); t.focus(); });
     $('#pwho').onchange = () => { $('#pwhoev').hidden = $('#pwho').value !== 'event'; };
     $('#padd').onclick = async () => {
       const options = [...p.querySelectorAll('.popt-ed')].map(r => ({ id: r.dataset.oid || undefined, text: r.querySelector('.po-t').value.trim(), details: r.querySelector('.po-d').value.trim() })).filter(o => o.text);
-      const body = { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked, who: $('#pwho').value, whoEvent: $('#pwhoe').value, eventId: $('#pev').value };
+      const body = { question: $('#pq').value, note: $('#pn').value, outro: $('#pout').value, options, startsAt: $('#ps').value ? new Date($('#ps').value).toISOString() : '', endsAt: $('#pe').value ? new Date($('#pe').value).toISOString() : '', results: $('#pr').value, multi: $('#pm').checked, who: $('#pwho').value, whoEvent: $('#pwhoe').value, eventId: $('#pev').value,
+        resultMsg: $('#pres').value, resultChannelId: $('#prch').value, autoAnnounce: $('#pauto').checked };
       if (editId) {
         const was = d.polls.find(x => x.id === editId), gone = was ? was.options.filter(o => !options.some(n => n.id === o.id) && o.votes) : [];
         if (gone.length && !confirm(`Removing ${gone.map(o => '"' + o.text + '"').join(', ')} also removes ${gone.reduce((a, o) => a + o.votes, 0)} vote(s). Save anyway?`)) return;
@@ -137,6 +149,33 @@
       card.querySelector('[data-pc]').onclick = e => api('/api/admin/polls/' + id, { method: 'PUT', body: { closed: e.target.dataset.pc === '1' } }).then(() => { toast('Saved. The Discord post updates in a few seconds.'); polls(p); }).catch(x => toast(x.message, true));
       const q = d.polls.find(x => x.id === id);
       card.querySelector('[data-pedit]').onclick = () => startEdit(q);
+      // END & ANNOUNCE: our message (placeholders filled in, live preview), where, and who to ping
+      card.querySelector('[data-pann]').onclick = async () => {
+        const box = card.querySelector('.pdc'); if (box.dataset.v === 'a') { box.innerHTML = ''; box.dataset.v = ''; return; }
+        let meta; try { meta = await api('/api/admin/discord/meta'); } catch (x) { return toast(x.message, true); }
+        const def = q.resultChannelId || '', firstPost = (q.posts[0] || {}).channel;
+        box.dataset.v = 'a';
+        box.innerHTML = `<div style="margin-top:12px;border:2px solid #000;background:#140d07;padding:12px">
+          <label>Message <span class="soft">(optional; placeholders like {poll_win} are filled in)</span></label>
+          <textarea class="an-msg" rows="4" maxlength="1500" placeholder="🎉 The votes are in! **{poll_win}** wins with {poll_win_votes} votes.">${esc(q.resultMsg || '')}</textarea>
+          <p class="soft small" style="margin:4px 0 8px">${['{poll_win}', '{poll_win_votes}', '{poll_win_percent}', '{poll_total}', '{poll_results}', '{poll_question}', '{event}', '{poll_link}'].map(t => `<code class="an-ph" style="cursor:pointer">${t}</code>`).join(' ')}</p>
+          <div class="soft small" style="margin-bottom:4px">Preview</div><div class="an-prev" style="white-space:pre-wrap;background:#0d0804;border:2px solid #000;padding:8px 10px;min-height:38px;font-size:14px"></div>
+          <div class="row" style="gap:8px;margin-top:10px"><select class="an-ch" style="max-width:300px">${!def && firstPost ? `<option value="">#${esc(firstPost)} (where the poll was posted)</option>` : ''}${meta.channels.map(c => `<option value="${c.id}"${c.id === def ? ' selected' : ''}>${c.news ? '📢' : '#'} ${esc(c.name)}</option>`).join('')}</select>
+            <label class="check" style="margin:0"><input type="checkbox" class="an-ping"> @everyone</label>${meta.roles.slice(0, 12).map(r => `<label class="check" style="margin:0"><input type="checkbox" class="an-role" value="${r.id}"> @${esc(r.name)}</label>`).join('')}</div>
+          <label class="check" style="margin-top:8px"><input type="checkbox" class="an-save" checked> Save this message to the poll</label>
+          <div class="row" style="margin-top:10px"><button class="btn sm" type="button" data-ango>${q.open || q.soon ? '🏁 END POLL AND POST RESULT' : '📣 POST RESULT'}</button></div></div>`;
+        const ta = box.querySelector('.an-msg'), prev = box.querySelector('.an-prev');
+        let t = 0; const show = () => { clearTimeout(t); t = setTimeout(() => api('/api/admin/polls/' + id + '/result-preview', { method: 'POST', body: { message: ta.value } })
+          .then(r => { prev.textContent = r.text || '(no message: only the results card is posted)'; }).catch(() => {}), 250); };
+        ta.oninput = show; show();
+        box.querySelectorAll('.an-ph').forEach(c => c.onclick = () => { const s = ta.selectionStart ?? ta.value.length; ta.value = ta.value.slice(0, s) + c.textContent + ta.value.slice(ta.selectionEnd ?? s); ta.focus(); show(); });
+        box.querySelector('[data-ango]').onclick = () => {
+          if ((q.open || q.soon) && !confirm('End this poll now and post the result? Voting stops on the website and in Discord.')) return;
+          api('/api/admin/polls/' + id + '/announce', { method: 'POST', body: { message: ta.value, save: box.querySelector('.an-save').checked, channelId: box.querySelector('.an-ch').value,
+            ping: box.querySelector('.an-ping').checked, roles: [...box.querySelectorAll('.an-role:checked')].map(c => c.value) } })
+            .then(r => { toast('Result posted to Discord.'); polls(p); if (r.link) window.open(r.link, '_blank', 'noopener'); }).catch(x => toast(x.message, true));
+        };
+      };
       // who voted for each option, newest first, and where they voted
       card.querySelector('[data-pvoters]').onclick = async () => {
         const box = card.querySelector('.pdc'); if (box.dataset.v === '1') { box.innerHTML = ''; box.dataset.v = ''; return; }
@@ -155,7 +194,7 @@
       const un = card.querySelector('[data-unsched]'); if (un) un.onclick = () => api('/api/admin/polls/' + id + '/discord', { method: 'POST', body: { when: 'cancel' } }).then(() => { toast('The scheduled Discord post is cancelled.'); polls(p); }).catch(x => toast(x.message, true));
       card.querySelector('[data-px]').onclick = () => { if (confirm('Delete this poll and its votes?')) api('/api/admin/polls/' + id, { method: 'DELETE' }).then(() => polls(p)).catch(x => toast(x.message, true)); };
       card.querySelector('[data-pd]').onclick = async () => {
-        const box = card.querySelector('.pdc'); if (box.innerHTML && box.dataset.v !== '1') { box.innerHTML = ''; return; } box.dataset.v = '';
+        const box = card.querySelector('.pdc'); if (box.innerHTML && !box.dataset.v) { box.innerHTML = ''; return; } box.dataset.v = '';
         let meta; try { meta = await api('/api/admin/discord/meta'); } catch (x) { return toast(x.message, true); }
         const tooMany = q.options.length > 10, ruled = q.who && q.who !== 'members', btnFirst = tooMany || ruled;
         box.innerHTML = `<div style="margin-top:12px">
