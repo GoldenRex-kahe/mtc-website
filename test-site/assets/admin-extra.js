@@ -100,7 +100,7 @@
           ${q.eventTitle ? `<p class="small" style="margin:4px 0">🔗 Linked to <b>${esc(q.eventTitle)}</b>: its home page card shows a vote button while this poll is open</p>` : ''}
           ${q.whoText ? `<p class="small" style="margin:4px 0">${esc(q.whoText)}</p>` : ''}<p class="soft small">${q.soon ? '⏳ voting opens ' + esc(fmt(q.startsAt)) + ' · ' : ''}${q.voters} voter${q.voters === 1 ? '' : 's'}${q.endsAt ? ' · closes ' + esc(fmt(q.endsAt)) : ''}${q.multi ? ' · multiple choice' : ''}${q.posts.length ? ' · on Discord: ' + q.posts.map(ps => `<a href="${esc(ps.link)}" target="_blank" rel="noopener">#${esc(ps.channel || 'post')}</a>`).join(', ') : ''}${q.autoPost ? ` · <b>posts to #${esc(q.autoPost.channel)} by itself when voting opens</b> <button type="button" class="btn ghost sm" data-unsched>CANCEL</button>` : ''}${q.resultPost ? ` · 🏁 result posted in <a href="${esc(q.resultPost.link)}" target="_blank" rel="noopener">#${esc(q.resultPost.channel)}</a>` : q.resultError ? ` · <span style="color:#ffb4a0">⚠️ result not posted: ${esc(q.resultError)}</span>` : (q.open || q.soon) && q.endsAt && q.autoAnnounce ? ' · 🏁 result posts by itself at the closing time' : ''}</p>
           ${q.options.map(o => `<div class="pbar" title="${esc(o.text)}: ${o.votes} vote${o.votes === 1 ? '' : 's'}"><span>${esc(o.text)}</span><i style="width:${Math.round((o.votes || 0) / max * 100)}%"></i><b>${o.votes || 0}</b></div>`).join('')}
-          <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn sm" data-pedit>✎ EDIT</button><button class="btn grey sm" data-pvoters>👥 VOTERS (${q.voters})</button><button class="btn sm" data-pann title="${q.open || q.soon ? 'End the poll now and post the result with your message' : 'Post the result with your message'}">${q.open || q.soon ? '🏁 END &amp; ANNOUNCE' : '📣 ANNOUNCE RESULT'}</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
+          <div class="row" style="margin-top:12px">${q.soon ? '<button class="btn green sm" data-open>OPEN VOTING NOW</button>' : ''}<button class="btn grey sm" data-pc="${q.closed ? 0 : 1}">${q.closed ? 'REOPEN' : 'CLOSE NOW'}</button><button class="btn sm" data-pedit>✎ EDIT</button><button class="btn grey sm" data-pvoters>👥 VOTERS (${q.voters})</button>${q.open ? '<button class="btn grey sm" data-prem title="DM the members who have not voted yet">🔔 REMIND</button>' : ''}<button class="btn sm" data-pann title="${q.open || q.soon ? 'End the poll now and post the result with your message' : 'Post the result with your message'}">${q.open || q.soon ? '🏁 END &amp; ANNOUNCE' : '📣 ANNOUNCE RESULT'}</button><button class="btn grey sm" data-pd>POST TO DISCORD</button><a class="btn grey sm" href="/community.html#poll-${q.id}" target="_blank" rel="noopener">VIEW</a><button class="btn red sm" data-px style="margin-left:auto">DELETE</button></div><div class="pdc"></div></div>`; }).join('') || '<p class="soft">No polls yet.</p>'}</div>`;
     const bindRows = () => p.querySelectorAll('.po-x').forEach(b => b.onclick = () => { if (p.querySelectorAll('.popt-ed').length > 2) b.closest('.popt-ed').remove(); else toast('A poll needs at least 2 options.', true); });
     bindRows();
     $('#paddopt').onclick = () => { if (p.querySelectorAll('.popt-ed').length >= 12) return toast('12 options at most.', true); $('#popts').insertAdjacentHTML('beforeend', optRow()); bindRows(); };
@@ -149,6 +149,7 @@
       card.querySelector('[data-pc]').onclick = e => api('/api/admin/polls/' + id, { method: 'PUT', body: { closed: e.target.dataset.pc === '1' } }).then(() => { toast('Saved. The Discord post updates in a few seconds.'); polls(p); }).catch(x => toast(x.message, true));
       const q = d.polls.find(x => x.id === id);
       card.querySelector('[data-pedit]').onclick = () => startEdit(q);
+      const rm = card.querySelector('[data-prem]'); if (rm) rm.onclick = () => { const box = card.querySelector('.pdc'); if (box.dataset.v === 'r') { box.innerHTML = ''; box.dataset.v = ''; return; } box.dataset.v = 'r'; remindBox(box, 'poll', id); };
       // END & ANNOUNCE: our message (placeholders filled in, live preview), where, and who to ping
       card.querySelector('[data-pann]').onclick = async () => {
         const box = card.querySelector('.pdc'); if (box.dataset.v === 'a') { box.innerHTML = ''; box.dataset.v = ''; return; }
@@ -643,5 +644,46 @@
     });
   }
 
-  window.MTCX = { seasonCard, botProfile, serverControl, promoCard, community, season, stats, notes, modSummary, whitelist, checkCell, bindCheck, templateBar, duplicate, saveTemplate };
+  /* ---- REMIND: DM the members who have not voted (poll) or not registered (event). Optional message with placeholders. */
+  async function remindBox(box, kind, id) {
+    let meta = null; try { meta = await api('/api/admin/discord/meta'); } catch (x) { return toast(x.message, true); }
+    const isPoll = kind === 'poll';
+    const PH = isPoll ? ['{name}', '{mention}', '{poll_question}', '{closes}', '{poll_link}'] : ['{name}', '{mention}', '{event}', '{starts}', '{slots_left}', '{event_link}'];
+    box.innerHTML = `<div style="margin-top:12px;border:2px solid #000;background:#140d07;padding:12px">
+      <b>🔔 ${isPoll ? 'Remind members who have not voted yet' : 'Remind members who have not registered yet'}</b>
+      <p class="soft small" style="margin:4px 0 10px">Each one gets a Discord DM with a ${isPoll ? '"Vote now"' : '"Register"'} button.${isPoll ? ' Only members allowed to vote (the poll\'s "who can vote" rule) are counted.' : ''}</p>
+      ${isPoll ? '' : `<label>Who should register</label><div class="row" style="gap:8px"><select class="rm-aud" style="max-width:260px"><option value="creators">Members with the Creator role</option><option value="members">Everyone in the MTC Discord</option><option value="role">Members with a role…</option></select>
+        <select class="rm-role" style="max-width:220px" hidden>${meta.roles.map(r => `<option value="${r.id}">@${esc(r.name)}</option>`).join('')}</select></div>`}
+      <label style="margin-top:8px">Message <span class="soft">(optional: empty = a ready-made reminder)</span></label>
+      <textarea class="rm-msg" rows="3" maxlength="1500" placeholder="${isPoll ? 'Hi {name}! We still need your vote on {poll_question}. Voting closes {closes}.' : 'Hi {name}! Registration for {event} is open ({slots_left} slots left). See you there!'}"></textarea>
+      <p class="soft small" style="margin:4px 0">${PH.map(t => `<code class="rm-ph" style="cursor:pointer">${t}</code>`).join(' ')}</p>
+      <label class="check"><input type="checkbox" class="rm-skip" checked> Skip members already reminded in the last 12 hours</label>
+      <div class="rm-prev soft small" style="margin-top:8px">Counting…</div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" type="button" data-rmgo disabled>🔔 SEND REMINDERS</button></div><div class="rm-job"></div></div>`;
+    const $q = s => box.querySelector(s), ta = $q('.rm-msg');
+    const body = () => ({ kind, id, message: ta.value, skipRecent: $q('.rm-skip').checked, ...(isPoll ? {} : { audience: $q('.rm-aud').value, roleId: $q('.rm-role').value }) });
+    let t = 0, count = 0;
+    const show = () => { clearTimeout(t); t = setTimeout(() => api('/api/admin/remind/preview', { method: 'POST', body: body() }).then(r => {
+      count = r.count; $q('[data-rmgo]').disabled = !r.count;
+      $q('.rm-prev').innerHTML = r.count ? `<b style="color:var(--ink)">${r.count}</b> member${r.count === 1 ? '' : 's'} will get it${r.skipped ? ` (${r.skipped} skipped: reminded recently)` : ''}: ${esc(r.sample.join(', '))}${r.count > r.sample.length ? '…' : ''}
+        <div style="white-space:pre-wrap;background:#0d0804;border:2px solid #000;padding:8px 10px;margin-top:6px;color:var(--ink)">${esc(r.text)}</div>`
+        : `Nobody to remind: ${r.skipped ? 'everyone left was reminded in the last 12 hours' : isPoll ? 'everyone allowed to vote has voted' : 'everyone has registered'}.`;
+    }).catch(x => { $q('.rm-prev').textContent = x.message; $q('[data-rmgo]').disabled = true; }), 300); };
+    ta.oninput = show; $q('.rm-skip').onchange = show;
+    if (!isPoll) { $q('.rm-aud').onchange = () => { $q('.rm-role').hidden = $q('.rm-aud').value !== 'role'; show(); }; $q('.rm-role').onchange = show; }
+    box.querySelectorAll('.rm-ph').forEach(c => c.onclick = () => { const s = ta.selectionStart ?? ta.value.length; ta.value = ta.value.slice(0, s) + c.textContent + ta.value.slice(ta.selectionEnd ?? s); ta.focus(); show(); });
+    show();
+    $q('[data-rmgo]').onclick = async () => {
+      if (!confirm(`Send a reminder DM to ${count} member${count === 1 ? '' : 's'}? It takes about ${Math.ceil(count * 1.1 / 60)} min.`)) return;
+      const btn = $q('[data-rmgo]'); btn.disabled = true;
+      let r; try { r = await api('/api/admin/remind', { method: 'POST', body: body() }); } catch (x) { btn.disabled = false; return toast(x.message, true); }
+      toast('Sending reminders…');
+      const jb = $q('.rm-job'), tick = async () => {
+        let j; try { j = (await api('/api/admin/messages/jobs/' + r.job.id)).job; } catch { jb.innerHTML = '<p class="msg ok small" style="margin-top:8px">Reminders sent.</p>'; return; }
+        jb.innerHTML = `<p class="small" style="margin-top:8px">${j.done ? '✅ Done:' : '⏳ Sending:'} ${j.sent} of ${j.total} sent${j.failed ? `, ${j.failed} could not be delivered (DMs closed)` : ''}.</p>`;
+        if (!j.done) setTimeout(tick, 2000); else show();
+      }; tick();
+    };
+  }
+  window.MTCX = { remindBox, seasonCard, botProfile, serverControl, promoCard, community, season, stats, notes, modSummary, whitelist, checkCell, bindCheck, templateBar, duplicate, saveTemplate };
 })();

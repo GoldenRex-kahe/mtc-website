@@ -971,5 +971,5 @@ module.exports = function install(x) {
   });
 
   const liveList = () => [...live.values()].map(l => ({ name: l.creator.name, title: l.title, url: 'https://www.youtube.com/watch?v=' + l.videoId, since: l.since }));
-  return { onPollButton, onPollVote, liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
+  return { onPollButton, onPollVote, pollMayVote: mayVote, pollStateOf: pollState, liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
 };

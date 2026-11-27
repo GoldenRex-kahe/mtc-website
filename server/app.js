@@ -1769,6 +1769,74 @@ on('POST', '/api/admin/messages/channel', async req => {
 // DMs go out one by one in the background (about one a second, so Discord does not block the bot)
 const dmJobs = new Map();
 const jobView = j => ({ id: j.id, total: j.total, sent: j.sent, failed: j.failed.length, done: j.done, failures: j.failed.slice(0, 50) });
+
+// ---- REMIND: a DM to members who have not voted in a poll, or not registered for an event. Our message (optional,
+// with placeholders) or a ready-made one, and a button to the poll / event. Sent one by one like other DM batches.
+const unixT = iso => Math.floor(new Date(iso).getTime() / 1000);
+async function remindTargets(b) {
+  const all = (await discord.allMembers(true)).members.filter(m => !(D().users[m.id] || {}).blocked);
+  const recent = new Set(), skipH = b.skipRecent === false ? 0 : 12;
+  if (b.kind === 'poll') {
+    const q = (D().polls || []).find(x => x.id === String(b.id)); if (!q) throw err(404, 'Poll not found.');
+    if (community.pollStateOf(q) !== 'open') throw err(400, 'Only an open poll can send reminders.');
+    for (const [uid, at] of Object.entries(q.remindedAt || {})) if (Date.now() - new Date(at) < skipH * 36e5) recent.add(uid);
+    const people = all.filter(m => !(q.votes || {})[m.id] && community.pollMayVote(q, m.id).ok);
+    return { kind: 'poll', item: q, people: people.filter(m => !recent.has(m.id)), skipped: people.filter(m => recent.has(m.id)).length };
+  }
+  const e = evById(String(b.id)); if (!e) throw err(404, 'Event not found.');
+  if (!['open', 'soon'].includes(e.status)) throw err(400, 'Reminders are for events that are taking registrations.');
+  for (const [uid, at] of Object.entries(e.remindedAt || {})) if (Date.now() - new Date(at) < skipH * 36e5) recent.add(uid);
+  const reg = new Set(D().registrations.filter(r => r.eventId === e.id && r.status !== 'withdrawn' && r.status !== 'rejected').map(r => r.userId));
+  // who should register: everyone in the Discord, or only members with the Creator role (or one picked role)
+  const aud = b.audience || (cfg.requireCreatorRole ? 'creators' : 'members');
+  const people = all.filter(m => !reg.has(m.id) && (aud === 'creators' ? m.creator : aud === 'role' ? (m.roles || []).includes(String(b.roleId)) : true));
+  return { kind: 'event', item: e, people: people.filter(m => !recent.has(m.id)), skipped: people.filter(m => recent.has(m.id)).length };
+}
+function remindMessage(t, text) {
+  const x = t.item, isPoll = t.kind === 'poll';
+  const link = isPoll ? `${cfg.publicUrl}/community.html#poll-${x.id}` : `${cfg.publicUrl}/event.html?slug=${encodeURIComponent(x.slug)}`;
+  const title = isPoll ? String(x.question || '').replace(/\*\*|__/g, '') : x.title;
+  const when = isPoll ? (x.endsAt ? `<t:${unixT(x.endsAt)}:R>` : '') : (x.start ? `<t:${unixT(x.start)}:F>` : (x.dateLabel || ''));
+  // placeholders: {name} {mention} {poll_question} {poll_link} {closes} / {event} {event_link} {starts} {slots_left}
+  const fill = s => String(s || '').replace(/\{poll_question\}/g, title).replace(/\{poll_link\}/g, link).replace(/\{closes\}/g, when)
+    .replace(/\{event\}/g, title).replace(/\{event_link\}/g, link).replace(/\{starts\}/g, when)
+    .replace(/\{slots_left\}/g, x.slots ? String(Math.max(0, x.slots - D().registrations.filter(r => r.eventId === x.id && ['pending', 'approved'].includes(r.status)).length)) : 'open');
+  const desc = text ? fill(text) : isPoll ? `Hi {name}, you have not voted yet in **${title}**.${when ? ` Voting closes ${when}.` : ''} It only takes a second!`
+    : `Hi {name}, registration is open for **${title}**${x.start ? `, starting ${when}` : ''}. Register on the website so you don't miss it!`;
+  const embed = { title: (isPoll ? '🗳️ Reminder: vote now' : '📝 Reminder: register now').slice(0, 256), description: desc.slice(0, 4000), url: link, color: '#F7931E', timestamp: '',
+    author: { name: 'MTC · MC Thamizh Creators', url: '', icon: '' }, thumbnail: '', footer: { text: isPoll ? title.slice(0, 200) : 'MC Thamizh Creators', icon: '' }, fields: [] };
+  return { m: { content: '', embed, image: '', images: [] }, button: { label: isPoll ? 'Vote now' : 'Register', url: link, emoji: isPoll ? '🗳️' : '📝' } };
+}
+on('POST', '/api/admin/remind/preview', async req => {
+  needAdmin(req); const b = await readBody(req), t = await remindTargets(b), r = remindMessage(t, str(b.message, 1500));
+  // Discord shows <t:...> as a local date; the admin preview shows it in India time
+  const tm = s => s.replace(/<t:(\d+):([RF])>/g, (m, n, k) => { const d = new Date(+n * 1000), txt = d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    if (k === 'F') return txt; const h = Math.round((d - Date.now()) / 36e5); return h >= 48 ? `in ${Math.round(h / 24)} days` : h >= 1 ? `in ${h} hours` : 'soon'; });
+  return { count: t.people.length, skipped: t.skipped, sample: t.people.slice(0, 12).map(m => m.name), text: tm(r.m.embed.description.replace(/\{name\}/g, (t.people[0] || {}).name || 'Name').replace(/\{mention\}/g, '@' + ((t.people[0] || {}).name || 'Name'))) };
+});
+on('POST', '/api/admin/remind', async req => {
+  const u = needAdmin(req), b = await readBody(req);
+  if ([...dmJobs.values()].some(j => !j.done)) throw err(409, 'A DM batch is still sending. Wait for it to finish.');
+  const t = await remindTargets(b); if (!t.people.length) throw err(400, t.skipped ? 'Everyone left was already reminded in the last 12 hours.' : 'Nobody to remind: everyone has already ' + (t.kind === 'poll' ? 'voted.' : 'registered.'));
+  if (t.people.length > 500) throw err(400, `That is ${t.people.length} people. Pick a role to send to 500 or fewer at a time.`);
+  const { m, button } = remindMessage(t, str(b.message, 1500));
+  const job = { id: store.id(), total: t.people.length, sent: 0, failed: [], done: false }; dmJobs.set(job.id, job);
+  const label = t.kind === 'poll' ? 'Poll reminder: ' + String(t.item.question).slice(0, 80) : 'Event reminder: ' + t.item.title;
+  const rec = { id: job.id, kind: 'dm', message: { ...m, content: label }, ping: { mention: false }, target: { users: [], roles: [], count: t.people.length }, by: u.name, at: store.now(), result: { ok: false, sending: true } };
+  logMessage(rec); store.save();
+  const stamp = t.item.remindedAt = t.item.remindedAt || {};
+  (async () => {
+    for (const p of t.people) {
+      try { const { payload, files } = payloadOf(m, { name: p.name, mentionId: p.id, ping: { mention: false } }); payload.components = linkRow([button]);
+        await discord.dmSend(p.id, payload, files); job.sent++; stamp[p.id] = store.now(); }
+      catch (e) { job.failed.push({ name: p.name, reason: e.code === 50007 ? 'DMs closed or not in the server' : e.message }); }
+      await new Promise(s => setTimeout(s, 1100));
+    }
+    job.done = true; rec.result = { ok: job.failed.length === 0, sent: job.sent, failed: job.failed.length, failures: job.failed.slice(0, 50) }; store.save();
+    setTimeout(() => dmJobs.delete(job.id), 3600e3).unref();
+  })();
+  return { ok: true, job: jobView(job), skipped: t.skipped };
+});
 on('POST', '/api/admin/messages/dm', async req => {
   const u = needAdmin(req); const b = await readBody(req, 40 * 1024 * 1024);   // room for several pictures
   if ([...dmJobs.values()].some(j => !j.done)) throw err(409, 'A DM batch is still sending. Wait for it to finish.');
@@ -2045,6 +2113,7 @@ function describe(key, p, b, out, c) {
     case 'DELETE /api/admin/announcements/:id': return { kind: 'delete', icon: '🗑️', title: `Deleted news: ${(c.news && c.news.title) || ''}` };
     case 'PUT /api/admin/alerts': return { kind: 'update', icon: '🔔', title: 'Changed alert and log settings', details: [['Staff channel', b.staffChannel ? `<#${b.staffChannel}>` : 'Off'], ['Log channel', b.logChannel ? `<#${b.logChannel}>` : 'Off']] };
     case 'POST /api/admin/messages/channel': return { kind: 'discord', icon: '📢', title: 'Posted a message to Discord', details: [['Channel', `<#${b.channelId}>`], ['Message', msgSum(b.message)], ['Ping', pingText(b.ping)], ['Shown on site', b.showOnSite ? 'Yes' : '']] };
+    case 'POST /api/admin/remind': return { kind: 'discord', icon: '🔔', title: `Sent ${b.kind === 'poll' ? 'poll' : 'event'} reminders to ${out.job ? out.job.total : '?'} member${out.job && out.job.total === 1 ? '' : 's'}`, details: [['Message', b.message ? String(b.message).slice(0, 120) : '(the ready-made reminder)']] };
     case 'POST /api/admin/messages/dm': return { kind: 'discord', icon: '✉️', title: `Started sending DMs to ${out.job ? out.job.total : '?'} people`, details: [['Message', msgSum(b.message)], ['People picked', (b.users || []).length ? String(b.users.length) : ''], ['Roles', (b.roles || []).map(r => `<@&${r}>`).join(' ')], ['Mention each person', b.ping && b.ping.mention ? 'Yes' : '']] };
     case 'POST /api/admin/alerts/:id/retry': return { kind: 'discord', icon: '🔁', title: 'Retried a DM alert', details: [['Result', out.ok ? 'Delivered' : out.error]] };
     case 'PUT /api/admin/staff-login': return { kind: 'security', icon: '🔐', title: b.newLink ? 'Made a new private staff login link (the old one stops working)' : `Staff password login set to: ${{ open: 'visible to everyone', hidden: 'hidden (private staff link only)', off: 'off (Discord login only)' }[b.mode] || b.mode}` };
