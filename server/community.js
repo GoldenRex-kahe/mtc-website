@@ -586,36 +586,126 @@ module.exports = function install(x) {
   });
 
   // ================================================================ event suggestions from members and creators
+  // Members post ideas on the website (Community > Event ideas) and vote 👍 / 👎. When an ideas channel is set
+  // (Admin > Community > Event ideas), each idea is also posted there: the bot adds 👍 and 👎, removes any other emoji,
+  // and Discord votes count on the website too (one vote per member, either way). Edits on the website update the post.
   const SUG_STATUS = { new: 'New', planned: 'Planned', done: 'Made into an event', declined: 'Not this time' };
-  const pubSug = (s, u) => ({ id: s.id, title: s.title, type: s.type, text: s.text, teamSize: s.teamSize, by: { name: s.name, avatar: s.avatar, skin: s.skin, userId: s.userId }, votes: (s.votes || []).length, voted: !!(u && (s.votes || []).includes(u.uid)), mine: !!(u && u.uid === s.userId), status: s.status, statusLabel: SUG_STATUS[s.status], reply: s.reply || '', createdAt: s.createdAt });
-  on('GET', '/api/suggestions', async req => { const u = session(req); return { suggestions: list('suggestions').filter(s => !s.hidden).map(s => pubSug(s, u)).sort((a, b) => (a.status === 'declined') - (b.status === 'declined') || b.votes - a.votes || b.createdAt.localeCompare(a.createdAt)), canPost: isMember(u) }; });
+  const UP = '👍', DOWN = '👎';
+  const pubSug = (s, u) => ({ id: s.id, title: s.title, type: s.type, text: s.text, teamSize: s.teamSize, by: { name: s.name, avatar: s.avatar, skin: s.skin, userId: s.userId },
+    votes: (s.votes || []).length, down: (s.down || []).length, score: (s.votes || []).length - (s.down || []).length,
+    voted: !!(u && (s.votes || []).includes(u.uid)), downed: !!(u && (s.down || []).includes(u.uid)), mine: !!(u && u.uid === s.userId),
+    status: s.status, statusLabel: SUG_STATUS[s.status] || s.status, reply: s.reply || '', createdAt: s.createdAt, editedAt: s.editedAt || '',
+    discord: s.dc ? `https://discord.com/channels/${cfg.guild}/${s.dc.channelId}/${s.dc.messageId}` : '' });
+  const SUG_TYPES = ['survival', 'minigame', 'build', 'pvp', 'other'];
+  const TYPE_LABEL = { survival: '🌲 Survival', minigame: '🎮 Minigame', build: '🏗️ Build', pvp: '⚔️ PvP', other: '⭐ Other' };
+  const SUG_COLOR = { new: 0xF7931E, planned: 0x3a78b8, done: 0x4c9a2a, declined: 0x5c5c5c };
+  const ideasCh = () => (S().ideasChannel || {}).id || '';
+
+  // ---- the Discord post for an idea
+  function ideaMessage(s) {
+    const up = (s.votes || []).length, dn = (s.down || []).length;
+    const fields = [{ name: 'Type', value: TYPE_LABEL[s.type] || TYPE_LABEL.other, inline: true }, { name: 'Players', value: (s.teamSize || 1) > 1 ? `Teams of ${s.teamSize}` : 'Solo', inline: true },
+      { name: 'Status', value: SUG_STATUS[s.status] || 'New', inline: true }];
+    if (s.reply) fields.push({ name: '💬 MTC reply', value: String(s.reply).slice(0, 1024) });
+    return { embeds: [{ author: { name: `${s.name || 'A member'} suggested an event`, ...(s.avatar ? { icon_url: s.avatar } : {}) }, title: `💡 ${s.title}`.slice(0, 256),
+      url: `${site()}/community.html#ideas`, description: String(s.text || '').slice(0, 4000), color: SUG_COLOR[s.status] || SUG_COLOR.new, fields,
+      footer: { text: `Score ${up - dn >= 0 ? '+' : ''}${up - dn}  ·  👍 ${up}  👎 ${dn}  ·  vote with 👍 or 👎 here or on the website${s.editedAt ? '  ·  edited' : ''}` } }],
+      components: [{ type: 1, components: [{ type: 2, style: 5, label: 'See all ideas', url: `${site()}/community.html#ideas`, emoji: { name: '💡' } }] }] };
+  }
+  async function postIdea(s) {
+    const ch = ideasCh(); if (!ch || s.hidden || s.dc) return;
+    const sent = await discord.send(ch, { ...ideaMessage(s), allowed_mentions: { parse: [] } });
+    s.dc = { channelId: ch, messageId: sent.id }; store.save();
+    await discord.react(ch, sent.id, UP).catch(() => {}); await discord.react(ch, sent.id, DOWN).catch(() => {});
+  }
+  const ideaTimers = new Map();
+  function refreshIdea(s) {   // edit the post, at most every 3 seconds while votes come in
+    if (!s.dc || ideaTimers.has(s.id)) return;
+    ideaTimers.set(s.id, setTimeout(() => { ideaTimers.delete(s.id); const live = list('suggestions').find(z => z.id === s.id); if (!live || !live.dc) return;
+      discord.edit(live.dc.channelId, live.dc.messageId, ideaMessage(live)).catch(e => { if (e.status === 404) { delete live.dc; store.save(); } else logErr('idea post', e); }); }, 3000));
+  }
+  const unpostIdea = s => { if (s.dc) { discord.deleteMessage(s.dc.channelId, s.dc.messageId).catch(() => {}); delete s.dc; } };
+  // one vote per member: 'up', 'down', or '' (none)
+  function setIdeaVote(s, uid, dir) {
+    s.votes = (s.votes || []).filter(x => x !== uid); s.down = (s.down || []).filter(x => x !== uid);
+    if (dir === 'up') s.votes.push(uid); else if (dir === 'down') s.down.push(uid);
+  }
+  // reactions on idea posts: only 👍 and 👎 (anything else is removed); picking one removes the other
+  const botId = () => (x.gatewayState && x.gatewayState().userId) || '';
+  function onIdeaReaction(ev, added) {
+    if (!ev || ev.guild_id !== cfg.guild || !ev.user_id || ev.user_id === botId()) return;
+    const s = list('suggestions').find(z => z.dc && z.dc.messageId === ev.message_id); if (!s) return;
+    const name = ev.emoji && ev.emoji.name, isUp = name === UP || /^👍/.test(name || ''), isDown = name === DOWN || /^👎/.test(name || '');
+    if (!isUp && !isDown) { if (added) discord.unreact(ev.channel_id, ev.message_id, ev.emoji, ev.user_id).catch(() => {}); return; }
+    if (added && userRec(ev.user_id).blocked) { discord.unreact(ev.channel_id, ev.message_id, ev.emoji, ev.user_id).catch(() => {}); return; }
+    const was = (s.votes || []).includes(ev.user_id) ? 'up' : (s.down || []).includes(ev.user_id) ? 'down' : '';
+    if (added) {
+      const dir = isUp ? 'up' : 'down';
+      if (was && was !== dir) discord.unreact(ev.channel_id, ev.message_id, was === 'up' ? UP : DOWN, ev.user_id).catch(() => {});   // only one of the two
+      setIdeaVote(s, ev.user_id, dir);
+    } else if ((isUp && was === 'up') || (isDown && was === 'down')) setIdeaVote(s, ev.user_id, '');
+    else return;
+    store.save(); refreshIdea(s);
+  }
+
+  on('GET', '/api/suggestions', async req => { const u = session(req); return { suggestions: list('suggestions').filter(s => !s.hidden).map(s => pubSug(s, u)).sort((a, b) => (a.status === 'declined') - (b.status === 'declined') || b.score - a.score || b.createdAt.localeCompare(a.createdAt)), canPost: isMember(u), types: TYPE_LABEL }; });
+  const cleanIdea = b => { const title = str(b.title, 80), text = str(b.text, 1500); if (!title || text.length < 10) throw err(400, 'Give your idea a title and a few words about how it works.');
+    return { title, text, type: SUG_TYPES.includes(b.type) ? b.type : 'other', teamSize: int(b.teamSize, 1, 20, 1) }; };
   on('POST', '/api/suggestions', async req => {
-    const u = needMember(req); const b = await readBody(req);
-    const title = str(b.title, 80), text = str(b.text, 1500); if (!title || text.length < 10) throw err(400, 'Give your idea a title and a few words about how it works.');
+    const u = needMember(req); const b = await readBody(req), c = cleanIdea(b);
     if (list('suggestions').filter(s => s.userId === u.uid && s.status === 'new' && !s.hidden).length >= 3) throw err(429, 'You already have 3 ideas waiting. Wait for an admin to look at them first.');
-    const s = { id: id(), ...person(u), title, text, type: ['survival', 'minigame', 'build', 'pvp', 'other'].includes(b.type) ? b.type : 'other', teamSize: int(b.teamSize, 1, 20, 1), votes: [u.uid], status: 'new', createdAt: now() };
+    const s = { id: id(), ...person(u), ...c, votes: [u.uid], down: [], status: 'new', createdAt: now() };
     list('suggestions').push(s); store.save();
-    alertStaff('community', { title: `💡 New event idea: ${title}`, text: `**${s.name}** suggested:\n${text.slice(0, 600)}`, tab: 'community' });
+    alertStaff('community', { title: `💡 New event idea: ${c.title}`, text: `**${s.name}** suggested:\n${c.text.slice(0, 600)}`, tab: 'community' });
+    postIdea(s).catch(e => logErr('idea post', e));
+    return { ok: true, suggestion: pubSug(s, u) };
+  });
+  // the author (or an admin) edits the idea; the Discord post follows
+  on('PUT', '/api/suggestions/:id', async (req, res, p) => {
+    const u = needUser(req); const s = list('suggestions').find(z => z.id === p.id); if (!s) throw err(404, 'Not found.');
+    if (s.userId !== u.uid && !u.adm) throw err(403, 'You can only edit your own ideas.');
+    Object.assign(s, cleanIdea(await readBody(req)), { editedAt: now() }); store.save(); refreshIdea(s);
     return { ok: true, suggestion: pubSug(s, u) };
   });
   on('POST', '/api/suggestions/:id/vote', async (req, res, p) => {
     const u = needMember(req); const s = list('suggestions').find(z => z.id === p.id && !z.hidden); if (!s) throw err(404, 'Not found.');
-    s.votes = s.votes || []; const i = s.votes.indexOf(u.uid); if (i >= 0) s.votes.splice(i, 1); else s.votes.push(u.uid); store.save(); return { suggestion: pubSug(s, u) };
+    const b = await readBody(req).catch(() => ({})), dir = b.dir === 'down' ? 'down' : 'up';
+    const was = (s.votes || []).includes(u.uid) ? 'up' : (s.down || []).includes(u.uid) ? 'down' : '';
+    setIdeaVote(s, u.uid, was === dir ? '' : dir);   // tapping your vote again takes it back
+    if (s.dc && was && was !== dir) discord.unreact(s.dc.channelId, s.dc.messageId, was === 'up' ? UP : DOWN, u.uid).catch(() => {});   // their old reaction on Discord no longer counts
+    store.save(); refreshIdea(s); return { suggestion: pubSug(s, u) };
   });
   on('DELETE', '/api/suggestions/:id', async (req, res, p) => {
     const u = needUser(req); const s = list('suggestions').find(z => z.id === p.id); if (!s) throw err(404, 'Not found.');
-    if (s.userId !== u.uid && !u.adm) throw err(403, 'You can only delete your own ideas.'); D().suggestions = list('suggestions').filter(z => z !== s); store.save(); return { ok: true };
+    if (s.userId !== u.uid && !u.adm) throw err(403, 'You can only delete your own ideas.'); unpostIdea(s); D().suggestions = list('suggestions').filter(z => z !== s); store.save(); return { ok: true };
   });
-  on('GET', '/api/admin/suggestions', async req => { const u = needAdmin(req); return { suggestions: list('suggestions').slice().reverse().map(s => ({ ...pubSug(s, u), hidden: !!s.hidden })), statuses: SUG_STATUS }; });
+  on('GET', '/api/admin/suggestions', async req => { const u = needAdmin(req); return { suggestions: list('suggestions').slice().reverse().map(s => ({ ...pubSug(s, u), hidden: !!s.hidden })), statuses: SUG_STATUS, channel: S().ideasChannel || null }; });
   on('PUT', '/api/admin/suggestions/:id', async (req, res, p) => {
     needAdmin(req); const s = list('suggestions').find(z => z.id === p.id); if (!s) throw err(404, 'Not found.');
     const b = await readBody(req), before = s.status;
-    if (SUG_STATUS[b.status]) s.status = b.status; if (b.reply !== undefined) s.reply = str(b.reply, 500); if (b.hidden !== undefined) s.hidden = !!b.hidden;
-    store.save();
+    if (SUG_STATUS[b.status]) s.status = b.status; if (b.reply !== undefined) s.reply = str(b.reply, 500);
+    if (b.hidden !== undefined) { s.hidden = !!b.hidden; if (s.hidden) unpostIdea(s); else postIdea(s).catch(e => logErr('idea post', e)); }
+    store.save(); refreshIdea(s);
     if (s.status !== before) alertUser(s.userId, 'community', { title: `💡 Your idea "${s.title}": ${SUG_STATUS[s.status]}`, color: s.status === 'declined' ? 'no' : 'ok',
       text: (s.status === 'planned' ? 'MTC is planning an event from your idea!' : s.status === 'done' ? 'Your idea became an MTC event. Thank you!' : s.status === 'declined' ? 'MTC will not run this one for now.' : 'Your idea was updated.') + (s.reply ? `\n\n**Admin reply:** ${s.reply}` : ''),
       buttons: [{ label: 'See ideas', url: site() + '/community.html#ideas', emoji: '💡' }] });
     return { ok: true };
+  });
+  // the ideas channel: picking one posts every idea that is not there yet (and new ones from then on); none = stop
+  on('PUT', '/api/admin/ideas-channel', async req => {
+    needAdmin(req); const b = await readBody(req);
+    if (!b.channelId) { S().ideasChannel = null; store.save(); return { ok: true, posted: 0 }; }
+    const chs = await discord.channels(), ch = chs.find(c => c.id === String(b.channelId)); if (!ch) throw err(400, 'Pick a channel.');
+    const moved = ideasCh() && ideasCh() !== ch.id;
+    S().ideasChannel = { id: ch.id, name: ch.name }; store.save();
+    let posted = 0;
+    for (const s of list('suggestions').filter(z => !z.hidden).sort((a, c) => String(a.createdAt).localeCompare(String(c.createdAt)))) {
+      if (moved && s.dc) delete s.dc;   // a new channel: post them there
+      if (s.dc) continue;
+      try { await postIdea(s); posted++; } catch (e) { logErr('idea post', e); }
+      await new Promise(r => setTimeout(r, 600));
+    }
+    return { ok: true, posted };
   });
 
   // ================================================================ team finder (per event, for team events that are open)
@@ -903,6 +993,8 @@ module.exports = function install(x) {
       'POST /api/admin/polls/:id/announce': { kind: 'discord', icon: '🏁', title: 'Ended a poll and announced the result' },
       'POST /api/polls/:id/vote': { kind: 'member', icon: '🗳️', title: 'Voted in a poll' },
       'POST /api/suggestions': { kind: 'member', icon: '💡', title: `Suggested an event: ${b.title || ''}` },
+      'PUT /api/suggestions/:id': { kind: 'member', icon: '✏️', title: `Edited an event idea: ${b.title || ''}` },
+      'PUT /api/admin/ideas-channel': { kind: 'discord', icon: '💡', title: b.channelId ? `Set the event ideas channel (<#${b.channelId}>) and posted ${out.posted || 0} idea(s)` : 'Turned off posting event ideas to Discord' },
       'POST /api/suggestions/:id/vote': { kind: 'member', icon: '👍', title: 'Voted for an event idea' },
       'DELETE /api/suggestions/:id': { kind: 'delete', icon: '🗑️', title: 'Deleted an event idea' },
       'PUT /api/admin/suggestions/:id': { kind: 'update', icon: '💡', title: `Updated an event idea${b.status ? ': ' + (SUG_STATUS[b.status] || b.status) : ''}` },
@@ -971,5 +1063,5 @@ module.exports = function install(x) {
   });
 
   const liveList = () => [...live.values()].map(l => ({ name: l.creator.name, title: l.title, url: 'https://www.youtube.com/watch?v=' + l.videoId, since: l.since }));
-  return { onPollButton, onPollVote, pollMayVote: mayVote, pollStateOf: pollState, liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
+  return { onIdeaReaction, onPollButton, onPollVote, pollMayVote: mayVote, pollStateOf: pollState, liveOf, liveList, bannerOf, bannerCached, previewTags, describeExtra, badgesOf, NO_LOG: ['POST /api/polls/:id/vote', 'POST /api/suggestions/:id/vote'] };
 };

@@ -31,6 +31,10 @@
 .upv small{font-size:10px;color:var(--soft);letter-spacing:1px}
 .upv[aria-pressed=true]{border-color:var(--accent);background:#3a250f}
 .upv:disabled{cursor:default;opacity:.7}
+.vote2{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
+.vote2 .upv{min-height:48px;width:58px;font-size:15px}.vote2 .upv span{font-size:16px;line-height:1}
+.vote2 .upv.dn[aria-pressed=true]{border-color:#c0392b;background:#3a1410}
+.vote2 .score{font:12px var(--display);color:var(--accent)}.vote2 .score.neg{color:#e57373}
 .idea h3{margin:0 0 4px;font-size:13px;line-height:1.5}
 .reply{margin-top:8px;padding:8px 12px;border-left:4px solid var(--accent);background:#1a110a;font-size:14px}
 .lfg{display:flex;gap:12px;align-items:center}
@@ -111,19 +115,34 @@ async function ideas() {
         <div class="full"><label for="s_x">How does it work?</label><textarea id="s_x" maxlength="1500" required placeholder="The idea, the rules, how a winner is picked..."></textarea></div></div>
         <div style="margin-top:12px"><button class="btn" type="submit">SEND IDEA</button></div></form></details>` : ''}
     ${d.suggestions.length ? d.suggestions.map(s => `<article class="card idea" data-s="${s.id}">
-      <button type="button" class="upv" data-up aria-pressed="${s.voted}" aria-label="${s.voted ? 'Remove your vote' : 'Vote for this idea'}"${d.canPost ? '' : ' disabled'}><span>▲</span>${s.votes}<small>VOTES</small></button>
+      <div class="vote2"><button type="button" class="upv" data-up aria-pressed="${s.voted}" aria-label="${s.voted ? 'Remove your 👍' : 'Vote 👍 for this idea'}" title="👍 ${s.votes}"${d.canPost ? '' : ' disabled'}><span>👍</span>${s.votes}</button>
+        <b class="score${s.score < 0 ? ' neg' : ''}" title="Score: 👍 minus 👎">${s.score > 0 ? '+' : ''}${s.score}</b>
+        <button type="button" class="upv dn" data-dn aria-pressed="${s.downed}" aria-label="${s.downed ? 'Remove your 👎' : 'Vote 👎 for this idea'}" title="👎 ${s.down}"${d.canPost ? '' : ' disabled'}><span>👎</span>${s.down}</button></div>
       <div class="grow" style="min-width:0"><h3>${esc(s.title)}</h3>
-        <p class="soft small" style="margin:0 0 6px"><span class="badge ${ST[s.status]}">${esc(s.statusLabel).toUpperCase()}</span> ${esc(TYPES[s.type] || s.type)}${s.teamSize > 1 ? ' · teams of ' + s.teamSize : ''} · by <span class="mtc-user">${esc(s.by.name)}</span> · ${esc(MTC.day(s.createdAt))}</p>
-        <div class="md">${MTCmd.md(s.text)}</div>
+        <p class="soft small" style="margin:0 0 6px"><span class="badge ${ST[s.status]}">${esc(s.statusLabel).toUpperCase()}</span> ${esc(TYPES[s.type] || s.type)}${s.teamSize > 1 ? ' · teams of ' + s.teamSize : ''} · by <span class="mtc-user">${esc(s.by.name)}</span> · ${esc(MTC.day(s.createdAt))}${s.editedAt ? ' · edited' : ''}${s.discord ? ` · <a href="${esc(s.discord)}" target="_blank" rel="noopener">vote on Discord</a>` : ''}</p>
+        <div class="idea-view"><div class="md">${MTCmd.md(s.text)}</div>
         ${s.reply ? `<div class="reply"><b>MTC:</b> ${esc(s.reply)}</div>` : ''}
-        ${s.mine ? '<button type="button" class="btn ghost sm" data-del style="margin-top:8px">DELETE</button>' : ''}</div></article>`).join('')
+        ${s.mine ? '<div class="row" style="gap:6px;margin-top:8px"><button type="button" class="btn grey sm" data-edit>✎ EDIT</button><button type="button" class="btn ghost sm" data-del>DELETE</button></div>' : ''}</div>
+        ${s.mine ? `<form class="idea-edit" hidden style="margin-top:8px"><div class="fields"><div class="full"><label>Title</label><input type="text" class="e_t" maxlength="80" required value="${esc(s.title)}"></div>
+          <div><label>Game type</label><select class="e_ty">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}"${k === s.type ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+          <div><label>Team size</label><input type="number" class="e_ts" min="1" max="20" value="${s.teamSize || 1}"></div>
+          <div class="full"><label>How does it work?</label><textarea class="e_x" maxlength="1500" required>${esc(s.text)}</textarea></div></div>
+          <div class="row" style="gap:6px;margin-top:10px"><button class="btn sm" type="submit">SAVE</button><button class="btn ghost sm" type="button" data-cancel>CANCEL</button></div>
+          ${s.discord ? '<p class="soft small" style="margin:6px 0 0">The Discord post updates too.</p>' : ''}</form>` : ''}</div></article>`).join('')
       : '<div class="card"><p class="soft">No ideas yet. Be the first!</p></div>'}`;
   if ($('#sf')) $('#sf').onsubmit = async e => { e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
     try { await api('/api/suggestions', {method: 'POST', body: {title: $('#s_t').value, type: $('#s_ty').value, teamSize: $('#s_ts').value, text: $('#s_x').value}}); toast('Thanks! Your idea is up. Admins have been told.'); ideas(); }
     catch (x) { toast(x.message, true); b.disabled = false; } };
   box.querySelectorAll('[data-s]').forEach(card => {
     const id = card.dataset.s;
-    card.querySelector('[data-up]').onclick = () => api('/api/suggestions/' + id + '/vote', {method: 'POST'}).then(ideas).catch(x => toast(x.message, true));
+    card.querySelector('[data-up]').onclick = () => api('/api/suggestions/' + id + '/vote', {method: 'POST', body: {dir: 'up'}}).then(ideas).catch(x => toast(x.message, true));
+    card.querySelector('[data-dn]').onclick = () => api('/api/suggestions/' + id + '/vote', {method: 'POST', body: {dir: 'down'}}).then(ideas).catch(x => toast(x.message, true));
+    const ed = card.querySelector('[data-edit]'), form = card.querySelector('.idea-edit'), view = card.querySelector('.idea-view');
+    if (ed) { ed.onclick = () => { view.hidden = true; form.hidden = false; form.querySelector('.e_t').focus(); };
+      form.querySelector('[data-cancel]').onclick = () => { form.hidden = true; view.hidden = false; };
+      form.onsubmit = async e => { e.preventDefault(); const b = form.querySelector('button[type=submit]'); b.disabled = true;
+        try { await api('/api/suggestions/' + id, {method: 'PUT', body: {title: form.querySelector('.e_t').value, type: form.querySelector('.e_ty').value, teamSize: form.querySelector('.e_ts').value, text: form.querySelector('.e_x').value}}); toast('Idea saved.'); ideas(); }
+        catch (x) { toast(x.message, true); b.disabled = false; } }; }
     const del = card.querySelector('[data-del]'); if (del) del.onclick = () => { if (confirm('Delete your idea?')) api('/api/suggestions/' + id, {method: 'DELETE'}).then(ideas).catch(x => toast(x.message, true)); };
   });
 }

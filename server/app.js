@@ -2155,7 +2155,7 @@ on('PUT', '/api/admin/maintenance', async req => {
 
 // ---------------------------------------------------------------- community features (server/community.js)
 const community = require('./community')({ on, routes, D, store, cfg, err, str, int, isoOrNull, readBody, session, needUser, needAdmin, discord, alertUser, alertStaff, linkRow,
-  evById, evBy, mcOf, edOf, yt, sortEvents, publicCreators, MC_WORDS, isMcText, isMcStream, logErr, esc, playerCard, saveImage, serverStatusOf, sessionOf });
+  evById, evBy, mcOf, edOf, yt, sortEvents, publicCreators, MC_WORDS, isMcText, isMcStream, logErr, esc, playerCard, saveImage, serverStatusOf, sessionOf, gatewayState: () => gateway.state });
 community.NO_LOG.forEach(k => NO_LOG.add(k));
 // the Minecraft plugin that opens and closes the event server (server/plugin.js)
 const serverPlugin = require('./plugin')({ on, D, store, cfg, err, readBody, needAdmin, evById, evBy, sessionOf, teamsOf, drawTeams });
@@ -2455,6 +2455,9 @@ if (discord.ready() && !process.env.MTC_NO_BOT) {
     // the member lists are cached for 10 minutes: refresh them as soon as someone joins, leaves or their roles change
     GUILD_MEMBER_UPDATE: m => { if (m.guild_id === cfg.guild) discord.forget(); },
     // votes on native Discord polls posted by the site count as website votes
+    // 👍 / 👎 on event idea posts (any other emoji there is removed)
+    MESSAGE_REACTION_ADD: r => community.onIdeaReaction(r, true),
+    MESSAGE_REACTION_REMOVE: r => community.onIdeaReaction(r, false),
     MESSAGE_POLL_VOTE_ADD: v => community.onPollVote(v, true),
     MESSAGE_POLL_VOTE_REMOVE: v => community.onPollVote(v, false),
     GUILD_MEMBER_REMOVE: m => { if (m.guild_id === cfg.guild) discord.forget(); },

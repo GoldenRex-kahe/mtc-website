@@ -219,11 +219,23 @@
     const st = d.statuses || {};
     p.innerHTML = d.suggestions.length ? `<p class="soft small">Ideas members and creators posted on the Community page. Changing the status DMs the person who suggested it.</p><div class="list">${d.suggestions.map(s => `<div class="item" data-sug="${s.id}" style="align-items:flex-start${s.hidden ? ';opacity:.55' : ''}">${face(s.by.avatar, s.by.name)}
       <div class="grow"><b>${esc(s.title)}</b> <span class="badge ${s.status === 'done' ? 'approved' : s.status === 'declined' ? 'rejected' : s.status === 'planned' ? 'live' : 'pending'}">${esc(st[s.status] || s.status)}</span>${s.hidden ? ' <span class="badge withdrawn">HIDDEN</span>' : ''}<br>
-        <span class="soft small">by ${esc(s.by.name)} · ${esc(day(s.createdAt))} · 👍 ${s.votes} · ${esc(s.type)}${s.teamSize > 1 ? ' · teams of ' + s.teamSize : ''}</span>
+        <span class="soft small">by ${esc(s.by.name)} · ${esc(day(s.createdAt))} · 👍 ${s.votes} 👎 ${s.down} (score ${s.score > 0 ? '+' : ''}${s.score}) · ${esc(s.type)}${s.teamSize > 1 ? ' · teams of ' + s.teamSize : ''}${s.editedAt ? ' · edited' : ''}${s.discord ? ` · <a href="${esc(s.discord)}" target="_blank" rel="noopener">on Discord</a>` : ''}</span>
         <div class="md small" style="margin:6px 0">${MTCmd.md(s.text)}</div>
         <div class="row" style="gap:6px"><select class="sst" style="max-width:220px">${Object.entries(st).map(([k, l]) => `<option value="${k}"${k === s.status ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
           <input type="text" class="srp" maxlength="500" value="${esc(s.reply)}" placeholder="Reply shown under the idea (optional)" style="flex:1;min-width:180px">
           <button class="btn sm" data-ss type="button">SAVE</button><button class="btn grey sm" data-sh type="button">${s.hidden ? 'SHOW' : 'HIDE'}</button></div></div></div>`).join('')}</div>` : '<p class="soft">No ideas yet. Members post them on the Community page.</p>';
+    // the Discord channel for ideas: picking one posts every idea there (with 👍 / 👎), and new ideas from then on
+    p.insertAdjacentHTML('afterbegin', `<div class="card accent" style="margin-bottom:14px"><b>💡 IDEAS IN DISCORD</b>
+      <p class="soft small" style="margin:4px 0 8px">Each idea is posted in this channel with 👍 and 👎. The bot removes any other emoji, Discord votes count on the website (one vote per member), and edits update the post.</p>
+      <div class="row" style="gap:8px"><select id="ideaCh" style="max-width:300px"><option value="">Off (website only)</option></select><button class="btn sm" type="button" id="ideaChGo">SAVE</button>
+      <span class="soft small">${d.channel ? `Now: #${esc(d.channel.name)}` : 'Not posting to Discord yet'}</span></div></div>`);
+    api('/api/admin/discord/meta').then(m => { const sel = p.querySelector('#ideaCh');
+      sel.insertAdjacentHTML('beforeend', m.channels.map(c => `<option value="${c.id}"${d.channel && d.channel.id === c.id ? ' selected' : ''}>${c.news ? '📢' : '#'} ${esc(c.name)}</option>`).join('')); }).catch(() => {});
+    p.querySelector('#ideaChGo').onclick = () => { const v = p.querySelector('#ideaCh').value;
+      if (v && !confirm('Post every idea that is not in Discord yet to this channel now? New ideas are posted there from now on.')) return;
+      const b = p.querySelector('#ideaChGo'); b.disabled = true; b.textContent = 'POSTING…';
+      api('/api/admin/ideas-channel', { method: 'PUT', body: { channelId: v } }).then(r => { toast(v ? `Saved. ${r.posted} idea${r.posted === 1 ? '' : 's'} posted to Discord.` : 'Ideas are no longer posted to Discord.'); community(p.parentNode); })
+        .catch(x => { toast(x.message, true); b.disabled = false; b.textContent = 'SAVE'; }); };
     p.querySelectorAll('[data-sug]').forEach(row => {
       const id = row.dataset.sug, s = d.suggestions.find(x => x.id === id);
       row.querySelector('[data-ss]').onclick = () => api('/api/admin/suggestions/' + id, { method: 'PUT', body: { status: row.querySelector('.sst').value, reply: row.querySelector('.srp').value } }).then(() => { toast('Saved.'); community(p.parentNode); }).catch(x => toast(x.message, true));

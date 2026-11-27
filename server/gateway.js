@@ -5,9 +5,10 @@ const cfg = require('./env');
 const API = 'https://discord.com/api/v10';
 const INTENT_GUILDS = 1, INTENT_MEMBERS = 2; // members is "privileged": it must be switched on in the Developer Portal
 const INTENT_POLLS = 1 << 24;                // votes on native Discord polls (MESSAGE_POLL_VOTE_ADD / _REMOVE); not privileged
+const INTENT_REACTIONS = 1 << 10;            // reactions on messages (👍 / 👎 votes on event ideas); not privileged
 const INTENT_PRESENCES = 1 << 8;             // who is online (to go idle when every admin is offline); "privileged": Presence Intent in the Developer Portal
 let ws = null, beat = null, acked = true, seq = null, session = null, resumeUrl = null, stopped = false;
-let intents = INTENT_GUILDS | INTENT_MEMBERS | INTENT_POLLS | INTENT_PRESENCES, presence = { name: 'MC Thamizh Creators', type: 0 }, status = 'online', handlers = {};
+let intents = INTENT_GUILDS | INTENT_MEMBERS | INTENT_POLLS | INTENT_PRESENCES | INTENT_REACTIONS, presence = { name: 'MC Thamizh Creators', type: 0 }, status = 'online', handlers = {};
 const state = { online: false, since: null, user: null, userId: null, lastError: '', reconnects: 0, membersIntent: true, presencesIntent: true };
 
 function send(op, d) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ op, d })); }
