@@ -34,7 +34,12 @@
 .vote2{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
 .vote2 .upv{min-height:48px;width:58px;font-size:15px}.vote2 .upv span{font-size:16px;line-height:1}
 .vote2 .upv.dn[aria-pressed=true]{border-color:#c0392b;background:#3a1410}
-.vote2 .score{font:12px var(--display);color:var(--accent)}.vote2 .score.neg{color:#e57373}
+.vote2 .score{font:12px var(--display);color:var(--accent);text-align:center;line-height:1.3}.vote2 .score.neg{color:#e57373}
+.vote2 .score small{display:block;font:600 9px Archivo,sans-serif;color:var(--soft);letter-spacing:.06em;text-transform:uppercase}
+.voters{margin-top:8px;background:#0d0804;border:2px solid #000;padding:6px 10px}.voters summary{cursor:pointer;font-weight:700;font-size:14px}
+.voters .vl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}.voters .vl>b{min-width:44px}
+.voters .vp{display:inline-flex;align-items:center;gap:5px;background:#1a110a;border:2px solid #000;padding:2px 8px 2px 2px;font-size:13px}
+.voters .vp img{width:20px;height:20px;border-radius:2px}.voters .vp:not(:has(img)){padding-left:8px}
 .idea h3{margin:0 0 4px;font-size:13px;line-height:1.5}
 .reply{margin-top:8px;padding:8px 12px;border-left:4px solid var(--accent);background:#1a110a;font-size:14px}
 .lfg{display:flex;gap:12px;align-items:center}
@@ -116,14 +121,16 @@ async function ideas() {
         <div style="margin-top:12px"><button class="btn" type="submit">SEND IDEA</button></div></form></details>` : ''}
     ${d.suggestions.length ? d.suggestions.map(s => `<article class="card idea" data-s="${s.id}">
       <div class="vote2"><button type="button" class="upv" data-up aria-pressed="${s.voted}" aria-label="${s.voted ? 'Remove your 👍' : 'Vote 👍 for this idea'}" title="👍 ${s.votes}"${d.canPost ? '' : ' disabled'}><span>👍</span>${s.votes}</button>
-        <b class="score${s.score < 0 ? ' neg' : ''}" title="Score: 👍 minus 👎">${s.score > 0 ? '+' : ''}${s.score}</b>
+        <b class="score${s.score < 0 ? ' neg' : ''}" title="Score = 👍 minus 👎 (${s.votes} − ${s.down})">${s.score > 0 ? '+' : ''}${s.score}<small>score</small></b>
         <button type="button" class="upv dn" data-dn aria-pressed="${s.downed}" aria-label="${s.downed ? 'Remove your 👎' : 'Vote 👎 for this idea'}" title="👎 ${s.down}"${d.canPost ? '' : ' disabled'}><span>👎</span>${s.down}</button></div>
       <div class="grow" style="min-width:0"><h3>${esc(s.title)}</h3>
         <p class="soft small" style="margin:0 0 6px"><span class="badge ${ST[s.status]}">${esc(s.statusLabel).toUpperCase()}</span> ${esc(TYPES[s.type] || s.type)}${s.teamSize > 1 ? ' · teams of ' + s.teamSize : ''} · by <span class="mtc-user">${esc(s.by.name)}</span> · ${esc(MTC.day(s.createdAt))}${s.editedAt ? ' · edited' : ''}${s.discord ? ` · <a href="${esc(s.discord)}" target="_blank" rel="noopener">vote on Discord</a>` : ''}</p>
         <div class="idea-view"><div class="md">${MTCmd.md(s.text)}</div>
         ${s.reply ? `<div class="reply"><b>MTC:</b> ${esc(s.reply)}</div>` : ''}
-        ${s.mine ? '<div class="row" style="gap:6px;margin-top:8px"><button type="button" class="btn grey sm" data-edit>✎ EDIT</button><button type="button" class="btn ghost sm" data-del>DELETE</button></div>' : ''}</div>
-        ${s.mine ? `<form class="idea-edit" hidden style="margin-top:8px"><div class="fields"><div class="full"><label>Title</label><input type="text" class="e_t" maxlength="80" required value="${esc(s.title)}"></div>
+        ${s.voters ? `<details class="voters"><summary>👥 Who voted (${s.voters.up.length + s.voters.down.length}) <span class="soft small">only you${s.mine ? '' : ' (admin)'} and admins see this</span></summary>
+          ${[['👍', s.voters.up], ['👎', s.voters.down]].map(([ic, l]) => `<div class="vl"><b>${ic} ${l.length}</b>${l.length ? l.map(v => `<span class="vp">${v.avatar ? `<img src="${esc(v.avatar)}" alt="">` : ''}${esc(v.name)}</span>`).join('') : '<span class="soft small">nobody</span>'}</div>`).join('')}</details>` : ''}
+        ${s.canEdit ? '<div class="row" style="gap:6px;margin-top:8px"><button type="button" class="btn grey sm" data-edit>✎ EDIT</button><button type="button" class="btn ghost sm" data-del>DELETE</button></div>' : ''}</div>
+        ${s.canEdit ? `<form class="idea-edit" hidden style="margin-top:8px"><div class="fields"><div class="full"><label>Title</label><input type="text" class="e_t" maxlength="80" required value="${esc(s.title)}"></div>
           <div><label>Game type</label><select class="e_ty">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}"${k === s.type ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
           <div><label>Team size</label><input type="number" class="e_ts" min="1" max="20" value="${s.teamSize || 1}"></div>
           <div class="full"><label>How does it work?</label><textarea class="e_x" maxlength="1500" required>${esc(s.text)}</textarea></div></div>

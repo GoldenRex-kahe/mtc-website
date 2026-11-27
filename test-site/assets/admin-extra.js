@@ -221,9 +221,15 @@
       <div class="grow"><b>${esc(s.title)}</b> <span class="badge ${s.status === 'done' ? 'approved' : s.status === 'declined' ? 'rejected' : s.status === 'planned' ? 'live' : 'pending'}">${esc(st[s.status] || s.status)}</span>${s.hidden ? ' <span class="badge withdrawn">HIDDEN</span>' : ''}<br>
         <span class="soft small">by ${esc(s.by.name)} · ${esc(day(s.createdAt))} · 👍 ${s.votes} 👎 ${s.down} (score ${s.score > 0 ? '+' : ''}${s.score}) · ${esc(s.type)}${s.teamSize > 1 ? ' · teams of ' + s.teamSize : ''}${s.editedAt ? ' · edited' : ''}${s.discord ? ` · <a href="${esc(s.discord)}" target="_blank" rel="noopener">on Discord</a>` : ''}</span>
         <div class="md small" style="margin:6px 0">${MTCmd.md(s.text)}</div>
+        ${s.voters && (s.voters.up.length || s.voters.down.length) ? `<p class="small" style="margin:0 0 6px">👍 ${esc(s.voters.up.map(v => v.name).join(', ') || 'nobody')}<br>👎 ${esc(s.voters.down.map(v => v.name).join(', ') || 'nobody')}</p>` : ''}
         <div class="row" style="gap:6px"><select class="sst" style="max-width:220px">${Object.entries(st).map(([k, l]) => `<option value="${k}"${k === s.status ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
           <input type="text" class="srp" maxlength="500" value="${esc(s.reply)}" placeholder="Reply shown under the idea (optional)" style="flex:1;min-width:180px">
-          <button class="btn sm" data-ss type="button">SAVE</button><button class="btn grey sm" data-sh type="button">${s.hidden ? 'SHOW' : 'HIDE'}</button></div></div></div>`).join('')}</div>` : '<p class="soft">No ideas yet. Members post them on the Community page.</p>';
+          <button class="btn sm" data-ss type="button">SAVE</button><button class="btn grey sm" data-sed type="button">✎ EDIT IDEA</button><button class="btn grey sm" data-sh type="button">${s.hidden ? 'SHOW' : 'HIDE'}</button></div>
+        <form class="sug-edit" hidden style="margin-top:10px;border:2px solid #000;background:#140d07;padding:10px"><div class="fields"><div class="full"><label>Title</label><input type="text" class="e_t" maxlength="80" required value="${esc(s.title)}"></div>
+          <div><label>Game type</label><select class="e_ty">${['survival', 'minigame', 'build', 'pvp', 'other'].map(k => `<option value="${k}"${k === s.type ? ' selected' : ''}>${k}</option>`).join('')}</select></div>
+          <div><label>Team size</label><input type="number" class="e_ts" min="1" max="20" value="${s.teamSize || 1}"></div>
+          <div class="full"><label>How does it work?</label><textarea class="e_x" rows="4" maxlength="1500" required>${esc(s.text)}</textarea></div></div>
+          <div class="row" style="gap:6px;margin-top:8px"><button class="btn sm" type="submit">SAVE IDEA</button><button class="btn ghost sm" type="button" data-secancel>CANCEL</button><span class="soft small">${s.discord ? 'The Discord post updates too.' : ''}</span></div></form></div></div>`).join('')}</div>` : '<p class="soft">No ideas yet. Members post them on the Community page.</p>';
     // the Discord channel for ideas: picking one posts every idea there (with 👍 / 👎), and new ideas from then on
     p.insertAdjacentHTML('afterbegin', `<div class="card accent" style="margin-bottom:14px"><b>💡 IDEAS IN DISCORD</b>
       <p class="soft small" style="margin:4px 0 8px">Each idea is posted in this channel with 👍 and 👎. The bot removes any other emoji, Discord votes count on the website (one vote per member), and edits update the post.</p>
@@ -239,6 +245,11 @@
     p.querySelectorAll('[data-sug]').forEach(row => {
       const id = row.dataset.sug, s = d.suggestions.find(x => x.id === id);
       row.querySelector('[data-ss]').onclick = () => api('/api/admin/suggestions/' + id, { method: 'PUT', body: { status: row.querySelector('.sst').value, reply: row.querySelector('.srp').value } }).then(() => { toast('Saved.'); community(p.parentNode); }).catch(x => toast(x.message, true));
+      const f = row.querySelector('.sug-edit');
+      row.querySelector('[data-sed]').onclick = () => { f.hidden = !f.hidden; if (!f.hidden) f.querySelector('.e_t').focus(); };
+      f.querySelector('[data-secancel]').onclick = () => { f.hidden = true; };
+      f.onsubmit = ev => { ev.preventDefault(); api('/api/suggestions/' + id, { method: 'PUT', body: { title: f.querySelector('.e_t').value, type: f.querySelector('.e_ty').value, teamSize: f.querySelector('.e_ts').value, text: f.querySelector('.e_x').value } })
+        .then(() => { toast('Idea saved.' + (s.discord ? ' The Discord post updates in a few seconds.' : '')); community(p.parentNode); }).catch(x => toast(x.message, true)); };
       row.querySelector('[data-sh]').onclick = () => api('/api/admin/suggestions/' + id, { method: 'PUT', body: { hidden: !s.hidden } }).then(() => community(p.parentNode)).catch(x => toast(x.message, true));
     });
   }

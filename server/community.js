@@ -593,9 +593,12 @@ module.exports = function install(x) {
   const UP = '👍', DOWN = '👎';
   const pubSug = (s, u) => ({ id: s.id, title: s.title, type: s.type, text: s.text, teamSize: s.teamSize, by: { name: s.name, avatar: s.avatar, skin: s.skin, userId: s.userId },
     votes: (s.votes || []).length, down: (s.down || []).length, score: (s.votes || []).length - (s.down || []).length,
-    voted: !!(u && (s.votes || []).includes(u.uid)), downed: !!(u && (s.down || []).includes(u.uid)), mine: !!(u && u.uid === s.userId),
+    voted: !!(u && (s.votes || []).includes(u.uid)), downed: !!(u && (s.down || []).includes(u.uid)), mine: !!(u && u.uid === s.userId), canEdit: !!(u && (u.uid === s.userId || u.adm)),
     status: s.status, statusLabel: SUG_STATUS[s.status] || s.status, reply: s.reply || '', createdAt: s.createdAt, editedAt: s.editedAt || '',
-    discord: s.dc ? `https://discord.com/channels/${cfg.guild}/${s.dc.channelId}/${s.dc.messageId}` : '' });
+    discord: s.dc ? `https://discord.com/channels/${cfg.guild}/${s.dc.channelId}/${s.dc.messageId}` : '',
+    // who voted: only admins and the person who suggested the idea see this
+    ...(u && (u.adm || u.uid === s.userId) ? { voters: { up: (s.votes || []).map(voterOf), down: (s.down || []).map(voterOf) } } : {}) });
+  const voterOf = uid => { const g = discord.cachedMember(uid) || {}, r = userRec(uid); return { name: g.name || r.name || r.username || 'A member', avatar: g.avatar || r.avatar || '' }; };
   const SUG_TYPES = ['survival', 'minigame', 'build', 'pvp', 'other'];
   const TYPE_LABEL = { survival: '🌲 Survival', minigame: '🎮 Minigame', build: '🏗️ Build', pvp: '⚔️ PvP', other: '⭐ Other' };
   const SUG_COLOR = { new: 0xF7931E, planned: 0x3a78b8, done: 0x4c9a2a, declined: 0x5c5c5c };
@@ -609,7 +612,7 @@ module.exports = function install(x) {
     if (s.reply) fields.push({ name: '💬 MTC reply', value: String(s.reply).slice(0, 1024) });
     return { embeds: [{ author: { name: `${s.name || 'A member'} suggested an event`, ...(s.avatar ? { icon_url: s.avatar } : {}) }, title: `💡 ${s.title}`.slice(0, 256),
       url: `${site()}/community.html#ideas`, description: String(s.text || '').slice(0, 4000), color: SUG_COLOR[s.status] || SUG_COLOR.new, fields,
-      footer: { text: `Score ${up - dn >= 0 ? '+' : ''}${up - dn}  ·  👍 ${up}  👎 ${dn}  ·  vote with 👍 or 👎 here or on the website${s.editedAt ? '  ·  edited' : ''}` } }],
+      footer: { text: `👍 ${up}  👎 ${dn}  ·  Score ${up - dn >= 0 ? '+' : ''}${up - dn} (👍 minus 👎)  ·  vote here or on the website${s.editedAt ? '  ·  edited' : ''}` } }],
       components: [{ type: 1, components: [{ type: 2, style: 5, label: 'See all ideas', url: `${site()}/community.html#ideas`, emoji: { name: '💡' } }] }] };
   }
   async function postIdea(s) {
